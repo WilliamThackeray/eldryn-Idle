@@ -30,7 +30,7 @@ export const Section: React.FC<SectionProps> = ({
         <span>{title}</span>
         {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
       </button>
-      
+
       {isOpen && (
         <div className="ml-8 flex flex-col gap-1">
           {skills.map(skill => (
@@ -38,8 +38,8 @@ export const Section: React.FC<SectionProps> = ({
               key={skill.id}
               onClick={() => onNavigate(skill.id)}
               className={`px-4 py-2 rounded-lg text-left transition-colors
-                ${currentPage === skill.id 
-                  ? 'bg-[#A61C3C] text-[#DAD6D6]' 
+                ${currentPage === skill.id
+                  ? 'bg-[#A61C3C] text-[#DAD6D6]'
                   : 'hover:bg-[#694A38] text-[#DAD6D6]'
                 }`}
             >

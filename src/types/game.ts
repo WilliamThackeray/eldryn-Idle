@@ -1,14 +1,16 @@
 export interface Skill {
   id: string;
   name: string;
-  category: 'combat' | 'passive' | 'non-combat';
+  category: "combat" | "passive" | "non-combat";
   currentXP: number;
   level: number;
   description: string;
 }
 
 export interface Character {
-  skills: Skill[];
+  combatSkills: Skill[];
+  passiveSkills: Skill[];
+  nonCombatSkills: Skill[];
   inventory: InventoryItem[];
 }
 
