@@ -1,17 +1,17 @@
 import { useState } from 'react';
 
 // Pages
-import { SkillPage } from './pages/SkillPage';
-import { InventoryPage } from './pages/InventoryPage';
-import { ShopPage } from './pages/ShopPage';
-import { CombatPage } from './pages/CombatPage';
+import { SkillPage } from './pages/SkillPage/SkillPage';
+import { InventoryPage } from './pages/InventoryPage/InventoryPage';
+import { ShopPage } from './pages/ShopPage/ShopPage';
+import { CombatPage } from './pages/CombatPage/CombatPage';
 
 // Components
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { useGameState } from './hooks/useGameState';
 
-//todo: saveGame can be moved to the Header Component instead of passed
+//todo: move applicable components to a components folder in the specific page folder
 //todo: Should I extract the routing to it's own component? 
 //     * this would make App() as simple as possible
 
@@ -32,7 +32,7 @@ function App() {
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
       <main className="flex-1">
-        <Header title={getPageTitle()} gameState={gameState} onSave={saveGame} />
+        <Header title={getPageTitle()} gameState={gameState} skills={skills} />
 
         <div className="p-6">
           {currentPage !== 'shop' && currentPage !== 'inventory' && (

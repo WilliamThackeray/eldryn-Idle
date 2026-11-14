@@ -2,6 +2,57 @@ import { GameState } from "../types/game";
 
 export const initialGameState: GameState = {
   character: {
+    name: "bob",
+    abilities: [
+      {
+        id: "strength",
+        name: "Strength",
+        abbr: "STR",
+        score: 0,
+        modifier: 0,
+        description: "be strong",
+      },
+      {
+        id: "dexterity",
+        name: "Dexterity",
+        abbr: "DEX",
+        score: 0,
+        modifier: 0,
+        description: "be quick",
+      },
+      {
+        id: "constitution",
+        name: "Constitution",
+        abbr: "CON",
+        score: 0,
+        modifier: 0,
+        description: "be solid",
+      },
+      {
+        id: "intelligence",
+        name: "Intelligence",
+        abbr: "INT",
+        score: 0,
+        modifier: 0,
+        description: "be smart",
+      },
+      {
+        id: "widsom",
+        name: "Wisdom",
+        abbr: "WIS",
+        score: 0,
+        modifier: 0,
+        description: "be wise",
+      },
+      {
+        id: "charisma",
+        name: "Charisma",
+        abbr: "CHA",
+        score: 0,
+        modifier: 0,
+        description: "be rizzy",
+      },
+    ],
     combatSkills: [
       {
         id: "ammunition",

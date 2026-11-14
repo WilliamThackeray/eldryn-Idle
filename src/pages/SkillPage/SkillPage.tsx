@@ -1,7 +1,7 @@
-import { SkillCard } from "../components/SkillCard"
-import { SkillProgress } from "../components/SkillProgress"
-import handleSkillAction from "../global-functions/handleSkillAction"
-import { useGameState } from "../hooks/useGameState"
+import { SkillCard } from "./components/SkillCard"
+import { SkillProgress } from "./components/SkillProgress"
+import handleSkillAction from "../../global-functions/handleSkillAction"
+import { useGameState } from "../../hooks/useGameState"
 
 interface SkillPageProps {
   currentPage: string

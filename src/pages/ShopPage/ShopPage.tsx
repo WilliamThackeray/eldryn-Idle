@@ -1,4 +1,4 @@
-import { useGameState } from "../hooks/useGameState"
+import { useGameState } from "../../hooks/useGameState"
 
 interface ShopPageProps {
   currentPage: string

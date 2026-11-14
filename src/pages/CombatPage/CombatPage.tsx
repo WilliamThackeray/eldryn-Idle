@@ -1,4 +1,4 @@
-import handleSkillAction from "../global-functions/handleSkillAction"
+import handleSkillAction from "../../global-functions/handleSkillAction"
 
 interface CombatPageProps {
   currentPage: string

@@ -7,11 +7,22 @@ export interface Skill {
   description: string;
 }
 
+export interface Ability {
+  id: string;
+  name: string;
+  abbr: string;
+  score: number;
+  modifier: number;
+  description: string;
+}
+
 export interface Character {
+  name: string;
   combatSkills: Skill[];
   passiveSkills: Skill[];
   nonCombatSkills: Skill[];
   inventory: InventoryItem[];
+  abilities: Ability[];
 }
 
 export interface InventoryItem {
