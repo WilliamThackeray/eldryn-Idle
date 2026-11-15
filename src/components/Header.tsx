@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
-import { User, Save } from 'lucide-react';
-import { GameState, Skill } from '../types/game';
-import { useGameState } from '../hooks/useGameState';
+import { Save, User } from 'lucide-react'
+import { useState } from 'react'
+import { SKILLS } from '../data/skills'
+import { deriveAbilities } from '../engine/abilities'
+import { describeXp } from '../engine/experience'
+import { useGameStore } from '../store/gameStore'
 
 interface HeaderProps {
-  title: string;
-  gameState: GameState;
-  skills: Skill[];
+  title: string
 }
 
-export const Header: React.FC<HeaderProps> = ({ title, gameState, skills }) => {
-  const [showCharacterInfo, setShowCharacterInfo] = useState(false);
-  const { saveGame } = useGameState();
-
+export function Header({ title }: HeaderProps) {
+  const [showCharacterInfo, setShowCharacterInfo] = useState(false)
+  const skills = useGameStore((state) => state.skills)
+  const saveGame = useGameStore((state) => state.saveGame)
+  const abilities = deriveAbilities(skills)
 
   return (
     <div className="bg-[#1f1f1f] text-[#DAD6D6] p-4 flex justify-between items-center">
@@ -28,17 +29,32 @@ export const Header: React.FC<HeaderProps> = ({ title, gameState, skills }) => {
             <span>Character Info</span>
           </button>
 
-          {/* //todo: extract character info to own component */}
           {showCharacterInfo && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-[#1f1f1f] rounded-lg shadow-lg p-4">
-              <h3 className="font-bold mb-2">Skills Overview</h3>
-              <div className="space-y-2">
-                {skills.map(skill => (
-                  <div key={skill.id} className="flex justify-between">
-                    <span>{skill.name}</span>
-                    <span>Level {skill.level}</span>
+            <div className="absolute right-0 top-full mt-2 w-72 max-h-96 overflow-auto bg-[#1f1f1f] rounded-lg shadow-lg p-4 z-10">
+              <h3 className="font-bold mb-2">Abilities</h3>
+              <div className="space-y-1 mb-3">
+                {abilities.map((ability) => (
+                  <div key={ability.id} className="flex justify-between">
+                    <span>{ability.abbr}</span>
+                    <span>
+                      {ability.score} ({ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier})
+                    </span>
                   </div>
                 ))}
+              </div>
+              <h3 className="font-bold mb-2">Skills</h3>
+              <div className="space-y-1">
+                {SKILLS.map((skill) => {
+                  const progress = describeXp(skills[skill.id].xp)
+                  return (
+                    <div key={skill.id} className="flex justify-between gap-3">
+                      <span>{skill.name}</span>
+                      <span className="shrink-0">
+                        {progress.level} · {progress.xp} XP
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -53,5 +69,5 @@ export const Header: React.FC<HeaderProps> = ({ title, gameState, skills }) => {
         </button>
       </div>
     </div>
-  );
-};
+  )
+}

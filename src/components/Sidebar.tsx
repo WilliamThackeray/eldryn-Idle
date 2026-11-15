@@ -1,23 +1,36 @@
-import React, { useState } from 'react';
-import { ShoppingCart, Package, Swords, Brain, Sparkles } from 'lucide-react';
-import { Link } from './Link';
-import { Section } from './Section';
+import { BookOpen, Dumbbell, Eye, Footprints, Package, ShoppingCart, Sparkles, Swords } from 'lucide-react'
+import { useState } from 'react'
+import type { LucideIcon } from 'lucide-react'
+import { ABILITIES } from '../data/abilities'
+import { SKILL_ABILITY_GROUPS, SKILLS } from '../data/skills'
+import type { AbilityAbbr } from '../types/game'
+import { Link } from './Link'
+import { Section } from './Section'
 
 interface SidebarProps {
-  currentPage: string;
-  setCurrentPage: (page: string) => void;
+  currentPage: string
+  setCurrentPage: (page: string) => void
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
-  const [sections, setSections] = useState({
-    combat: true,
-    passive: true,
-    nonCombat: true
-  });
+const GROUP_ICONS: Record<(typeof SKILL_ABILITY_GROUPS)[number], LucideIcon> = {
+  STR: Dumbbell,
+  DEX: Footprints,
+  INT: BookOpen,
+  WIS: Eye,
+  CHA: Sparkles,
+}
 
-  const toggleSection = (section: keyof typeof sections) => {
-    setSections(prev => ({ ...prev, [section]: !prev[section] }));
-  };
+export function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
+  const [open, setOpen] = useState<Record<string, boolean>>({
+    combat: true,
+    STR: true,
+    DEX: true,
+    INT: true,
+    WIS: true,
+    CHA: true,
+  })
+
+  const toggle = (id: string) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }))
 
   return (
     <div className="w-64 bg-[#1f1f1f] text-[#DAD6D6] h-screen p-4 flex flex-col gap-4 overflow-auto">
@@ -37,65 +50,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage })
       <Section
         title="Combat"
         icon={<Swords size={20} />}
-        isOpen={sections.combat}
-        onToggle={() => toggleSection('combat')}
-        skills={[
-          { id: "ammunition", name: "Ammunition" },
-          { id: "finesse", name: "Finesse" },
-          { id: "heavy", name: "Heavy" },
-          { id: "light", name: "Light" },
-          { id: "loading", name: "Loading" },
-          { id: "range", name: "Range" },
-          { id: "reach", name: "Reach" },
-          { id: "special", name: "Special" },
-          { id: "thrown", name: "Thrown" },
-          { id: "twoHanded", name: "Two-Handed" },
-          { id: "versatile", name: "Versatile" }
-        ]}
+        isOpen={open.combat}
+        onToggle={() => toggle('combat')}
+        skills={[{ id: 'monsterHunting', name: 'Monster Hunting' }]}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
       />
 
-      <Section
-        title="Passive"
-        icon={<Brain size={20} />}
-        isOpen={sections.passive}
-        onToggle={() => toggleSection('passive')}
-        skills={[
-          { id: 'passivetbd', name: 'TBD' }
-        ]}
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-      />
-
-      <Section
-        title="Non-Combat"
-        icon={<Sparkles size={20} />}
-        isOpen={sections.nonCombat}
-        onToggle={() => toggleSection('nonCombat')}
-        skills={[
-          { id: "acrobatics", name: "Acrobatics" },
-          { id: "animalHandling", name: "Animal Handling" },
-          { id: "arcana", name: "Arcana" },
-          { id: "athletics", name: "Athletics" },
-          { id: "deception", name: "Deception" },
-          { id: "history", name: "History" },
-          { id: "insight", name: "Insight" },
-          { id: "intimidation", name: "Intimidation" },
-          { id: "investigation", name: "Investigation" },
-          { id: "medicine", name: "Medicine" },
-          { id: "nature", name: "Nature" },
-          { id: "perception", name: "Perception" },
-          { id: "performance", name: "Performance" },
-          { id: "persuasion", name: "Persuasion" },
-          { id: "religion", name: "Religion" },
-          { id: "sleightOfHand", name: "Sleight of Hand" },
-          { id: "stealth", name: "Stealth" },
-          { id: "survival", name: "Survival" }
-        ]}
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-      />
+      {SKILL_ABILITY_GROUPS.map((abbr) => {
+        const ability = ABILITIES.find((entry) => entry.abbr === abbr)
+        const Icon = GROUP_ICONS[abbr]
+        return (
+          <Section
+            key={abbr}
+            title={abilityName(ability?.name, abbr)}
+            icon={<Icon size={20} />}
+            isOpen={open[abbr]}
+            onToggle={() => toggle(abbr)}
+            skills={SKILLS.filter((skill) => skill.ability === abbr).map((skill) => ({
+              id: skill.id,
+              name: skill.name,
+            }))}
+            currentPage={currentPage}
+            onNavigate={setCurrentPage}
+          />
+        )
+      })}
     </div>
-  );
-};
+  )
+}
+
+function abilityName(name: string | undefined, abbr: AbilityAbbr): string {
+  return name ?? abbr
+}
