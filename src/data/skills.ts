@@ -15,6 +15,12 @@ export const SKILLS = [
     description: 'Perform physical feats of strength and endurance.',
   },
   {
+    id: 'vitality',
+    name: 'Vitality',
+    ability: 'CON',
+    description: 'Constitution. Rises when you take or heal damage.',
+  },
+  {
     id: 'acrobatics',
     name: 'Acrobatics',
     ability: 'DEX',
@@ -127,7 +133,7 @@ export const SKILLS = [
 
 export type SkillId = (typeof SKILLS)[number]['id']
 
-/** Sidebar groups. CON has no skills. */
+/** Sidebar groups. Vitality is CON and stays off this list. */
 export const SKILL_ABILITY_GROUPS = ['STR', 'DEX', 'INT', 'WIS', 'CHA'] as const
 
 const SKILL_IDS = new Set<string>(SKILLS.map((skill) => skill.id))

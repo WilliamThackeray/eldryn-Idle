@@ -1,14 +1,18 @@
 import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
+import type { ActiveAction } from '../engine/advance'
 import type { InventoryItem, SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-export const SAVE_VERSION = 1
+/** v3: lastTick (epoch ms) and the one active action. */
+export const SAVE_VERSION = 3
 
 export interface SaveData {
   characterName: string
   skills: Record<SkillId, SkillProgress>
   inventory: InventoryItem[]
   lastSaved: string
+  lastTick: number
+  activeAction: ActiveAction | null
 }
 
 export function createInitialSave(): SaveData {
@@ -17,6 +21,8 @@ export function createInitialSave(): SaveData {
     skills: initialSkillProgress(),
     inventory: [],
     lastSaved: new Date().toISOString(),
+    lastTick: Date.now(),
+    activeAction: null,
   }
 }
 
@@ -45,6 +51,8 @@ export function normalizeSave(raw: unknown): SaveData {
     skills,
     inventory: Array.isArray(source.inventory) ? source.inventory.filter(isInventoryItem) : [],
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
+    lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
+    activeAction: parseActiveAction(source.activeAction),
   }
 }
 
@@ -76,6 +84,36 @@ function readLegacySkills(raw: unknown, skills: Record<SkillId, SkillProgress>) 
     if (typeof xp !== 'number' || !Number.isFinite(xp) || xp < 0) continue
     skills[entry.id] = { xp }
   }
+}
+
+function parseActiveAction(value: unknown): ActiveAction | null {
+  if (!isRecord(value)) return null
+  const progressMs = finite(value.progressMs)
+  const baseIntervalMs = finite(value.baseIntervalMs)
+  if (progressMs == null || progressMs < 0 || baseIntervalMs == null || baseIntervalMs <= 0) return null
+  if (typeof value.label !== 'string') return null
+
+  if (value.kind === 'combat') return { kind: 'combat', label: value.label, baseIntervalMs, progressMs }
+  if (value.kind !== 'skill' || typeof value.skillId !== 'string' || !isSkillId(value.skillId)) return null
+  if (typeof value.activityId !== 'string') return null
+  const requiredLevel = finite(value.requiredLevel)
+  const baseXp = finite(value.baseXp)
+  if (requiredLevel == null || requiredLevel < 1 || baseXp == null || baseXp < 0) return null
+
+  return {
+    kind: 'skill',
+    skillId: value.skillId,
+    activityId: value.activityId,
+    label: value.label,
+    baseIntervalMs,
+    requiredLevel,
+    baseXp,
+    progressMs,
+  }
+}
+
+function finite(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function isInventoryItem(value: unknown): value is InventoryItem {

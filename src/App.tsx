@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Header } from './components/Header'
+import { OfflineModal } from './components/OfflineModal'
 import { Sidebar } from './components/Sidebar'
+import { useGameLoop } from './hooks/useGameLoop'
 import { isSkillId, SKILLS } from './data/skills'
 import { CombatPage } from './pages/CombatPage/CombatPage'
 import { InventoryPage } from './pages/InventoryPage/InventoryPage'
@@ -15,11 +17,13 @@ function pageTitle(page: string): string {
 }
 
 function App() {
+  useGameLoop()
   const [currentPage, setCurrentPage] = useState('shop')
   const skillId = isSkillId(currentPage) ? currentPage : null
 
   return (
     <div className="flex min-h-screen bg-[#DAD6D6]">
+      <OfflineModal />
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
       <main className="flex-1">

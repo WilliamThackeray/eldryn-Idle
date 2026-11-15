@@ -1,12 +1,33 @@
 import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
-import type { SkillId } from '../data/skills'
-import { addXp } from '../engine/experience'
+import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
+import type { Rng } from '../engine/rng'
 import { SAVE_KEY, SAVE_VERSION, createInitialSave, migrateSave, normalizeSave, type SaveData } from './migrate'
 
+const LOG_LIMIT = 10
+
 interface GameStore extends SaveData {
-  addSkillXp: (skillId: SkillId, amount: number) => void
+  log: GameEvent[]
+  offlineReport: OfflineReport | null
+  startActivity: (activity: Omit<SkillAction, 'kind' | 'progressMs'>) => void
+  stopActivity: () => void
+  applyElapsed: (elapsedMs: number, lastTick: number) => void
+  dismissOffline: () => void
   saveGame: () => void
+}
+
+const liveRng: Rng = () => Math.random()
+
+let pending: { name: string; raw: string } | null = null
+let writesEnabled = false
+
+export function enableSaveWrites() {
+  writesEnabled = true
+}
+
+export function flushSave() {
+  if (!writesEnabled || !pending) return
+  localStorage.setItem(pending.name, pending.raw)
 }
 
 const storage: PersistStorage<SaveData> = {
@@ -25,7 +46,8 @@ const storage: PersistStorage<SaveData> = {
     }
   },
   setItem: (name, value: StorageValue<SaveData>) => {
-    localStorage.setItem(name, JSON.stringify(value))
+    // Ticks rewrite state ~10 times a second. Flush writes on the autosave interval, on leave, and on Save.
+    pending = { name, raw: JSON.stringify(value) }
   },
   removeItem: (name) => {
     localStorage.removeItem(name)
@@ -36,15 +58,35 @@ export const useGameStore = create<GameStore>()(
   persist(
     (set) => ({
       ...createInitialSave(),
-      addSkillXp: (skillId, amount) =>
-        set((state) => {
-          const current = state.skills[skillId]
-          if (!current) return state
-          const xp = addXp(current.xp, amount)
-          if (xp === current.xp) return state
-          return { skills: { ...state.skills, [skillId]: { xp } } }
+      log: [],
+      offlineReport: null,
+      startActivity: (activity) =>
+        set({
+          activeAction: { kind: 'skill', ...activity, progressMs: 0 },
+          log: [],
         }),
-      saveGame: () => set({ lastSaved: new Date().toISOString() }),
+      stopActivity: () => set({ activeAction: null }),
+      applyElapsed: (elapsedMs, lastTick) =>
+        set((state) => {
+          if (!(elapsedMs > 0)) return { lastTick }
+          const result = advance(
+            { skills: state.skills, inventory: state.inventory, activeAction: state.activeAction },
+            elapsedMs,
+            liveRng,
+          )
+          return {
+            skills: result.state.skills,
+            inventory: result.state.inventory,
+            activeAction: result.state.activeAction,
+            log: [...state.log, ...result.log].slice(-LOG_LIMIT),
+            lastTick,
+          }
+        }),
+      dismissOffline: () => set({ offlineReport: null }),
+      saveGame: () => {
+        set({ lastSaved: new Date().toISOString() })
+        flushSave()
+      },
     }),
     {
       name: SAVE_KEY,
@@ -55,6 +97,8 @@ export const useGameStore = create<GameStore>()(
         skills: state.skills,
         inventory: state.inventory,
         lastSaved: state.lastSaved,
+        lastTick: state.lastTick,
+        activeAction: state.activeAction,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

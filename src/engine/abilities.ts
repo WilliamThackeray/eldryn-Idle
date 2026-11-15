@@ -1,7 +1,15 @@
 import { ABILITIES, type AbilityId } from '../data/abilities'
 import { SKILLS, type SkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
-import { levelFromXp } from './experience'
+import {
+  ABILITY_AGGREGATION,
+  ABILITY_LEVEL_DIVISOR,
+  ABILITY_LEVEL_OFFSET,
+  ABILITY_SCORE_BASE,
+  MODIFIER_DIVISOR,
+  type AbilityAggregation,
+} from './config'
+import { levelForXp } from './xp'
 
 export interface DerivedAbility {
   id: AbilityId
@@ -12,24 +20,30 @@ export interface DerivedAbility {
   modifier: number
 }
 
-/** Score = 10 + floor((average skill level + 1) / 10). Empty (CON) stays 10. */
-export function abilityScoreFromLevels(levels: readonly number[]): number {
-  if (levels.length === 0) return 10
-  const average = levels.reduce((sum, level) => sum + level, 0) / levels.length
-  const score = 10 + Math.floor((average + 1) / 10)
-  return Math.min(20, Math.max(10, score))
+export function abilityScoreFromLevels(
+  levels: readonly number[],
+  aggregation: AbilityAggregation = ABILITY_AGGREGATION,
+): number {
+  if (levels.length === 0) return ABILITY_SCORE_BASE
+  const aggregate =
+    aggregation === 'highest' ? Math.max(...levels) : levels.reduce((sum, level) => sum + level, 0) / levels.length
+  return ABILITY_SCORE_BASE + Math.floor((aggregate + ABILITY_LEVEL_OFFSET) / ABILITY_LEVEL_DIVISOR)
 }
 
 export function abilityModifier(score: number): number {
-  return Math.floor((score - 10) / 2)
+  return Math.floor((score - ABILITY_SCORE_BASE) / MODIFIER_DIVISOR)
 }
 
-export function deriveAbilities(skills: Record<SkillId, SkillProgress>): DerivedAbility[] {
+/** `itemBonuses` are flat score bonuses, such as a Belt of Giant Strength, and can exceed 20. */
+export function deriveAbilities(
+  skills: Record<SkillId, SkillProgress>,
+  itemBonuses: Partial<Record<AbilityAbbr, number>> = {},
+): DerivedAbility[] {
   return ABILITIES.map((ability) => {
     const levels = SKILLS.filter((skill) => skill.ability === ability.abbr).map((skill) =>
-      levelFromXp(skills[skill.id]?.xp ?? 0),
+      levelForXp(skills[skill.id]?.xp ?? 0),
     )
-    const score = abilityScoreFromLevels(levels)
+    const score = abilityScoreFromLevels(levels) + (itemBonuses[ability.abbr] ?? 0)
     return {
       id: ability.id,
       name: ability.name,
