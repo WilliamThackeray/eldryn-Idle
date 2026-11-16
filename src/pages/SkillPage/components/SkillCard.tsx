@@ -4,6 +4,7 @@ interface SkillCardProps {
   title: string
   description: string
   intervalSeconds: string
+  xpMultiplierLabel: string | null
   requiredLevel: number
   needsMaterials: boolean
   locked: boolean
@@ -17,6 +18,7 @@ export function SkillCard({
   title,
   description,
   intervalSeconds,
+  xpMultiplierLabel,
   requiredLevel,
   needsMaterials,
   locked,
@@ -38,6 +40,7 @@ export function SkillCard({
         <span className="shrink-0 text-sm text-sage">{intervalSeconds}</span>
       </div>
       <p className="mb-2 line-clamp-2 text-sm text-parchment/90">{description}</p>
+      {xpMultiplierLabel && <p className="mb-2 text-sm text-sage">{xpMultiplierLabel}</p>}
       {locked ? (
         <p className="text-sm text-parchment/70">Requires level {requiredLevel}</p>
       ) : needsMaterials ? (

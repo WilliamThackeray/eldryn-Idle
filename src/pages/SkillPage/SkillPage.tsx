@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { activitiesFor, type ActivityDef, type GoldDrop, type LootEntry } from '../../data/activities'
+import { getClass, modifiersFor } from '../../data/classes'
 import { getItem } from '../../data/items'
 import { SKILLS, type SkillId } from '../../data/skills'
 import { deriveAbilities } from '../../engine/abilities'
@@ -21,6 +22,8 @@ export function SkillPage({ skillId }: SkillPageProps) {
   const skills = useGameStore((state) => state.skills)
   const inventory = useGameStore((state) => state.inventory)
   const activeAction = useGameStore((state) => state.activeAction)
+  const activeClassId = useGameStore((state) => state.activeClassId)
+  const clericFocus = useGameStore((state) => state.clericFocus)
   const log = useGameStore((state) => state.log)
   const startActivity = useGameStore((state) => state.startActivity)
   const stopActivity = useGameStore((state) => state.stopActivity)
@@ -29,6 +32,12 @@ export function SkillPage({ skillId }: SkillPageProps) {
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
   const modifier = deriveAbilities(skills).find((entry) => entry.abbr === ability)?.modifier ?? 0
   const bonus = modifier + proficiency(tier(level))
+  const classMods = modifiersFor(activeClassId, clericFocus)
+  const className = activeClassId ? getClass(activeClassId).name : null
+  const xpMultiplierLabel =
+    ability && className
+      ? `XP ×${(1 + (classMods[ability] ?? 0)).toFixed(2)} (${className})`
+      : null
   const activities = activitiesFor(skillId)
   const activeInterval =
     activeAction?.kind === 'skill' && activeAction.skillId === skillId ? actionIntervalMs(activeAction, skills) : 0
@@ -69,6 +78,7 @@ export function SkillPage({ skillId }: SkillPageProps) {
                 title={activity.name}
                 description={activity.description}
                 intervalSeconds={formatInterval(interval)}
+                xpMultiplierLabel={xpMultiplierLabel}
                 requiredLevel={activity.requiredLevel}
                 needsMaterials={lacksInputs(activity, inventory)}
                 locked={level < activity.requiredLevel}
@@ -86,6 +96,7 @@ export function SkillPage({ skillId }: SkillPageProps) {
             title={selected.name}
             description={selected.description}
             xpGain={selected.xp}
+            xpMultiplierLabel={xpMultiplierLabel}
             intervalSeconds={formatInterval(activityIntervalMs(skillId, selected.baseIntervalMs, skills))}
             requiredLevel={selected.requiredLevel}
             dc={checkDc(selected.requiredLevel)}

@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { ClassPickerModal } from './components/ClassPickerModal'
 import { Header } from './components/Header'
 import { OfflineModal } from './components/OfflineModal'
 import { Sidebar } from './components/Sidebar'
 import { useGameLoop } from './hooks/useGameLoop'
 import { isSkillId, SKILLS } from './data/skills'
+import { CharacterPage } from './pages/CharacterPage/CharacterPage'
 import { CombatPage } from './pages/CombatPage/CombatPage'
 import { InventoryPage } from './pages/InventoryPage/InventoryPage'
 import { ShopPage } from './pages/ShopPage/ShopPage'
@@ -13,6 +15,7 @@ function pageTitle(page: string): string {
   if (page === 'shop') return 'Shop'
   if (page === 'inventory') return 'Inventory'
   if (page === 'monsterHunting') return 'Monster Hunting'
+  if (page === 'character') return 'Character'
   return SKILLS.find((skill) => skill.id === page)?.name ?? ''
 }
 
@@ -25,6 +28,7 @@ function App() {
     <>
       <div className="flex h-screen overflow-hidden bg-ink text-parchment">
         <OfflineModal />
+        <ClassPickerModal />
         <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
         <main className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
@@ -35,6 +39,7 @@ function App() {
             {currentPage === 'shop' && <ShopPage />}
             {currentPage === 'inventory' && <InventoryPage />}
             {currentPage === 'monsterHunting' && <CombatPage />}
+            {currentPage === 'character' && <CharacterPage />}
           </div>
         </main>
       </div>

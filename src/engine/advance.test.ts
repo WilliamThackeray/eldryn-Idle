@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { getActivity } from '../data/activities'
+import { modifiersFor } from '../data/classes'
 import { initialSkillProgress, type SkillId } from '../data/skills'
 import { deriveAbilities } from './abilities'
 import { advance, cappedAway, summarizeGains, type AdvanceState } from './advance'
@@ -54,7 +55,7 @@ test('a partial interval is kept for the next tick', () => {
 })
 
 test('XP uses the skill check and ability modifiers', () => {
-  const result = advance(training('athletics', 10), 6000, scripted(0.45), { STR: 0.3 })
+  const result = advance(training('athletics', 10), 6000, scripted(0.45), modifiersFor('barbarian'))
 
   expect(result.log[0]).toMatchObject({
     roll: 10,

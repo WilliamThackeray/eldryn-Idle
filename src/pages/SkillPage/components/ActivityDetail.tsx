@@ -4,6 +4,7 @@ interface ActivityDetailProps {
   title: string
   description: string
   xpGain: number
+  xpMultiplierLabel: string | null
   intervalSeconds: string
   requiredLevel: number
   dc: number
@@ -22,6 +23,7 @@ export function ActivityDetail({
   title,
   description,
   xpGain,
+  xpMultiplierLabel,
   intervalSeconds,
   requiredLevel,
   dc,
@@ -48,6 +50,7 @@ export function ActivityDetail({
         <Stat label="Interval" value={intervalSeconds} />
         <Stat label="Required" value={`Lv ${requiredLevel}`} />
       </dl>
+      {xpMultiplierLabel && <p className="mb-4 text-sm text-sage">{xpMultiplierLabel}</p>}
 
       {details.length > 0 && (
         <ul className="mb-4 space-y-1 text-sm text-sage">

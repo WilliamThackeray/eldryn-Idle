@@ -1,3 +1,9 @@
+import {
+  initialClassProgress,
+  isClassId,
+  type ClassId,
+  type ClericFocus,
+} from '../data/classes'
 import { isItemId } from '../data/items'
 import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
 import type { ActiveAction } from '../engine/advance'
@@ -5,8 +11,8 @@ import type { Inventory } from '../engine/inventory'
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v4: inventory is item counts, plus a gold counter. */
-export const SAVE_VERSION = 4
+/** v5: active class, per-class XP, cleric focus, dungeon/quest lock. */
+export const SAVE_VERSION = 5
 
 export interface SaveData {
   characterName: string
@@ -16,6 +22,10 @@ export interface SaveData {
   lastSaved: string
   lastTick: number
   activeAction: ActiveAction | null
+  activeClassId: ClassId | null
+  classes: Record<ClassId, { xp: number }>
+  clericFocus: ClericFocus
+  isInDungeonOrQuest: boolean
 }
 
 export function createInitialSave(): SaveData {
@@ -27,12 +37,19 @@ export function createInitialSave(): SaveData {
     lastSaved: new Date().toISOString(),
     lastTick: Date.now(),
     activeAction: null,
+    activeClassId: null,
+    classes: initialClassProgress(),
+    clericFocus: 'INT',
+    isInDungeonOrQuest: false,
   }
 }
 
 export function migrateSave(persisted: unknown, version: number): SaveData {
   const source = version < SAVE_VERSION ? fromLegacy(persisted) : persisted
-  return normalizeSave(source)
+  const save = normalizeSave(source)
+  // Old saves skip the picker and start as Fighter.
+  if (version < 5) return { ...save, activeClassId: 'fighter' }
+  return save
 }
 
 export function normalizeSave(raw: unknown): SaveData {
@@ -58,7 +75,36 @@ export function normalizeSave(raw: unknown): SaveData {
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
     activeAction: parseActiveAction(source.activeAction),
+    activeClassId: readActiveClassId(source.activeClassId),
+    classes: readClasses(source.classes),
+    clericFocus: source.clericFocus === 'STR' ? 'STR' : 'INT',
+    isInDungeonOrQuest: source.isInDungeonOrQuest === true,
   }
+}
+
+/** Returns the next activeClassId, or null when the switch is blocked / invalid. */
+export function nextActiveClassId(
+  isInDungeonOrQuest: boolean,
+  classId: string,
+): ClassId | null {
+  if (isInDungeonOrQuest || !isClassId(classId)) return null
+  return classId
+}
+
+function readActiveClassId(value: unknown): ClassId | null {
+  if (typeof value !== 'string' || !isClassId(value)) return null
+  return value
+}
+
+function readClasses(value: unknown): Record<ClassId, { xp: number }> {
+  const classes = initialClassProgress()
+  if (!isRecord(value)) return classes
+  for (const id of Object.keys(classes) as ClassId[]) {
+    const entry = value[id]
+    if (!isRecord(entry) || typeof entry.xp !== 'number' || !Number.isFinite(entry.xp) || entry.xp < 0) continue
+    classes[id] = { xp: entry.xp }
+  }
+  return classes
 }
 
 function fromLegacy(raw: unknown): unknown {

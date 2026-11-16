@@ -1,10 +1,10 @@
 import { Coins, Package, Save, ShoppingCart, Swords, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { getClass } from '../data/classes'
 import { SKILLS } from '../data/skills'
-import { deriveAbilities } from '../engine/abilities'
 import { actionIntervalMs } from '../engine/advance'
-import { progressToNext } from '../engine/xp'
+import { levelForXp } from '../engine/xp'
 import { useGameStore } from '../store/gameStore'
 import { Link } from './Link'
 import { ProgressBar } from './ProgressBar'
@@ -16,14 +16,15 @@ interface HeaderProps {
 }
 
 export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
-  const [showCharacterInfo, setShowCharacterInfo] = useState(false)
   const [charTip, setCharTip] = useState<{ top: number; left: number } | null>(null)
   const charRef = useRef<HTMLButtonElement>(null)
+  const characterName = useGameStore((state) => state.characterName)
+  const activeClassId = useGameStore((state) => state.activeClassId)
+  const classes = useGameStore((state) => state.classes)
   const skills = useGameStore((state) => state.skills)
   const gold = useGameStore((state) => state.gold)
   const activeAction = useGameStore((state) => state.activeAction)
   const saveGame = useGameStore((state) => state.saveGame)
-  const abilities = deriveAbilities(skills)
   const actionInterval = activeAction ? actionIntervalMs(activeAction, skills) : 0
   const actionProgress =
     activeAction && actionInterval > 0 ? Math.min(100, (activeAction.progressMs / actionInterval) * 100) : 0
@@ -33,6 +34,9 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
       : activeAction.label
     : 'Idle'
   const tipHost = typeof document !== 'undefined' ? document.getElementById('tooltip-root') : null
+  const classLevel = activeClassId ? levelForXp(classes[activeClassId].xp) : null
+  const classLabel = activeClassId ? `${getClass(activeClassId).name} ${classLevel}` : 'No class'
+  const summary = `${characterName} · ${classLabel}`
 
   const showCharTip = () => {
     const rect = charRef.current?.getBoundingClientRect()
@@ -97,21 +101,21 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
           <button
             ref={charRef}
             type="button"
-            onClick={() => setShowCharacterInfo(!showCharacterInfo)}
+            onClick={() => setCurrentPage('character')}
             onMouseEnter={showCharTip}
             onFocus={showCharTip}
             onMouseLeave={() => setCharTip(null)}
             onBlur={() => setCharTip(null)}
-            aria-label="Character Info"
-            aria-expanded={showCharacterInfo}
-            className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-              showCharacterInfo ? 'bg-crimson text-parchment' : 'text-parchment hover:bg-brown'
+            aria-label="Character"
+            aria-current={currentPage === 'character' ? 'page' : undefined}
+            className={`flex max-w-[14rem] items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+              currentPage === 'character' ? 'bg-crimson text-parchment' : 'text-parchment hover:bg-brown'
             }`}
           >
-            <User size={20} />
+            <User size={20} className="shrink-0" />
+            <span className="truncate">{summary}</span>
           </button>
           {charTip &&
-            !showCharacterInfo &&
             tipHost &&
             createPortal(
               <span
@@ -119,40 +123,10 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
                 className="absolute -translate-x-1/2 whitespace-nowrap rounded-md bg-panel px-2 py-1 text-xs text-parchment shadow-lg ring-1 ring-brown/60"
                 style={{ top: charTip.top, left: charTip.left }}
               >
-                Character Info
+                Character
               </span>,
               tipHost,
             )}
-
-          {showCharacterInfo && (
-            <div className="absolute right-0 top-full z-10 mt-2 max-h-96 w-72 overflow-auto rounded-lg border border-brown/40 bg-panel p-4 shadow-lg">
-              <h3 className="mb-2 font-bold text-gold">Abilities</h3>
-              <div className="mb-3 space-y-1">
-                {abilities.map((ability) => (
-                  <div key={ability.id} className="flex justify-between">
-                    <span>{ability.abbr}</span>
-                    <span>
-                      {ability.score} ({ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier})
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <h3 className="mb-2 font-bold text-gold">Skills</h3>
-              <div className="space-y-1">
-                {SKILLS.map((skill) => {
-                  const progress = progressToNext(skills[skill.id].xp)
-                  return (
-                    <div key={skill.id} className="flex justify-between gap-3">
-                      <span>{skill.name}</span>
-                      <span className="shrink-0">
-                        {progress.level} · {progress.xp} XP
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
 
         <button

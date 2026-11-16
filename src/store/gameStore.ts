@@ -1,10 +1,19 @@
 import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
+import { modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
 import type { ItemId } from '../data/items'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
 import { sellItems } from '../engine/inventory'
 import type { Rng } from '../engine/rng'
-import { SAVE_KEY, SAVE_VERSION, createInitialSave, migrateSave, normalizeSave, type SaveData } from './migrate'
+import {
+  SAVE_KEY,
+  SAVE_VERSION,
+  createInitialSave,
+  migrateSave,
+  nextActiveClassId,
+  normalizeSave,
+  type SaveData,
+} from './migrate'
 
 const LOG_LIMIT = 10
 
@@ -17,6 +26,8 @@ interface GameStore extends SaveData {
   dismissOffline: () => void
   saveGame: () => void
   sellItem: (itemId: ItemId) => void
+  setActiveClass: (classId: ClassId) => void
+  setClericFocus: (focus: ClericFocus) => void
 }
 
 const liveRng: Rng = () => Math.random()
@@ -81,6 +92,7 @@ export const useGameStore = create<GameStore>()(
             },
             elapsedMs,
             liveRng,
+            modifiersFor(state.activeClassId, state.clericFocus),
           )
           return {
             skills: result.state.skills,
@@ -97,6 +109,13 @@ export const useGameStore = create<GameStore>()(
         flushSave()
       },
       sellItem: (itemId) => set((state) => sellItems(state.inventory, state.gold, itemId)),
+      setActiveClass: (classId) =>
+        set((state) => {
+          const next = nextActiveClassId(state.isInDungeonOrQuest, classId)
+          if (!next) return state
+          return { activeClassId: next }
+        }),
+      setClericFocus: (focus) => set({ clericFocus: focus === 'STR' ? 'STR' : 'INT' }),
     }),
     {
       name: SAVE_KEY,
@@ -110,6 +129,10 @@ export const useGameStore = create<GameStore>()(
         lastSaved: state.lastSaved,
         lastTick: state.lastTick,
         activeAction: state.activeAction,
+        activeClassId: state.activeClassId,
+        classes: state.classes,
+        clericFocus: state.clericFocus,
+        isInDungeonOrQuest: state.isInDungeonOrQuest,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {
