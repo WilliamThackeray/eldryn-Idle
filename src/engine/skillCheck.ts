@@ -36,10 +36,24 @@ export interface SkillCheckResult {
   byproduct: boolean
 }
 
+export function checkDc(requiredLevel: number): number {
+  return DC_BASE + Math.floor(requiredLevel / DC_LEVEL_DIVISOR)
+}
+
+/** Share of d20 faces that succeed. A natural 1 never does. A natural 20 always does. */
+export function successChance(bonus: number, requiredLevel: number): number {
+  const dc = checkDc(requiredLevel)
+  let hits = 0
+  for (let roll = 1; roll <= 20; roll++) {
+    if (roll === 20 || (roll !== 1 && roll + bonus >= dc)) hits += 1
+  }
+  return hits / 20
+}
+
 export function skillCheck(input: SkillCheckInput): SkillCheckResult {
   const natural = rollD20(input.rng, input.mode ?? 'normal')
   const total = natural + input.abilityModifier + proficiency(tier(input.skillLevel))
-  const dc = DC_BASE + Math.floor(input.requiredLevel / DC_LEVEL_DIVISOR)
+  const dc = checkDc(input.requiredLevel)
   const result = (outcome: SkillCheckOutcome, xpMultiplier: number, itemMultiplier: number, rareRoll: boolean, byproduct: boolean): SkillCheckResult => ({
     roll: natural,
     total,

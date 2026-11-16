@@ -1,7 +1,9 @@
 import { expect, test } from 'vitest'
+import { getActivity } from '../data/activities'
 import { initialSkillProgress, type SkillId } from '../data/skills'
 import { deriveAbilities } from './abilities'
 import { advance, cappedAway, summarizeGains, type AdvanceState } from './advance'
+import type { Inventory } from './inventory'
 import { mulberry32, type Rng } from './rng'
 import { xpForLevel } from './xp'
 
@@ -19,7 +21,8 @@ function training(skillId: SkillId, baseXp = 10, dexXp = 0): AdvanceState {
   skills.stealth = { xp: dexXp }
   return {
     skills,
-    inventory: [],
+    inventory: {},
+    gold: 0,
     activeAction: {
       kind: 'skill',
       skillId,
@@ -38,7 +41,7 @@ test('advance over 60s at a 6s interval resolves exactly 10 actions', () => {
 
   expect(result.log).toHaveLength(10)
   expect(result.state.activeAction).toMatchObject({ kind: 'skill', progressMs: 0 })
-  expect(result.state.inventory).toEqual([])
+  expect(result.state.inventory).toEqual({})
   expect(result.state.skills.athletics.xp).toBeGreaterThan(0)
 })
 
@@ -78,15 +81,97 @@ test('DEX is ignored for an INT skill', () => {
   expect(slow.state.activeAction).toMatchObject({ progressMs: 0 })
 })
 
-test('summarizeGains reports skill XP, levels, and no items yet', () => {
+test('summarizeGains reports skill XP, levels, item gains, and gold', () => {
   const before = initialSkillProgress()
   const after = initialSkillProgress()
   after.athletics = { xp: 100 }
 
-  expect(summarizeGains(before, after, [], [])).toEqual({
+  expect(summarizeGains(before, after, { 'iron-ore': 1 }, { 'iron-ore': 1, 'steel-bar': 2 }, 5, 9)).toEqual({
     skills: [{ skillId: 'athletics', xp: 100, levels: 1 }],
-    items: [],
+    items: [{ id: 'steel-bar', name: 'Steel Bar', quantity: 2 }],
+    gold: 4,
   })
+})
+
+function doing(skillId: SkillId, activityId: string, inventory: Inventory = {}): AdvanceState {
+  const activity = getActivity(skillId, activityId)
+  if (!activity) throw new Error(`missing activity ${skillId}:${activityId}`)
+  return {
+    skills: initialSkillProgress(),
+    inventory,
+    gold: 0,
+    activeAction: {
+      kind: 'skill',
+      skillId,
+      activityId: activity.id,
+      label: activity.name,
+      baseIntervalMs: activity.baseIntervalMs,
+      requiredLevel: activity.requiredLevel,
+      baseXp: activity.xp,
+      progressMs: 0,
+    },
+  }
+}
+
+test('a critical doubles outputs and rolls the rare table', () => {
+  const result = advance(doing('athletics', 'mine-iron'), 6000, scripted(0.95, 0))
+
+  expect(result.log[0]).toMatchObject({ outcome: 'critical' })
+  expect(result.state.inventory).toEqual({ 'iron-ore': 2, coal: 2 })
+})
+
+test('a failed craft consumes every input and grants nothing', () => {
+  const result = advance(doing('athletics', 'smith-steel', { 'iron-ore': 1, coal: 1 }), 6000, scripted(0.2))
+
+  expect(result.log[0]).toMatchObject({ outcome: 'fail', items: [] })
+  expect(result.state.inventory).toEqual({})
+  expect(result.state.skills.athletics.xp).toBeGreaterThan(0)
+  expect(result.state.activeAction).not.toBeNull()
+})
+
+test('a fumble can grant the byproduct after spending inputs', () => {
+  const result = advance(doing('athletics', 'smith-steel', { 'iron-ore': 1, coal: 1 }), 6000, scripted(0, 0))
+
+  expect(result.log[0]).toMatchObject({ outcome: 'fumble' })
+  expect(result.state.inventory).toEqual({ slag: 1 })
+})
+
+test('the action stops when an input is missing and spends nothing', () => {
+  const result = advance(doing('athletics', 'smith-steel', { 'iron-ore': 1 }), 6000, scripted(0.45))
+
+  expect(result.log.map((event) => event.kind)).toEqual(['materials'])
+  expect(result.state.inventory).toEqual({ 'iron-ore': 1 })
+  expect(result.state.skills.athletics.xp).toBe(0)
+  expect(result.state.activeAction).toBeNull()
+})
+
+test('the action stops once inputs run out', () => {
+  let calls = 0
+  const rng: Rng = () => {
+    calls += 1
+    return 0.45
+  }
+  const result = advance(doing('athletics', 'smith-steel', { 'iron-ore': 1, coal: 1 }), 18_000, rng)
+
+  expect(result.log.map((event) => event.kind)).toEqual(['skill', 'materials'])
+  expect(result.state.inventory).toEqual({ 'steel-bar': 1 })
+  expect(result.state.activeAction).toBeNull()
+  expect(calls).toBe(1)
+})
+
+test('pickpocketing adds gold', () => {
+  const result = advance(doing('sleightOfHand', 'pickpocket-peasant'), 6000, scripted(0.45, 0))
+
+  expect(result.log[0]).toMatchObject({ outcome: 'success', gold: 2, items: [] })
+  expect(result.state.gold).toBe(2)
+  expect(result.state.inventory).toEqual({})
+})
+
+test('cooking turns a raw fish into a meal', () => {
+  const result = advance(doing('nature', 'cook-forest-fish', { 'raw-forest-fish': 1 }), 6000, scripted(0.45))
+
+  expect(result.state.inventory).toEqual({ 'cooked-forest-fish': 1 })
+  expect(result.state.activeAction).not.toBeNull()
 })
 
 test('the offline cap clamps 48h to 24h', () => {

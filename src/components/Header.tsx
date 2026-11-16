@@ -1,4 +1,4 @@
-import { Save, User } from 'lucide-react'
+import { Coins, Save, User } from 'lucide-react'
 import { useState } from 'react'
 import { SKILLS } from '../data/skills'
 import { deriveAbilities } from '../engine/abilities'
@@ -13,6 +13,7 @@ interface HeaderProps {
 export function Header({ title }: HeaderProps) {
   const [showCharacterInfo, setShowCharacterInfo] = useState(false)
   const skills = useGameStore((state) => state.skills)
+  const gold = useGameStore((state) => state.gold)
   const activeAction = useGameStore((state) => state.activeAction)
   const saveGame = useGameStore((state) => state.saveGame)
   const abilities = deriveAbilities(skills)
@@ -46,6 +47,10 @@ export function Header({ title }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 text-[#F4AC45]" aria-label="Gold">
+          <Coins size={18} />
+          <span>{gold.toLocaleString()} gp</span>
+        </div>
         <div className="relative">
           <button
             onClick={() => setShowCharacterInfo(!showCharacterInfo)}

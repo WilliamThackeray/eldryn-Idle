@@ -1,0 +1,27 @@
+import type { ItemDef } from './types'
+
+export const MATERIALS = [
+  { id: 'iron-ore', name: 'Iron Ore', description: 'Raw iron from a surface vein.', category: 'material', rarity: 'common', stackable: true, sellValue: 2, tags: ['ore'] },
+  { id: 'coal', name: 'Coal', description: 'Burns hot enough to turn iron into steel.', category: 'material', rarity: 'common', stackable: true, sellValue: 2, tags: ['ore'] },
+  { id: 'silver-ore', name: 'Silver Ore', description: 'Pale ore used to silver a blade.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 8, tags: ['ore'] },
+  { id: 'gold-ore', name: 'Gold Ore', description: 'Heavy ore. This is not spending money.', category: 'material', rarity: 'rare', stackable: true, sellValue: 15, tags: ['ore'] },
+  { id: 'mithral-ore', name: 'Mithral Ore', description: 'Light ore that shrugs off weight.', category: 'material', rarity: 'very-rare', stackable: true, sellValue: 40, tags: ['ore'] },
+  { id: 'adamantine-ore', name: 'Adamantine Ore', description: 'The hardest ore in the ground.', category: 'material', rarity: 'legendary', stackable: true, sellValue: 80, tags: ['ore'] },
+  { id: 'iron-bar', name: 'Iron Bar', description: 'Smelted iron, ready for the anvil.', category: 'material', rarity: 'common', stackable: true, sellValue: 5, tags: ['bar'] },
+  { id: 'steel-bar', name: 'Steel Bar', description: 'Iron hardened with coal.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 12, tags: ['bar'] },
+  { id: 'silver-bar', name: 'Silver Bar', description: 'Smelted silver.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 20, tags: ['bar'] },
+  { id: 'gold-bar', name: 'Gold Bar', description: 'Smelted gold.', category: 'material', rarity: 'rare', stackable: true, sellValue: 40, tags: ['bar'] },
+  { id: 'mithral-bar', name: 'Mithral Bar', description: 'Smelted mithral.', category: 'material', rarity: 'very-rare', stackable: true, sellValue: 100, tags: ['bar'] },
+  { id: 'adamantine-bar', name: 'Adamantine Bar', description: 'Smelted adamantine.', category: 'material', rarity: 'legendary', stackable: true, sellValue: 200, tags: ['bar'] },
+  { id: 'logs', name: 'Logs', description: 'Ordinary timber.', category: 'material', rarity: 'common', stackable: true, sellValue: 2, tags: ['wood'] },
+  { id: 'hardwood', name: 'Hardwood', description: 'Dense timber for bows and hafts.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 6, tags: ['wood'] },
+  { id: 'ironwood', name: 'Ironwood', description: 'Wood almost as stubborn as metal.', category: 'material', rarity: 'rare', stackable: true, sellValue: 15, tags: ['wood'] },
+  { id: 'forest-herbs', name: 'Forest Herbs', description: 'Common leaves for potions and cooking.', category: 'material', rarity: 'common', stackable: true, sellValue: 3, tags: ['herb'] },
+  { id: 'desert-herbs', name: 'Desert Herbs', description: 'Bitter plants from dry ground.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 8, tags: ['herb'] },
+  { id: 'desert-spices', name: 'Desert Spices', description: 'Sharp spices gathered in the waste.', category: 'material', rarity: 'rare', stackable: true, sellValue: 10, tags: ['herb'] },
+  { id: 'fey-herbs', name: 'Fey Herbs', description: 'Herbs from where the Feywild leaked through.', category: 'material', rarity: 'very-rare', stackable: true, sellValue: 30, tags: ['herb'] },
+  { id: 'hide', name: 'Hide', description: 'A scraped animal skin.', category: 'material', rarity: 'common', stackable: true, sellValue: 4, tags: ['hide'] },
+  { id: 'bones', name: 'Bones', description: 'Cleaned bones.', category: 'material', rarity: 'common', stackable: true, sellValue: 2, tags: ['bone'] },
+  { id: 'animal-scraps', name: 'Animal Scraps', description: 'Fur and sinew too small to butcher.', category: 'material', rarity: 'common', stackable: true, sellValue: 1, tags: ['scrap'] },
+  { id: 'slag', name: 'Slag', description: 'Cinder from a spoiled heat.', category: 'material', rarity: 'common', stackable: true, sellValue: 1, tags: ['scrap'] },
+] as const satisfies readonly ItemDef[]

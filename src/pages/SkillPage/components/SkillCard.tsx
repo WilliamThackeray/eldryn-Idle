@@ -4,6 +4,10 @@ interface SkillCardProps {
   xpGain: number
   intervalSeconds: string
   requiredLevel: number
+  dc: number
+  successPercent: number
+  details: string[]
+  needsMaterials: boolean
   locked: boolean
   active: boolean
   progress: number
@@ -17,6 +21,10 @@ export function SkillCard({
   xpGain,
   intervalSeconds,
   requiredLevel,
+  dc,
+  successPercent,
+  details,
+  needsMaterials,
   locked,
   active,
   progress,
@@ -26,13 +34,23 @@ export function SkillCard({
   return (
     <div className={`bg-[#1f1f1f] p-6 rounded-lg shadow-lg ${locked ? 'opacity-60' : ''}`}>
       <h3 className="text-xl font-bold text-[#F4AC45] mb-2">{title}</h3>
-      <p className="text-[#DAD6D6] mb-4">{description}</p>
-      <div className="flex justify-between items-center gap-3 mb-3">
+      <p className="text-[#DAD6D6] mb-3">{description}</p>
+      <p className="text-sm text-[#DAD6D6] mb-2">
+        DC {dc} · {successPercent}% success
+      </p>
+      {details.map((line) => (
+        <p key={line} className="text-sm text-[#92BFB1] mb-1">
+          {line}
+        </p>
+      ))}
+      <div className="flex justify-between items-center gap-3 mb-3 mt-3">
         <span className="text-[#92BFB1]">
           +{xpGain} XP · {intervalSeconds}
         </span>
         {locked ? (
           <span className="text-[#DAD6D6]">Requires level {requiredLevel}</span>
+        ) : needsMaterials && !active ? (
+          <span className="text-[#DAD6D6]">Need materials</span>
         ) : (
           <button
             type="button"

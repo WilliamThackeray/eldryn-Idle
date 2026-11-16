@@ -1,15 +1,18 @@
+import { isItemId } from '../data/items'
 import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
 import type { ActiveAction } from '../engine/advance'
-import type { InventoryItem, SkillProgress } from '../types/game'
+import type { Inventory } from '../engine/inventory'
+import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v3: lastTick (epoch ms) and the one active action. */
-export const SAVE_VERSION = 3
+/** v4: inventory is item counts, plus a gold counter. */
+export const SAVE_VERSION = 4
 
 export interface SaveData {
   characterName: string
   skills: Record<SkillId, SkillProgress>
-  inventory: InventoryItem[]
+  inventory: Inventory
+  gold: number
   lastSaved: string
   lastTick: number
   activeAction: ActiveAction | null
@@ -19,7 +22,8 @@ export function createInitialSave(): SaveData {
   return {
     characterName: 'bob',
     skills: initialSkillProgress(),
-    inventory: [],
+    inventory: {},
+    gold: 0,
     lastSaved: new Date().toISOString(),
     lastTick: Date.now(),
     activeAction: null,
@@ -49,7 +53,8 @@ export function normalizeSave(raw: unknown): SaveData {
   return {
     characterName,
     skills,
-    inventory: Array.isArray(source.inventory) ? source.inventory.filter(isInventoryItem) : [],
+    inventory: readInventory(source.inventory),
+    gold: readGold(source.gold),
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
     activeAction: parseActiveAction(source.activeAction),
@@ -116,15 +121,31 @@ function finite(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function isInventoryItem(value: unknown): value is InventoryItem {
-  if (!isRecord(value)) return false
-  return (
-    typeof value.id === 'string' &&
-    typeof value.name === 'string' &&
-    typeof value.quantity === 'number' &&
-    Number.isFinite(value.quantity) &&
-    typeof value.description === 'string'
-  )
+function readInventory(value: unknown): Inventory {
+  const inventory: Inventory = {}
+  const add = (id: string, quantity: unknown) => {
+    if (!isItemId(id)) return
+    const qty = finite(quantity)
+    if (qty == null || qty <= 0) return
+    inventory[id] = (inventory[id] ?? 0) + Math.floor(qty)
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (!isRecord(entry) || typeof entry.id !== 'string') continue
+      add(entry.id, entry.quantity)
+    }
+    return inventory
+  }
+  if (isRecord(value)) {
+    for (const [id, quantity] of Object.entries(value)) add(id, quantity)
+  }
+  return inventory
+}
+
+function readGold(value: unknown): number {
+  const gold = finite(value)
+  if (gold == null || gold <= 0) return 0
+  return Math.floor(gold)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
+import type { ItemId } from '../data/items'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
+import { sellItems } from '../engine/inventory'
 import type { Rng } from '../engine/rng'
 import { SAVE_KEY, SAVE_VERSION, createInitialSave, migrateSave, normalizeSave, type SaveData } from './migrate'
 
@@ -14,6 +16,7 @@ interface GameStore extends SaveData {
   applyElapsed: (elapsedMs: number, lastTick: number) => void
   dismissOffline: () => void
   saveGame: () => void
+  sellItem: (itemId: ItemId) => void
 }
 
 const liveRng: Rng = () => Math.random()
@@ -70,13 +73,19 @@ export const useGameStore = create<GameStore>()(
         set((state) => {
           if (!(elapsedMs > 0)) return { lastTick }
           const result = advance(
-            { skills: state.skills, inventory: state.inventory, activeAction: state.activeAction },
+            {
+              skills: state.skills,
+              inventory: state.inventory,
+              gold: state.gold,
+              activeAction: state.activeAction,
+            },
             elapsedMs,
             liveRng,
           )
           return {
             skills: result.state.skills,
             inventory: result.state.inventory,
+            gold: result.state.gold,
             activeAction: result.state.activeAction,
             log: [...state.log, ...result.log].slice(-LOG_LIMIT),
             lastTick,
@@ -87,6 +96,7 @@ export const useGameStore = create<GameStore>()(
         set({ lastSaved: new Date().toISOString() })
         flushSave()
       },
+      sellItem: (itemId) => set((state) => sellItems(state.inventory, state.gold, itemId)),
     }),
     {
       name: SAVE_KEY,
@@ -96,6 +106,7 @@ export const useGameStore = create<GameStore>()(
         characterName: state.characterName,
         skills: state.skills,
         inventory: state.inventory,
+        gold: state.gold,
         lastSaved: state.lastSaved,
         lastTick: state.lastTick,
         activeAction: state.activeAction,

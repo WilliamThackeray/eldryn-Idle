@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { skillCheck } from './skillCheck'
+import { skillCheck, successChance } from './skillCheck'
 import type { Rng } from './rng'
 import { mulberry32 } from './rng'
 
@@ -56,6 +56,12 @@ test('each skill-check outcome band is reachable and sets the multipliers', () =
   })
 
   expect(skillCheck({ rng: scripted(0, 0.999), ...base }).byproduct).toBe(false)
+})
+
+test('success chance is the share of d20 faces that beat the activity DC', () => {
+  expect(successChance(2, 1)).toBe(13 / 20)
+  expect(successChance(0, 90)).toBe(2 / 20)
+  expect(successChance(20, 1)).toBe(19 / 20)
 })
 
 test('a natural 1 is a fumble and a natural 20 is a critical', () => {

@@ -30,6 +30,12 @@ export function OfflineModal() {
             })}
           </ul>
         )}
+        {report.gold > 0 && (
+          <>
+            <h3 className="font-bold mt-4 mb-1">Gold</h3>
+            <p className="text-sm">+{report.gold} gp</p>
+          </>
+        )}
         <h3 className="font-bold mt-4 mb-1">Items</h3>
         {report.items.length === 0 ? (
           <p className="text-sm">No items gained.</p>

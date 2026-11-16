@@ -43,14 +43,15 @@ async function catchUp(showReport: boolean) {
   const { elapsedMs, cappedMs } = cappedAway(awayMs)
   const beforeSkills = state.skills
   const beforeItems = state.inventory
+  const beforeGold = state.gold
   if (elapsedMs > 0) await play(elapsedMs)
   const after = useGameStore.getState()
-  const gains = summarizeGains(beforeSkills, after.skills, beforeItems, after.inventory)
+  const gains = summarizeGains(beforeSkills, after.skills, beforeItems, after.inventory, beforeGold, after.gold)
   useGameStore.setState({
     lastTick: Date.now(),
     offlineReport:
       showReport && awayMs >= REPORT_AFTER_MS
-        ? { awayMs, cappedMs, skills: gains.skills, items: gains.items }
+        ? { awayMs, cappedMs, skills: gains.skills, items: gains.items, gold: gains.gold }
         : after.offlineReport,
   })
 }
