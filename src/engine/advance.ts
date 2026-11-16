@@ -4,6 +4,7 @@ import { SKILLS, type SkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { deriveAbilities } from './abilities'
 import { OFFLINE_CAP_MS } from './config'
+import { emptyEquipment, gearRollMode, heavyArmorIntervalMultiplier, type Equipment } from './equipment'
 import { intervalMs } from './interval'
 import { hasItems, removeItems, addItems, type Inventory } from './inventory'
 import { rollGold, rollLoot } from './loot'
@@ -37,6 +38,8 @@ export interface AdvanceState {
   inventory: Inventory
   gold: number
   activeAction: ActiveAction | null
+  /** Missing means empty; keeps older advance tests valid. */
+  equipment?: Equipment
 }
 
 export interface SkillEvent {
@@ -141,23 +144,33 @@ export function onActivityComplete(
   return { ...state, inventory, gold: state.gold + rollGold(activity.gold, rng, multiplier) }
 }
 
-// shortcut: other speed bonuses stay 0 until gear, potions, and buffs exist.
+// shortcut: other speed bonuses stay 0 until potions and buffs exist.
 export function activityIntervalMs(
   skillId: SkillId,
   baseIntervalMs: number,
   skills: Record<SkillId, SkillProgress>,
+  equipment: Equipment = emptyEquipment(),
 ): number {
-  const dex = deriveAbilities(skills).find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
+  const abilities = deriveAbilities(skills)
+  const dex = abilities.find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
+  const str = abilities.find((ability) => ability.abbr === 'STR')?.score ?? 10
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
-  return intervalMs(baseIntervalMs, dex, 0, ability === 'STR' || ability === 'DEX')
+  const base = intervalMs(baseIntervalMs, dex, 0, ability === 'STR' || ability === 'DEX')
+  return base * heavyArmorIntervalMultiplier(equipment, str)
 }
 
-export function actionIntervalMs(action: ActiveAction, skills: Record<SkillId, SkillProgress>): number {
+export function actionIntervalMs(
+  action: ActiveAction,
+  skills: Record<SkillId, SkillProgress>,
+  equipment: Equipment = emptyEquipment(),
+): number {
   if (action.kind === 'combat') {
-    const dex = deriveAbilities(skills).find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
-    return intervalMs(action.baseIntervalMs, dex, 0, true)
+    const abilities = deriveAbilities(skills)
+    const dex = abilities.find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
+    const str = abilities.find((ability) => ability.abbr === 'STR')?.score ?? 10
+    return intervalMs(action.baseIntervalMs, dex, 0, true) * heavyArmorIntervalMultiplier(equipment, str)
   }
-  return activityIntervalMs(action.skillId, action.baseIntervalMs, skills)
+  return activityIntervalMs(action.skillId, action.baseIntervalMs, skills, equipment)
 }
 
 export function advance(
@@ -172,6 +185,7 @@ export function advance(
   let skills = state.skills
   let inventory = state.inventory
   let gold = state.gold
+  const equipment = state.equipment ?? emptyEquipment()
   let action: ActiveAction | null = current
   let progress = current.progressMs
   let remaining = elapsedMs
@@ -197,7 +211,7 @@ export function advance(
       break
     }
 
-    const interval = activityIntervalMs(acting.skillId, acting.baseIntervalMs, skills)
+    const interval = activityIntervalMs(acting.skillId, acting.baseIntervalMs, skills, equipment)
     if (!Number.isFinite(interval) || interval <= 0) break
 
     const need = Math.max(0, interval - progress)
@@ -210,6 +224,7 @@ export function advance(
     progress = 0
     const check = skillCheck({
       rng,
+      mode: gearRollMode(skill.id, equipment),
       abilityModifier: deriveAbilities(skills).find((ability) => ability.abbr === skill.ability)?.modifier ?? 0,
       skillLevel: levelForXp(skills[skill.id].xp),
       requiredLevel: acting.requiredLevel,
@@ -219,7 +234,7 @@ export function advance(
     const beforeItems = inventory
     const beforeGold = gold
     const next = onActivityComplete(
-      { skills, inventory, gold, activeAction: { ...acting, progressMs: 0 } },
+      { skills, inventory, gold, activeAction: { ...acting, progressMs: 0 }, equipment },
       acting,
       check,
       rng,

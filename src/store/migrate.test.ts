@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { initialClassProgress } from '../data/classes'
+import { emptyEquipment } from '../engine/equipment'
 import { SAVE_VERSION, migrateSave, nextActiveClassId, normalizeSave } from './migrate'
 
 test('an old save keeps real skill xp and drops weapon properties', () => {
@@ -36,7 +37,7 @@ test('a broken save resets to a fresh character', () => {
 })
 
 test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(5)
+  expect(SAVE_VERSION).toBe(6)
 
   const next = migrateSave(
     {
@@ -64,6 +65,8 @@ test('version 4 drops stored level and score and keeps vitality xp', () => {
   expect(next.activeClassId).toBe('fighter')
   expect(next.clericFocus).toBe('INT')
   expect(next.isInDungeonOrQuest).toBe(false)
+  expect(next.equipment).toEqual(emptyEquipment())
+  expect(next.equipmentSets).toEqual([])
 })
 
 test('version 3 keeps the active action and last tick', () => {
@@ -133,15 +136,17 @@ test('version 4 keeps item counts and gold and becomes Fighter', () => {
   expect(next.classes.fighter).toEqual({ xp: 0 })
   expect(next.clericFocus).toBe('INT')
   expect(next.isInDungeonOrQuest).toBe(false)
+  expect(next.equipment).toEqual(emptyEquipment())
+  expect(next.equipmentSets).toEqual([])
 })
 
-test('version 5 keeps class XP and the active class', () => {
+test('version 5 keeps class XP, gold, inventory, and gains empty equipment', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
       skills: { athletics: { xp: 10 } },
-      inventory: {},
-      gold: 0,
+      inventory: { dagger: 1 },
+      gold: 25,
       lastSaved: '2020-01-01T00:00:00.000Z',
       lastTick: 1_000,
       activeAction: null,
@@ -158,6 +163,10 @@ test('version 5 keeps class XP and the active class', () => {
   expect(next.classes.wizard).toEqual({ xp: 80 })
   expect(next.classes.fighter).toEqual({ xp: 0 })
   expect(next.clericFocus).toBe('STR')
+  expect(next.inventory).toEqual({ dagger: 1 })
+  expect(next.gold).toBe(25)
+  expect(next.equipment).toEqual(emptyEquipment())
+  expect(next.equipmentSets).toEqual([])
 })
 
 test('a missing active class on a v5 save stays null for the picker', () => {

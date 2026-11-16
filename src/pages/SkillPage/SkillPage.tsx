@@ -21,6 +21,7 @@ export function SkillPage({ skillId }: SkillPageProps) {
   const xp = useGameStore((state) => state.skills[skillId].xp)
   const skills = useGameStore((state) => state.skills)
   const inventory = useGameStore((state) => state.inventory)
+  const equipment = useGameStore((state) => state.equipment)
   const activeAction = useGameStore((state) => state.activeAction)
   const activeClassId = useGameStore((state) => state.activeClassId)
   const clericFocus = useGameStore((state) => state.clericFocus)
@@ -40,7 +41,9 @@ export function SkillPage({ skillId }: SkillPageProps) {
       : null
   const activities = activitiesFor(skillId)
   const activeInterval =
-    activeAction?.kind === 'skill' && activeAction.skillId === skillId ? actionIntervalMs(activeAction, skills) : 0
+    activeAction?.kind === 'skill' && activeAction.skillId === skillId
+      ? actionIntervalMs(activeAction, skills, equipment)
+      : 0
 
   const [selectedId, setSelectedId] = useState(() => defaultActivityId(skillId, activeAction?.kind === 'skill' ? activeAction : null, activities))
 
@@ -71,7 +74,7 @@ export function SkillPage({ skillId }: SkillPageProps) {
               activeAction?.kind === 'skill' &&
               activeAction.skillId === skillId &&
               activeAction.activityId === activity.id
-            const interval = activityIntervalMs(skillId, activity.baseIntervalMs, skills)
+            const interval = activityIntervalMs(skillId, activity.baseIntervalMs, skills, equipment)
             return (
               <SkillCard
                 key={activity.id}
@@ -97,7 +100,7 @@ export function SkillPage({ skillId }: SkillPageProps) {
             description={selected.description}
             xpGain={selected.xp}
             xpMultiplierLabel={xpMultiplierLabel}
-            intervalSeconds={formatInterval(activityIntervalMs(skillId, selected.baseIntervalMs, skills))}
+            intervalSeconds={formatInterval(activityIntervalMs(skillId, selected.baseIntervalMs, skills, equipment))}
             requiredLevel={selected.requiredLevel}
             dc={checkDc(selected.requiredLevel)}
             successPercent={Math.round(successChance(bonus, selected.requiredLevel) * 100)}

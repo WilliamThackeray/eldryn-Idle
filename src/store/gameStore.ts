@@ -2,7 +2,16 @@ import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
 import { modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
 import type { ItemId } from '../data/items'
+import { buyItem as buyShopItem } from '../data/shop'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
+import {
+  applyLoadout,
+  canEquip,
+  emptyEquipment,
+  equip,
+  unequip,
+  type EquipmentSlot,
+} from '../engine/equipment'
 import { sellItems } from '../engine/inventory'
 import type { Rng } from '../engine/rng'
 import {
@@ -26,6 +35,12 @@ interface GameStore extends SaveData {
   dismissOffline: () => void
   saveGame: () => void
   sellItem: (itemId: ItemId) => void
+  buyItem: (itemId: ItemId) => void
+  equipItem: (itemId: ItemId) => void
+  unequipSlot: (slot: EquipmentSlot) => void
+  saveEquipmentSet: (name: string) => void
+  loadEquipmentSet: (name: string) => void
+  deleteEquipmentSet: (name: string) => void
   setActiveClass: (classId: ClassId) => void
   setClericFocus: (focus: ClericFocus) => void
 }
@@ -89,6 +104,7 @@ export const useGameStore = create<GameStore>()(
               inventory: state.inventory,
               gold: state.gold,
               activeAction: state.activeAction,
+              equipment: state.equipment,
             },
             elapsedMs,
             liveRng,
@@ -109,6 +125,40 @@ export const useGameStore = create<GameStore>()(
         flushSave()
       },
       sellItem: (itemId) => set((state) => sellItems(state.inventory, state.gold, itemId)),
+      buyItem: (itemId) => set((state) => buyShopItem(state.inventory, state.gold, itemId)),
+      equipItem: (itemId) =>
+        set((state) => {
+          if (state.isInDungeonOrQuest || !canEquip(state.equipment, itemId)) return state
+          const next = equip(state.equipment, state.inventory, itemId)
+          if (!next) return state
+          return { equipment: next.equipment, inventory: next.inventory }
+        }),
+      unequipSlot: (slot) =>
+        set((state) => {
+          if (state.isInDungeonOrQuest) return state
+          const next = unequip(state.equipment, state.inventory, slot)
+          return { equipment: next.equipment, inventory: next.inventory }
+        }),
+      saveEquipmentSet: (name) =>
+        set((state) => {
+          const trimmed = name.trim()
+          if (!trimmed) return state
+          const slots = { ...state.equipment }
+          const rest = state.equipmentSets.filter((entry) => entry.name !== trimmed)
+          return { equipmentSets: [...rest, { name: trimmed, slots }] }
+        }),
+      loadEquipmentSet: (name) =>
+        set((state) => {
+          if (state.isInDungeonOrQuest) return state
+          const found = state.equipmentSets.find((entry) => entry.name === name)
+          if (!found) return state
+          const next = applyLoadout(state.equipment, state.inventory, found.slots)
+          return { equipment: next.equipment, inventory: next.inventory }
+        }),
+      deleteEquipmentSet: (name) =>
+        set((state) => ({
+          equipmentSets: state.equipmentSets.filter((entry) => entry.name !== name),
+        })),
       setActiveClass: (classId) =>
         set((state) => {
           const next = nextActiveClassId(state.isInDungeonOrQuest, classId)
@@ -133,6 +183,8 @@ export const useGameStore = create<GameStore>()(
         classes: state.classes,
         clericFocus: state.clericFocus,
         isInDungeonOrQuest: state.isInDungeonOrQuest,
+        equipment: state.equipment ?? emptyEquipment(),
+        equipmentSets: state.equipmentSets ?? [],
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

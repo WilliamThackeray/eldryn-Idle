@@ -22,10 +22,11 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
   const activeClassId = useGameStore((state) => state.activeClassId)
   const classes = useGameStore((state) => state.classes)
   const skills = useGameStore((state) => state.skills)
+  const equipment = useGameStore((state) => state.equipment)
   const gold = useGameStore((state) => state.gold)
   const activeAction = useGameStore((state) => state.activeAction)
   const saveGame = useGameStore((state) => state.saveGame)
-  const actionInterval = activeAction ? actionIntervalMs(activeAction, skills) : 0
+  const actionInterval = activeAction ? actionIntervalMs(activeAction, skills, equipment) : 0
   const actionProgress =
     activeAction && actionInterval > 0 ? Math.min(100, (activeAction.progressMs / actionInterval) * 100) : 0
   const actionLabel = activeAction

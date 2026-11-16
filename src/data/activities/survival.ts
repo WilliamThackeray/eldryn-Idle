@@ -15,4 +15,11 @@ export const survivalActivities = [
   activity({ skillId: 'survival', id: 'butcher-fowl', name: 'Butcher Air Fowl', description: 'Break a bird into meat and bones.', requiredLevel: 20, inputs: [stack('air-fowl')], outputs: [drop('raw-fowl'), drop('bones')] }),
   activity({ skillId: 'survival', id: 'butcher-medium', name: 'Butcher Medium Animal', description: 'Break a medium catch into meat, hide, and bones.', requiredLevel: 30, inputs: [stack('medium-animal')], outputs: [drop('raw-meat', 2), drop('hide'), drop('bones', 2)] }),
   activity({ skillId: 'survival', id: 'butcher-large', name: 'Butcher Large Animal', description: 'Break a large catch into meat, hide, and bones.', requiredLevel: 50, inputs: [stack('large-animal')], outputs: [drop('raw-meat', 3), drop('hide', 2), drop('bones', 3)] }),
+  activity({ skillId: 'survival', id: 'fletch-arrows', name: 'Fletch Arrows', description: 'Cut and fletch a bundle of arrows.', requiredLevel: 1, inputs: [stack('logs')], outputs: [drop('arrows', 20)] }),
+  activity({ skillId: 'survival', id: 'fletch-shortbow', name: 'Fletch Shortbow', description: 'Shape hardwood into a shortbow.', requiredLevel: 20, inputs: [stack('hardwood', 2)], outputs: [drop('shortbow')] }),
+  activity({ skillId: 'survival', id: 'leather-helmet', name: 'Leatherworking Helmet', description: 'Stitch a leather helmet.', requiredLevel: 1, inputs: [stack('hide')], outputs: [drop('leather-helmet')] }),
+  activity({ skillId: 'survival', id: 'leather-chest', name: 'Leatherworking Chest', description: 'Stitch a leather chest.', requiredLevel: 1, inputs: [stack('hide', 2)], outputs: [drop('leather-chest')] }),
+  activity({ skillId: 'survival', id: 'leather-chaps', name: 'Leatherworking Chaps', description: 'Stitch leather chaps.', requiredLevel: 1, inputs: [stack('hide')], outputs: [drop('leather-chaps')] }),
+  activity({ skillId: 'survival', id: 'leather-gauntlets', name: 'Leatherworking Gauntlets', description: 'Stitch leather gauntlets.', requiredLevel: 1, inputs: [stack('hide')], outputs: [drop('leather-gauntlets')] }),
+  activity({ skillId: 'survival', id: 'leather-boots', name: 'Leatherworking Boots', description: 'Stitch leather boots.', requiredLevel: 1, inputs: [stack('hide')], outputs: [drop('leather-boots')] }),
 ]

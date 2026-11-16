@@ -60,3 +60,50 @@ export const MIN_INTERVAL_FRACTION = 0.5
 
 /** Offline: cap away-time progress at 24 hours. */
 export const OFFLINE_CAP_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Armor value split across worn pieces. Floor the sum.
+ * TODO(design): confirm the split.
+ */
+export const ARMOR_SLOT_SHARE = {
+  chest: 0.4,
+  chaps: 0.25,
+  helmet: 0.15,
+  gauntlets: 0.1,
+  boots: 0.1,
+} as const
+
+/** Weapon base interval in seconds before DEX and other speed bonuses. */
+export const WEAPON_INTERVAL_SEC = {
+  light: 4.8,
+  standard: 6,
+  heavy: 7.2,
+  loadingExtra: 1.2,
+} as const
+
+/** Soft STR miss on heavy armor: finished interval × this factor. */
+export const HEAVY_ARMOR_INTERVAL_FACTOR = 1.1
+
+/**
+ * Attunement is three dedicated slots.
+ * TODO(design): slots vs a limit of 3 attuned items across all gear.
+ */
+export const ATTUNEMENT_LIMIT = 3
+
+/**
+ * Flat to-hit / damage / AC from material tiers. Defaults to 0.
+ * TODO(design): material tiers as flat bonuses.
+ */
+export const MATERIAL_FLAT_BONUS = {
+  iron: 0,
+  steel: 0,
+  silvered: 0,
+  mithral: 0,
+  adamantine: 0,
+} as const
+
+export const MATERIAL_FLAGS = {
+  silvered: { bypassesResistance: true },
+  mithral: { ignoresStrAndStealth: true },
+  adamantine: { negatesCriticalHits: true },
+} as const

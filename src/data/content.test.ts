@@ -59,3 +59,18 @@ test('mining, steel, fishing, cooking, and the herb plot match the slice', () =>
   ])
   expect(getActivity('survival', 'butcher-small')?.inputs).toEqual([{ itemId: 'small-animal', quantity: 1 }])
 })
+
+test('smithing, fletching, and leatherworking craft gear', () => {
+  expect(getActivity('athletics', 'smith-dagger')).toMatchObject({
+    inputs: [{ itemId: 'iron-bar', quantity: 1 }],
+    outputs: [{ itemId: 'dagger' }],
+  })
+  expect(getActivity('survival', 'fletch-arrows')).toMatchObject({
+    inputs: [{ itemId: 'logs', quantity: 1 }],
+    outputs: [{ itemId: 'arrows', min: 20, max: 20 }],
+  })
+  expect(getActivity('survival', 'leather-chest')).toMatchObject({
+    inputs: [{ itemId: 'hide', quantity: 2 }],
+    outputs: [{ itemId: 'leather-chest' }],
+  })
+})

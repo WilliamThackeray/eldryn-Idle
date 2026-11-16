@@ -7,12 +7,13 @@ import {
 import { isItemId } from '../data/items'
 import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
 import type { ActiveAction } from '../engine/advance'
+import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
 import type { Inventory } from '../engine/inventory'
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v5: active class, per-class XP, cleric focus, dungeon/quest lock. */
-export const SAVE_VERSION = 5
+/** v6: equipment slots and named loadouts. */
+export const SAVE_VERSION = 6
 
 export interface SaveData {
   characterName: string
@@ -26,6 +27,8 @@ export interface SaveData {
   classes: Record<ClassId, { xp: number }>
   clericFocus: ClericFocus
   isInDungeonOrQuest: boolean
+  equipment: Equipment
+  equipmentSets: EquipmentSet[]
 }
 
 export function createInitialSave(): SaveData {
@@ -41,6 +44,8 @@ export function createInitialSave(): SaveData {
     classes: initialClassProgress(),
     clericFocus: 'INT',
     isInDungeonOrQuest: false,
+    equipment: emptyEquipment(),
+    equipmentSets: [],
   }
 }
 
@@ -79,6 +84,8 @@ export function normalizeSave(raw: unknown): SaveData {
     classes: readClasses(source.classes),
     clericFocus: source.clericFocus === 'STR' ? 'STR' : 'INT',
     isInDungeonOrQuest: source.isInDungeonOrQuest === true,
+    equipment: readEquipment(source.equipment),
+    equipmentSets: readEquipmentSets(source.equipmentSets),
   }
 }
 
@@ -196,4 +203,26 @@ function readGold(value: unknown): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+const EQUIPMENT_SLOTS = Object.keys(emptyEquipment()) as EquipmentSlot[]
+
+function readEquipment(value: unknown): Equipment {
+  const equipment = emptyEquipment()
+  if (!isRecord(value)) return equipment
+  for (const slot of EQUIPMENT_SLOTS) {
+    const id = value[slot]
+    if (typeof id === 'string' && isItemId(id)) equipment[slot] = id
+  }
+  return equipment
+}
+
+function readEquipmentSets(value: unknown): EquipmentSet[] {
+  if (!Array.isArray(value)) return []
+  const sets: EquipmentSet[] = []
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.name !== 'string' || !entry.name.trim()) continue
+    sets.push({ name: entry.name.trim(), slots: readEquipment(entry.slots) })
+  }
+  return sets
 }
