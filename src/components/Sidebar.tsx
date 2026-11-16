@@ -1,10 +1,25 @@
-import { BookOpen, Dumbbell, Eye, Footprints, Package, ShoppingCart, Sparkles, Swords } from 'lucide-react'
-import { useState } from 'react'
+import {
+  Axe,
+  Crosshair,
+  Drama,
+  Dumbbell,
+  Eye,
+  Footprints,
+  Hand,
+  HeartPulse,
+  Leaf,
+  MessageCircle,
+  PawPrint,
+  Scale,
+  ScrollText,
+  Search,
+  Sparkles,
+  Theater,
+  TreePine,
+  Wand2,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { ABILITIES } from '../data/abilities'
-import { SKILL_ABILITY_GROUPS, SKILLS } from '../data/skills'
-import type { AbilityAbbr } from '../types/game'
-import { Link } from './Link'
+import { SKILL_ABILITY_GROUPS, SKILLS, type SkillId } from '../data/skills'
 import { Section } from './Section'
 
 interface SidebarProps {
@@ -12,74 +27,46 @@ interface SidebarProps {
   setCurrentPage: (page: string) => void
 }
 
-const GROUP_ICONS: Record<(typeof SKILL_ABILITY_GROUPS)[number], LucideIcon> = {
-  STR: Dumbbell,
-  DEX: Footprints,
-  INT: BookOpen,
-  WIS: Eye,
-  CHA: Sparkles,
+const SKILL_ICONS: Record<Exclude<SkillId, 'vitality'>, LucideIcon> = {
+  athletics: Dumbbell,
+  acrobatics: Footprints,
+  sleightOfHand: Hand,
+  stealth: Eye,
+  arcana: Wand2,
+  history: ScrollText,
+  investigation: Search,
+  nature: Leaf,
+  religion: Sparkles,
+  animalHandling: PawPrint,
+  insight: Scale,
+  medicine: HeartPulse,
+  perception: Crosshair,
+  survival: TreePine,
+  deception: Drama,
+  intimidation: Axe,
+  performance: Theater,
+  persuasion: MessageCircle,
 }
 
 export function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
-  const [open, setOpen] = useState<Record<string, boolean>>({
-    combat: true,
-    STR: true,
-    DEX: true,
-    INT: true,
-    WIS: true,
-    CHA: true,
-  })
-
-  const toggle = (id: string) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }))
-
   return (
-    <div className="w-64 bg-[#1f1f1f] text-[#DAD6D6] h-screen p-4 flex flex-col gap-4 overflow-auto">
-      <Link
-        icon={<ShoppingCart size={20} />}
-        label="Shop"
-        onClick={() => setCurrentPage('shop')}
-        active={currentPage === 'shop'}
-      />
-      <Link
-        icon={<Package size={20} />}
-        label="Inventory"
-        onClick={() => setCurrentPage('inventory')}
-        active={currentPage === 'inventory'}
-      />
-
-      <Section
-        title="Combat"
-        icon={<Swords size={20} />}
-        isOpen={open.combat}
-        onToggle={() => toggle('combat')}
-        skills={[{ id: 'monsterHunting', name: 'Monster Hunting' }]}
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-      />
-
-      {SKILL_ABILITY_GROUPS.map((abbr) => {
-        const ability = ABILITIES.find((entry) => entry.abbr === abbr)
-        const Icon = GROUP_ICONS[abbr]
-        return (
-          <Section
-            key={abbr}
-            title={abilityName(ability?.name, abbr)}
-            icon={<Icon size={20} />}
-            isOpen={open[abbr]}
-            onToggle={() => toggle(abbr)}
-            skills={SKILLS.filter((skill) => skill.ability === abbr).map((skill) => ({
+    <aside className="relative z-40 flex h-full w-16 shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-brown/40 bg-ink py-3">
+      {SKILL_ABILITY_GROUPS.map((abbr) => (
+        <Section
+          key={abbr}
+          title={abbr}
+          skills={SKILLS.filter((skill) => skill.ability === abbr && skill.id !== 'vitality').map((skill) => {
+            const Icon = SKILL_ICONS[skill.id as Exclude<SkillId, 'vitality'>]
+            return {
               id: skill.id,
               name: skill.name,
-            }))}
-            currentPage={currentPage}
-            onNavigate={setCurrentPage}
-          />
-        )
-      })}
-    </div>
+              icon: <Icon size={20} />,
+            }
+          })}
+          currentPage={currentPage}
+          onNavigate={setCurrentPage}
+        />
+      ))}
+    </aside>
   )
-}
-
-function abilityName(name: string | undefined, abbr: AbilityAbbr): string {
-  return name ?? abbr
 }

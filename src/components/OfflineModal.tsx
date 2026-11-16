@@ -9,8 +9,13 @@ export function OfflineModal() {
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="offline-title" className="w-full max-w-md bg-[#1f1f1f] text-[#DAD6D6] rounded-lg shadow-lg p-6">
-        <h2 id="offline-title" className="text-xl font-bold text-[#F4AC45] mb-2">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="offline-title"
+        className="w-full max-w-md rounded-lg border border-brown/40 bg-panel p-6 text-parchment shadow-lg"
+      >
+        <h2 id="offline-title" className="mb-2 text-xl font-bold text-gold">
           While you were away
         </h2>
         <AwayTime report={report} />
@@ -51,7 +56,7 @@ export function OfflineModal() {
         <button
           type="button"
           onClick={dismissOffline}
-          className="mt-6 px-4 py-2 bg-[#92BFB1] text-[#1f1f1f] rounded-lg hover:bg-[#F4AC45]"
+          className="mt-6 rounded-lg bg-sage px-4 py-2 text-ink transition-colors hover:bg-gold"
         >
           Continue
         </button>

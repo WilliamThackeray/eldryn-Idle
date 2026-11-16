@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { activitiesFor, type ActivityDef, type GoldDrop, type LootEntry } from '../../data/activities'
 import { getItem } from '../../data/items'
 import { SKILLS, type SkillId } from '../../data/skills'
@@ -7,6 +8,7 @@ import type { Inventory } from '../../engine/inventory'
 import { checkDc, successChance } from '../../engine/skillCheck'
 import { levelForXp, proficiency, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
+import { ActivityDetail } from './components/ActivityDetail'
 import { SkillCard } from './components/SkillCard'
 import { SkillProgress } from './components/SkillProgress'
 
@@ -27,63 +29,103 @@ export function SkillPage({ skillId }: SkillPageProps) {
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
   const modifier = deriveAbilities(skills).find((entry) => entry.abbr === ability)?.modifier ?? 0
   const bonus = modifier + proficiency(tier(level))
+  const activities = activitiesFor(skillId)
   const activeInterval =
     activeAction?.kind === 'skill' && activeAction.skillId === skillId ? actionIntervalMs(activeAction, skills) : 0
 
+  const [selectedId, setSelectedId] = useState(() => defaultActivityId(skillId, activeAction?.kind === 'skill' ? activeAction : null, activities))
+
+  useEffect(() => {
+    const running = useGameStore.getState().activeAction
+    setSelectedId(
+      defaultActivityId(skillId, running?.kind === 'skill' ? running : null, activitiesFor(skillId)),
+    )
+  }, [skillId])
+
+  const selected = activities.find((activity) => activity.id === selectedId) ?? activities[0]
+
   return (
-    <div>
-      <div className="mb-6">
-        <SkillProgress
-          level={progress.level}
-          tier={tier(progress.level)}
-          xp={progress.xp}
-          xpToNextLevel={progress.xpToNextLevel}
-          progress={progress.progress}
-          capped={progress.capped}
-        />
+    <div className="space-y-6">
+      <SkillProgress
+        level={progress.level}
+        tier={tier(progress.level)}
+        xp={progress.xp}
+        xpToNextLevel={progress.xpToNextLevel}
+        progress={progress.progress}
+        capped={progress.capped}
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {activities.map((activity) => {
+            const active =
+              activeAction?.kind === 'skill' &&
+              activeAction.skillId === skillId &&
+              activeAction.activityId === activity.id
+            const interval = activityIntervalMs(skillId, activity.baseIntervalMs, skills)
+            return (
+              <SkillCard
+                key={activity.id}
+                title={activity.name}
+                description={activity.description}
+                intervalSeconds={formatInterval(interval)}
+                requiredLevel={activity.requiredLevel}
+                needsMaterials={lacksInputs(activity, inventory)}
+                locked={level < activity.requiredLevel}
+                selected={selected?.id === activity.id}
+                active={active}
+                progress={active && activeInterval > 0 ? Math.min(100, (activeAction.progressMs / activeInterval) * 100) : 0}
+                onSelect={() => setSelectedId(activity.id)}
+              />
+            )
+          })}
+        </div>
+
+        {selected && (
+          <ActivityDetail
+            title={selected.name}
+            description={selected.description}
+            xpGain={selected.xp}
+            intervalSeconds={formatInterval(activityIntervalMs(skillId, selected.baseIntervalMs, skills))}
+            requiredLevel={selected.requiredLevel}
+            dc={checkDc(selected.requiredLevel)}
+            successPercent={Math.round(successChance(bonus, selected.requiredLevel) * 100)}
+            bonus={bonus}
+            details={activityDetails(selected, inventory)}
+            needsMaterials={lacksInputs(selected, inventory)}
+            locked={level < selected.requiredLevel}
+            active={
+              activeAction?.kind === 'skill' &&
+              activeAction.skillId === skillId &&
+              activeAction.activityId === selected.id
+            }
+            progress={
+              activeAction?.kind === 'skill' &&
+              activeAction.skillId === skillId &&
+              activeAction.activityId === selected.id &&
+              activeInterval > 0
+                ? Math.min(100, (activeAction.progressMs / activeInterval) * 100)
+                : 0
+            }
+            onStart={() =>
+              startActivity({
+                skillId,
+                activityId: selected.id,
+                label: selected.name,
+                baseIntervalMs: selected.baseIntervalMs,
+                requiredLevel: selected.requiredLevel,
+                baseXp: selected.xp,
+              })
+            }
+            onStop={stopActivity}
+          />
+        )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {activitiesFor(skillId).map((activity) => {
-          const active =
-            activeAction?.kind === 'skill' &&
-            activeAction.skillId === skillId &&
-            activeAction.activityId === activity.id
-          const interval = activityIntervalMs(skillId, activity.baseIntervalMs, skills)
-          const short = lacksInputs(activity, inventory)
-          return (
-            <SkillCard
-              key={activity.id}
-              title={activity.name}
-              description={activity.description}
-              xpGain={activity.xp}
-              intervalSeconds={formatInterval(interval)}
-              requiredLevel={activity.requiredLevel}
-              dc={checkDc(activity.requiredLevel)}
-              successPercent={Math.round(successChance(bonus, activity.requiredLevel) * 100)}
-              details={activityDetails(activity, inventory)}
-              needsMaterials={short}
-              locked={level < activity.requiredLevel}
-              active={active}
-              progress={active && activeInterval > 0 ? Math.min(100, (activeAction.progressMs / activeInterval) * 100) : 0}
-              onStart={() =>
-                startActivity({
-                  skillId,
-                  activityId: activity.id,
-                  label: activity.name,
-                  baseIntervalMs: activity.baseIntervalMs,
-                  requiredLevel: activity.requiredLevel,
-                  baseXp: activity.xp,
-                })
-              }
-              onStop={stopActivity}
-            />
-          )
-        })}
-      </div>
-      <section className="mt-6 bg-[#1f1f1f] text-[#DAD6D6] rounded-lg p-4">
-        <h2 className="font-bold mb-2">Recent rolls</h2>
+
+      <section className="rounded-lg border border-brown/40 bg-panel p-4 text-parchment">
+        <h2 className="mb-2 font-bold text-gold">Recent rolls</h2>
         {log.length === 0 ? (
-          <p className="text-sm">No rolls yet.</p>
+          <p className="text-sm text-parchment/70">No rolls yet.</p>
         ) : (
           <ul className="space-y-1 text-sm">
             {[...log].reverse().map((event, index) => (
@@ -98,6 +140,18 @@ export function SkillPage({ skillId }: SkillPageProps) {
       </section>
     </div>
   )
+}
+
+function defaultActivityId(
+  skillId: SkillId,
+  activeAction: { skillId: SkillId; activityId: string } | null,
+  activities: ActivityDef[],
+): string {
+  if (activeAction?.skillId === skillId) {
+    const running = activities.find((activity) => activity.id === activeAction.activityId)
+    if (running) return running.id
+  }
+  return activities[0]?.id ?? ''
 }
 
 function lacksInputs(activity: ActivityDef, inventory: Inventory): boolean {

@@ -1,78 +1,49 @@
+import { ProgressBar } from '../../../components/ProgressBar'
+
 interface SkillCardProps {
   title: string
   description: string
-  xpGain: number
   intervalSeconds: string
   requiredLevel: number
-  dc: number
-  successPercent: number
-  details: string[]
   needsMaterials: boolean
   locked: boolean
+  selected: boolean
   active: boolean
   progress: number
-  onStart: () => void
-  onStop: () => void
+  onSelect: () => void
 }
 
 export function SkillCard({
   title,
   description,
-  xpGain,
   intervalSeconds,
   requiredLevel,
-  dc,
-  successPercent,
-  details,
   needsMaterials,
   locked,
+  selected,
   active,
   progress,
-  onStart,
-  onStop,
+  onSelect,
 }: SkillCardProps) {
   return (
-    <div className={`bg-[#1f1f1f] p-6 rounded-lg shadow-lg ${locked ? 'opacity-60' : ''}`}>
-      <h3 className="text-xl font-bold text-[#F4AC45] mb-2">{title}</h3>
-      <p className="text-[#DAD6D6] mb-3">{description}</p>
-      <p className="text-sm text-[#DAD6D6] mb-2">
-        DC {dc} · {successPercent}% success
-      </p>
-      {details.map((line) => (
-        <p key={line} className="text-sm text-[#92BFB1] mb-1">
-          {line}
-        </p>
-      ))}
-      <div className="flex justify-between items-center gap-3 mb-3 mt-3">
-        <span className="text-[#92BFB1]">
-          +{xpGain} XP · {intervalSeconds}
-        </span>
-        {locked ? (
-          <span className="text-[#DAD6D6]">Requires level {requiredLevel}</span>
-        ) : needsMaterials && !active ? (
-          <span className="text-[#DAD6D6]">Need materials</span>
-        ) : (
-          <button
-            type="button"
-            onClick={active ? onStop : onStart}
-            className="px-4 py-2 bg-[#A61C3C] text-[#DAD6D6] rounded-lg hover:bg-[#694A38] transition-colors"
-          >
-            {active ? 'Stop' : 'Start'}
-          </button>
-        )}
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-lg border p-4 text-left shadow-lg transition-colors ${
+        selected ? 'border-gold bg-panel' : 'border-brown/40 bg-panel/80 hover:border-brown'
+      } ${locked ? 'opacity-60' : ''}`}
+    >
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <h3 className="text-lg font-bold text-gold">{title}</h3>
+        <span className="shrink-0 text-sm text-sage">{intervalSeconds}</span>
       </div>
-      {active && (
-        <div
-          className="w-full h-2 bg-[#694A38] rounded-full overflow-hidden"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(progress)}
-          aria-label={`${title} progress`}
-        >
-          <div className="h-full bg-[#F4AC45]" style={{ width: `${progress}%` }} />
-        </div>
-      )}
-    </div>
+      <p className="mb-2 line-clamp-2 text-sm text-parchment/90">{description}</p>
+      {locked ? (
+        <p className="text-sm text-parchment/70">Requires level {requiredLevel}</p>
+      ) : needsMaterials ? (
+        <p className="text-sm text-parchment/70">Need materials</p>
+      ) : null}
+      {active && <ProgressBar progress={progress} className="mt-3 h-1.5" label={`${title} progress`} />}
+    </button>
   )
 }

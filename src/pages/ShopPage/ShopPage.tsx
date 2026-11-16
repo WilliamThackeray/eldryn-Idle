@@ -1,3 +1,7 @@
 export function ShopPage() {
-  return <div className="text-center text-[#1f1f1f]">Shop content will go here</div>
+  return (
+    <div className="rounded-lg border border-brown/40 bg-panel p-8 text-center text-parchment/80">
+      Shop content will go here
+    </div>
+  )
 }

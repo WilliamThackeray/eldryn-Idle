@@ -1,3 +1,5 @@
+import { ProgressBar } from '../../../components/ProgressBar'
+
 interface SkillProgressProps {
   level: number
   tier: number
@@ -9,15 +11,13 @@ interface SkillProgressProps {
 
 export function SkillProgress({ level, tier, xp, xpToNextLevel, progress, capped }: SkillProgressProps) {
   return (
-    <div className="bg-[#1f1f1f] text-[#DAD6D6] p-4 rounded-lg">
-      <div className="flex justify-between mb-2">
+    <div className="rounded-lg border border-brown/40 bg-panel p-4 text-parchment">
+      <div className="mb-2 flex justify-between text-sm">
         <span>Level {level}</span>
         <span>Tier {tier}</span>
         <span>{capped ? `${xp} XP` : `${xp} / ${xpToNextLevel} XP`}</span>
       </div>
-      <div className="w-full h-4 bg-[#694A38] rounded-full overflow-hidden">
-        <div className="h-full bg-[#F4AC45]" style={{ width: `${progress}%` }} />
-      </div>
+      <ProgressBar progress={progress} className="h-3" label="Skill XP progress" />
     </div>
   )
 }

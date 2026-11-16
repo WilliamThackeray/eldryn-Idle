@@ -1,17 +1,24 @@
-import { Coins, Save, User } from 'lucide-react'
-import { useState } from 'react'
+import { Coins, Package, Save, ShoppingCart, Swords, User } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { SKILLS } from '../data/skills'
 import { deriveAbilities } from '../engine/abilities'
 import { actionIntervalMs } from '../engine/advance'
 import { progressToNext } from '../engine/xp'
 import { useGameStore } from '../store/gameStore'
+import { Link } from './Link'
+import { ProgressBar } from './ProgressBar'
 
 interface HeaderProps {
   title: string
+  currentPage: string
+  setCurrentPage: (page: string) => void
 }
 
-export function Header({ title }: HeaderProps) {
+export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
   const [showCharacterInfo, setShowCharacterInfo] = useState(false)
+  const [charTip, setCharTip] = useState<{ top: number; left: number } | null>(null)
+  const charRef = useRef<HTMLButtonElement>(null)
   const skills = useGameStore((state) => state.skills)
   const gold = useGameStore((state) => state.gold)
   const activeAction = useGameStore((state) => state.activeAction)
@@ -25,45 +32,102 @@ export function Header({ title }: HeaderProps) {
       ? `${SKILLS.find((skill) => skill.id === activeAction.skillId)?.name ?? 'Skill'} · ${activeAction.label}`
       : activeAction.label
     : 'Idle'
+  const tipHost = typeof document !== 'undefined' ? document.getElementById('tooltip-root') : null
+
+  const showCharTip = () => {
+    const rect = charRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setCharTip({ top: rect.bottom + 8, left: rect.left + rect.width / 2 })
+  }
 
   return (
-    <div className="bg-[#1f1f1f] text-[#DAD6D6] p-4 flex justify-between items-center">
-      <h1 className="text-2xl font-bold">{title}</h1>
+    <div className="flex items-center justify-between border-b border-brown/40 bg-panel px-4 py-3 text-parchment">
+      <h1 className="text-2xl font-bold text-gold">{title}</h1>
 
-      <div className="flex items-center gap-2 min-w-0 mx-4" aria-label="Active action">
-        <span className="truncate text-sm">{actionLabel}</span>
-        {activeAction && (
-          <div
-            className="w-24 h-2 shrink-0 bg-[#694A38] rounded-full overflow-hidden"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(actionProgress)}
-            aria-label="Active action progress"
+      <div className="mx-4 flex min-w-0 items-center gap-2" aria-label="Active action">
+        {activeAction ? (
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentPage(activeAction.kind === 'skill' ? activeAction.skillId : 'monsterHunting')
+            }
+            className="truncate text-sm hover:text-gold hover:underline"
           >
-            <div className="h-full bg-[#F4AC45]" style={{ width: `${actionProgress}%` }} />
+            {actionLabel}
+          </button>
+        ) : (
+          <span className="truncate text-sm">{actionLabel}</span>
+        )}
+        {activeAction && (
+          <div className="w-24 shrink-0">
+            <ProgressBar progress={actionProgress} className="h-2" label="Active action progress" />
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1 text-[#F4AC45]" aria-label="Gold">
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 text-gold" aria-label="Gold">
           <Coins size={18} />
           <span>{gold.toLocaleString()} gp</span>
         </div>
+
+        <Link
+          icon={<ShoppingCart size={20} />}
+          label="Shop"
+          tipSide="below"
+          onClick={() => setCurrentPage('shop')}
+          active={currentPage === 'shop'}
+        />
+        <Link
+          icon={<Package size={20} />}
+          label="Inventory"
+          tipSide="below"
+          onClick={() => setCurrentPage('inventory')}
+          active={currentPage === 'inventory'}
+        />
+        <Link
+          icon={<Swords size={20} />}
+          label="Monster Hunting"
+          tipSide="below"
+          onClick={() => setCurrentPage('monsterHunting')}
+          active={currentPage === 'monsterHunting'}
+        />
+
         <div className="relative">
           <button
+            ref={charRef}
+            type="button"
             onClick={() => setShowCharacterInfo(!showCharacterInfo)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[#694A38]"
+            onMouseEnter={showCharTip}
+            onFocus={showCharTip}
+            onMouseLeave={() => setCharTip(null)}
+            onBlur={() => setCharTip(null)}
+            aria-label="Character Info"
+            aria-expanded={showCharacterInfo}
+            className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+              showCharacterInfo ? 'bg-crimson text-parchment' : 'text-parchment hover:bg-brown'
+            }`}
           >
             <User size={20} />
-            <span>Character Info</span>
           </button>
+          {charTip &&
+            !showCharacterInfo &&
+            tipHost &&
+            createPortal(
+              <span
+                role="tooltip"
+                className="absolute -translate-x-1/2 whitespace-nowrap rounded-md bg-panel px-2 py-1 text-xs text-parchment shadow-lg ring-1 ring-brown/60"
+                style={{ top: charTip.top, left: charTip.left }}
+              >
+                Character Info
+              </span>,
+              tipHost,
+            )}
 
           {showCharacterInfo && (
-            <div className="absolute right-0 top-full mt-2 w-72 max-h-96 overflow-auto bg-[#1f1f1f] rounded-lg shadow-lg p-4 z-10">
-              <h3 className="font-bold mb-2">Abilities</h3>
-              <div className="space-y-1 mb-3">
+            <div className="absolute right-0 top-full z-10 mt-2 max-h-96 w-72 overflow-auto rounded-lg border border-brown/40 bg-panel p-4 shadow-lg">
+              <h3 className="mb-2 font-bold text-gold">Abilities</h3>
+              <div className="mb-3 space-y-1">
                 {abilities.map((ability) => (
                   <div key={ability.id} className="flex justify-between">
                     <span>{ability.abbr}</span>
@@ -73,7 +137,7 @@ export function Header({ title }: HeaderProps) {
                   </div>
                 ))}
               </div>
-              <h3 className="font-bold mb-2">Skills</h3>
+              <h3 className="mb-2 font-bold text-gold">Skills</h3>
               <div className="space-y-1">
                 {SKILLS.map((skill) => {
                   const progress = progressToNext(skills[skill.id].xp)
@@ -92,8 +156,9 @@ export function Header({ title }: HeaderProps) {
         </div>
 
         <button
+          type="button"
           onClick={saveGame}
-          className="flex items-center gap-2 px-4 py-2 bg-[#92BFB1] text-[#1f1f1f] rounded-lg hover:bg-[#F4AC45] transition-colors"
+          className="flex items-center gap-2 rounded-lg bg-sage px-4 py-2 text-ink transition-colors hover:bg-gold"
         >
           <Save size={20} />
           <span>Save Game</span>

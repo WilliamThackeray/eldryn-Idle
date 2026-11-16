@@ -22,21 +22,26 @@ function App() {
   const skillId = isSkillId(currentPage) ? currentPage : null
 
   return (
-    <div className="flex min-h-screen bg-[#DAD6D6]">
-      <OfflineModal />
-      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+    <>
+      <div className="flex h-screen overflow-hidden bg-ink text-parchment">
+        <OfflineModal />
+        <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
-      <main className="flex-1">
-        <Header title={pageTitle(currentPage)} />
+        <main className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
+          <Header title={pageTitle(currentPage)} currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
-        <div className="p-6">
-          {skillId && <SkillPage skillId={skillId} />}
-          {currentPage === 'shop' && <ShopPage />}
-          {currentPage === 'inventory' && <InventoryPage />}
-          {currentPage === 'monsterHunting' && <CombatPage />}
-        </div>
-      </main>
-    </div>
+          <div className="min-h-0 flex-1 overflow-auto p-6">
+            {skillId && <SkillPage skillId={skillId} />}
+            {currentPage === 'shop' && <ShopPage />}
+            {currentPage === 'inventory' && <InventoryPage />}
+            {currentPage === 'monsterHunting' && <CombatPage />}
+          </div>
+        </main>
+      </div>
+
+      {/* Outside overflow:hidden so hover labels are not clipped. */}
+      <div id="tooltip-root" className="pointer-events-none fixed inset-0 z-50" />
+    </>
   )
 }
 

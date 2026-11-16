@@ -3,11 +3,11 @@ import { getItem, ITEM_CATEGORIES, type ItemCategory, type ItemId, type ItemRari
 import { useGameStore } from '../../store/gameStore'
 
 const RARITY_TEXT: Record<ItemRarity, string> = {
-  common: 'text-[#DAD6D6]',
-  uncommon: 'text-[#92BFB1]',
+  common: 'text-parchment',
+  uncommon: 'text-sage',
   rare: 'text-[#7EB6D9]',
   'very-rare': 'text-[#C58BE2]',
-  legendary: 'text-[#F4AC45]',
+  legendary: 'text-gold',
   artifact: 'text-[#E85D4C]',
 }
 
@@ -39,7 +39,7 @@ export function InventoryPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="mb-4 flex flex-wrap gap-2">
         <FilterButton current={selected} id="all" label="All" onSelect={setCategory} />
         {ITEM_CATEGORIES.filter((entry) => present.has(entry)).map((entry) => (
           <FilterButton
@@ -52,18 +52,21 @@ export function InventoryPage() {
         ))}
       </div>
       {shown.length === 0 ? (
-        <p className="text-[#1f1f1f]">No items.</p>
+        <p className="text-parchment/70">No items.</p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
           {shown.map((entry) => (
-            <article key={entry.id} className="bg-[#1f1f1f] rounded-lg p-3 flex flex-col gap-2">
+            <article
+              key={entry.id}
+              className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-3"
+            >
               <h3 className={`font-bold ${RARITY_TEXT[entry.def.rarity]}`}>{entry.def.name}</h3>
-              <p className="text-sm text-[#DAD6D6]">x{entry.quantity}</p>
-              <p className="text-xs text-[#92BFB1] capitalize">{entry.def.rarity}</p>
+              <p className="text-sm text-parchment">x{entry.quantity}</p>
+              <p className="text-xs capitalize text-sage">{entry.def.rarity}</p>
               <button
                 type="button"
                 onClick={() => sellItem(entry.id)}
-                className="mt-auto px-3 py-1 bg-[#92BFB1] text-[#1f1f1f] rounded-lg hover:bg-[#F4AC45]"
+                className="mt-auto rounded-lg bg-sage px-3 py-1 text-ink transition-colors hover:bg-gold"
               >
                 Sell {entry.def.sellValue * entry.quantity} gp
               </button>
@@ -92,7 +95,7 @@ function FilterButton({
       type="button"
       aria-pressed={selected}
       onClick={() => onSelect(id)}
-      className={`px-3 py-1 rounded-lg ${selected ? 'bg-[#F4AC45] text-[#1f1f1f]' : 'bg-[#1f1f1f] text-[#DAD6D6]'}`}
+      className={`rounded-lg px-3 py-1 ${selected ? 'bg-gold text-ink' : 'bg-panel text-parchment ring-1 ring-brown/40'}`}
     >
       {label}
     </button>
