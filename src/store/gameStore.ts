@@ -3,9 +3,12 @@ import { persist, type PersistStorage, type StorageValue } from 'zustand/middlew
 import { modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
 import type { ItemId } from '../data/items'
 import { getMonster, type BiomeId } from '../data/monsters'
+import { isSpellId, type SpellId } from '../data/spells'
 import { buyItem as buyShopItem } from '../data/shop'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
 import { createFight } from '../engine/combat'
+import { SPELL_INTERVAL_SEC } from '../engine/config'
+import { effectiveCasterType, usesSpellLoop } from '../engine/spells'
 import {
   applyLoadout,
   canEquip,
@@ -56,6 +59,7 @@ interface GameStore extends SaveData {
   setClericFocus: (focus: ClericFocus) => void
   setCombatTrace: (trace: boolean) => void
   clearOfflineCombatFlags: () => void
+  setSpellSlot: (classId: ClassId, slotIndex: number, spellId: SpellId | null) => void
 }
 
 const liveRng: Rng = () => Math.random()
@@ -125,10 +129,13 @@ export const useGameStore = create<GameStore>()(
             classXp: state.classes[state.activeClassId].xp,
             rng: liveRng,
             trace: true,
+            spellLoadout: state.spellLoadouts[state.activeClassId],
           })
           if (!fight) return state
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
-          const baseSec = weaponIntervalBase(weapon)
+          const baseSec = usesSpellLoop(state.activeClassId)
+            ? SPELL_INTERVAL_SEC
+            : weaponIntervalBase(weapon)
           return {
             combat: fight,
             activeAction: {
@@ -228,6 +235,22 @@ export const useGameStore = create<GameStore>()(
           return { activeClassId: next }
         }),
       setClericFocus: (focus) => set({ clericFocus: focus === 'STR' ? 'STR' : 'INT' }),
+      setSpellSlot: (classId, slotIndex, spellId) =>
+        set((state) => {
+          if (spellId != null && !isSpellId(spellId)) return state
+          const casterType = effectiveCasterType(classId)
+          if (casterType == null) return state
+          const current = state.spellLoadouts[classId] ?? { slots: [] }
+          const slots = [...current.slots]
+          while (slots.length <= slotIndex) slots.push(null)
+          slots[slotIndex] = spellId
+          return {
+            spellLoadouts: {
+              ...state.spellLoadouts,
+              [classId]: { slots },
+            },
+          }
+        }),
     }),
     {
       name: SAVE_KEY,
@@ -248,6 +271,7 @@ export const useGameStore = create<GameStore>()(
         equipment: state.equipment ?? emptyEquipment(),
         equipmentSets: state.equipmentSets ?? [],
         combat: state.combat ?? null,
+        spellLoadouts: state.spellLoadouts,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

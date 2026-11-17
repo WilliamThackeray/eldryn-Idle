@@ -1,6 +1,7 @@
 import { getClass, type ClassId } from '../data/classes'
-import { getItem, type DamageType, type WeaponMastery } from '../data/items'
+import { getItem, type DamageType, type ItemId, type WeaponMastery } from '../data/items'
 import { getMonster, type BiomeId, type CreatureSize, type MonsterDef } from '../data/monsters'
+import { getSpell, type BuffEffectId, type SpellId } from '../data/spells'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import type { SkillId } from '../data/skills'
 import { deriveAbilities } from './abilities'
@@ -11,8 +12,11 @@ import {
   MATERIAL_FLAGS,
   MONSTER_INTERVAL_SEC,
   PUSH_DELAY_FRACTION,
+  QUICKENED_INTERVAL_FACTOR,
   RESPAWN_MS,
   SLOW_INTERVAL_FACTOR,
+  SPELL_INTERVAL_SEC,
+  SPELL_SLOT_MODEL,
 } from './config'
 import { applyDamageModifiers } from './damage'
 import { resolveRollMode, roll, rollD20, rollDamageParts, type RollMode } from './dice'
@@ -33,9 +37,26 @@ import {
   getSignatureHooks,
   shouldFlurry,
   tryBardicInspiration,
+  tryQuicken,
   tryWildShape,
   type SignatureRuntime,
 } from './signatures'
+import {
+  buildFightSlots,
+  castingAbilityFor,
+  componentBagId,
+  concentrationDc,
+  diceForCast,
+  hasComponentBag,
+  markSlotSpent,
+  pickSlotForCast,
+  refreshSlotsOnLongRest,
+  spendLowestSlot,
+  unlockSkillFor,
+  usesSpellLoop,
+  type SpellLoadout,
+  type SpellSlot,
+} from './spells'
 import { addXp, applyXpModifiers, levelForXp, proficiency, tier } from './xp'
 
 export interface CombatLootGain {
@@ -74,6 +95,11 @@ export interface CombatFight {
   outOfAmmo: boolean
   defeated: boolean
   log: string[]
+  spellSlots: SpellSlot[]
+  rotationIndex: number
+  concentration: BuffEffectId | null
+  /** Shield spell: +5 AC until the next hit taken. */
+  shieldBonus: number
 }
 
 export interface CombatAction {
@@ -169,13 +195,25 @@ function masteryOf(equipment: Equipment): WeaponMastery | null {
 function computePlayerIntervalMs(
   skills: Record<SkillId, SkillProgress>,
   equipment: Equipment,
+  spellcasting = false,
 ): number {
-  const weapon = playerWeapon(equipment)
-  const baseSec = weaponIntervalBase(weapon)
   const mods = abilityModMap(skills)
   const scores = abilityScoreMap(skills)
+  const baseSec = spellcasting ? SPELL_INTERVAL_SEC : weaponIntervalBase(playerWeapon(equipment))
   const base = intervalMs(baseSec * 1000, mods.DEX, 0, true)
   return base * heavyArmorIntervalMultiplier(equipment, scores.STR)
+}
+
+function playerArmorClass(fight: CombatFight, equipment: Equipment, dexMod: number): number {
+  let ac = armorClass(equipment, dexMod) + fight.shieldBonus
+  if (fight.concentration === 'shieldOfFaith') ac += 2
+  if (fight.concentration === 'barkskin') ac = Math.max(ac, 16)
+  return ac
+}
+
+function skillLevel(skills: Record<SkillId, SkillProgress>, skillId: SkillId | null): number {
+  if (!skillId) return 1
+  return levelForXp(skills[skillId]?.xp ?? 0)
 }
 
 function computeMonsterIntervalMs(monster: MonsterDef, slowActive: boolean): number {
@@ -192,6 +230,7 @@ export function createFight(input: {
   classXp: number
   rng: Rng
   trace?: boolean
+  spellLoadout?: SpellLoadout
 }): CombatFight | null {
   const monster = getMonster(input.monsterId)
   if (!monster) return null
@@ -200,8 +239,16 @@ export function createFight(input: {
   const classLevel = levelForXp(input.classXp)
   const classTier = tier(classLevel)
   const playerMax = maxHp(cls.hitDie, classTier, mods.CON)
-  const playerInterval = computePlayerIntervalMs(input.skills, input.equipment)
+  const casting = usesSpellLoop(input.activeClassId)
+  const playerInterval = computePlayerIntervalMs(input.skills, input.equipment, casting)
   const signature = emptySignatureRuntime(cls.signatureAbility.id)
+  const unlockSkill = unlockSkillFor(input.activeClassId)
+  const spellSlots = buildFightSlots({
+    classId: input.activeClassId,
+    classTier,
+    skillLevel: skillLevel(input.skills, unlockSkill),
+    loadout: input.spellLoadout,
+  })
   const fight: CombatFight = {
     monsterId: monster.id,
     biome: input.biome,
@@ -232,6 +279,10 @@ export function createFight(input: {
     outOfAmmo: false,
     defeated: false,
     log: [],
+    spellSlots,
+    rotationIndex: 0,
+    concentration: null,
+    shieldBonus: 0,
   }
 
   const hooks = getSignatureHooks(signature.id)
@@ -253,6 +304,10 @@ function longRestAbilities(fight: CombatFight, classTier: number, chaMod: number
   const hooks = getSignatureHooks(fight.signature.id)
   const runtime = emptySignatureRuntime(fight.signature.id)
   fight.signature = runtime
+  fight.spellSlots = refreshSlotsOnLongRest(fight.spellSlots)
+  fight.rotationIndex = 0
+  fight.concentration = null
+  fight.shieldBonus = 0
   // Re-init via onFightStart
   hooks.onFightStart?.({
     runtime,
@@ -272,6 +327,9 @@ function longRestAbilities(fight: CombatFight, classTier: number, chaMod: number
   }
   if (runtime.id === 'rage') {
     runtime.rageUses = 2 + Math.floor((classTier - 1) / 4)
+  }
+  if (runtime.id === 'metamagicPactMagic') {
+    runtime.sorceryPoints = classTier
   }
 }
 
@@ -358,6 +416,7 @@ function resolvePlayerAttack(input: {
 
   const advSources: Array<'advantage' | 'disadvantage'> = []
   if (fight.nextAttackAdvantage) advSources.push('advantage')
+  if (fight.concentration === 'faerieFire') advSources.push('advantage')
   if (heavyStrain) advSources.push('disadvantage')
   fight.nextAttackAdvantage = false
   const mode = resolveRollMode(advSources)
@@ -433,8 +492,19 @@ function resolvePlayerAttack(input: {
     bonusDice: 0,
     bonusFlat: 0,
     creatureType: monster.creatureType,
+    spendLowestSlot: () => spendLowestSlot(fight.spellSlots),
   }
   hooks.onHit?.(hitCtx)
+  if (fight.concentration === 'divineFavor') {
+    const favor = roll('1d6', rng)
+    hitCtx.bonusDice += favor
+    if (trace) line += ` Divine Favor [1d6] ${favor}.`
+  }
+  if (fight.concentration === 'huntersMark') {
+    const mark = roll('1d6', rng)
+    hitCtx.bonusDice += mark
+    if (trace) line += ` Hunter's Mark [1d6] ${mark}.`
+  }
 
   const raw = Math.max(0, parts.dice + parts.flat + magic + abilityBonus + hitCtx.bonusDice + hitCtx.bonusFlat)
   const dealt = applyDamageModifiers(
@@ -510,6 +580,183 @@ function resolvePlayerAttack(input: {
   }
 }
 
+function resolveSpellCast(input: {
+  fight: CombatFight
+  monster: MonsterDef
+  skills: Record<SkillId, SkillProgress>
+  inventory: Inventory
+  activeClassId: ClassId
+  classXp: number
+  rng: Rng
+  trace: boolean
+}): {
+  inventory: Inventory
+  classXp: number
+  skills: Record<SkillId, SkillProgress>
+  killed: boolean
+  stopped: boolean
+} {
+  const { fight, monster, rng, trace } = input
+  let { inventory, classXp, skills } = input
+  const mods = abilityModMap(skills)
+  const classTier = tier(levelForXp(classXp))
+  const prof = proficiency(classTier)
+  const castAbility = castingAbilityFor(input.activeClassId)
+  const castMod = mods[castAbility]
+  const unlock = unlockSkillFor(input.activeClassId)
+  const skillLvl = skillLevel(skills, unlock)
+  const saveDc = 8 + prof + castMod
+
+  const picked = pickSlotForCast({
+    slots: fight.spellSlots,
+    rotationIndex: fight.rotationIndex,
+    model: SPELL_SLOT_MODEL,
+  })
+  fight.rotationIndex = picked.nextRotationIndex
+
+  let slot = fight.spellSlots[picked.slotIndex]
+  let spellId: SpellId | null = slot?.spellId ?? null
+  let slotLevel = slot?.level ?? 0
+  let usedCantripFallback = false
+
+  const cantripSlot = fight.spellSlots.find((entry) => entry.level === 0)
+  const cantripId = cantripSlot?.spellId ?? null
+
+  const trySpell = spellId ? getSpell(spellId) : undefined
+  if (
+    !trySpell ||
+    slotLevel === 0 ||
+    !hasComponentBag(inventory, trySpell) ||
+    picked.fallbackToCantrip
+  ) {
+    if (trySpell && slotLevel > 0 && !hasComponentBag(inventory, trySpell) && !picked.fallbackToCantrip) {
+      usedCantripFallback = true
+    }
+    spellId = cantripId
+    slotLevel = 0
+    slot = cantripSlot
+  }
+
+  const spell = spellId ? getSpell(spellId) : undefined
+  if (!spell) {
+    pushLog(fight, 'No cantrip prepared. Interval wasted.', trace)
+    return { inventory, classXp, skills, killed: false, stopped: false }
+  }
+
+  if (spell.level > 0 && spell.componentTier) {
+    const bagId = componentBagId(spell.componentTier)
+    inventory = removeItems(inventory, [{ itemId: bagId as ItemId, quantity: 1 }])
+    if (SPELL_SLOT_MODEL === 'expended' && !usedCantripFallback && picked.slotIndex >= 0) {
+      markSlotSpent(fight.spellSlots, picked.slotIndex)
+    }
+  }
+
+  const notation = diceForCast(spell, Math.max(spell.level, slotLevel), skillLvl)
+  const intervalSec = (fight.playerIntervalMs / 1000).toFixed(2)
+  let line = `Cast ${spell.name}${slotLevel > 0 ? ` (slot ${slotLevel})` : ''}: ${intervalSec}s.`
+  if (usedCantripFallback) line += ' Out of components — cantrip.'
+  if (spell.level > 0 && spell.componentTier) {
+    line += ` Spent ${componentBagId(spell.componentTier)}.`
+  }
+
+  if (spell.kind === 'heal') {
+    const healDice = notation ? roll(notation, rng) : 0
+    const healed = Math.max(0, healDice + castMod)
+    fight.playerHp = Math.min(fight.playerMaxHp, fight.playerHp + healed)
+    line += ` Heal ${healed}.`
+    pushLog(fight, line, trace)
+    return { inventory, classXp, skills, killed: false, stopped: false }
+  }
+
+  if (spell.kind === 'buff') {
+    if (spell.buffEffect === 'shield') {
+      fight.shieldBonus = 5
+      line += ' +5 AC until hit.'
+    } else if (spell.buffEffect) {
+      fight.concentration = spell.concentration ? spell.buffEffect : fight.concentration
+      if (spell.concentration) line += ` Concentrating (${spell.name}).`
+      else line += ` ${spell.name}.`
+    }
+    pushLog(fight, line, trace)
+    return { inventory, classXp, skills, killed: false, stopped: false }
+  }
+
+  const dtype = spell.damageType ?? 'force'
+
+  if (spell.kind === 'attack') {
+    if (spell.autoHit) {
+      const parts = rollDamageParts(notation ?? '0', rng, false)
+      const dealt = applyDamageModifiers(
+        parts.total,
+        dtype,
+        monster.resistances,
+        monster.vulnerabilities,
+        monster.immunities,
+      )
+      fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
+      line += ` Auto-hit [${notation}] ${dealt} ${dtype}.`
+      pushLog(fight, line, trace)
+      return { inventory, classXp, skills, killed: fight.monsterHp <= 0, stopped: false }
+    }
+
+    const natural = rollD20(rng)
+    const total = natural + castMod + prof
+    const autoMiss = natural === 1
+    const crit = natural === 20
+    const hit = !autoMiss && (crit || total >= monster.ac)
+    line += ` to hit ${total} - ${hit ? 'hits' : 'misses'}.`
+    if (!hit) {
+      pushLog(fight, line, trace)
+      return { inventory, classXp, skills, killed: false, stopped: false }
+    }
+    const parts = rollDamageParts(notation ?? '0', rng, crit)
+    const dealt = applyDamageModifiers(
+      parts.total,
+      dtype,
+      monster.resistances,
+      monster.vulnerabilities,
+      monster.immunities,
+    )
+    fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
+    line += ` [${notation}] ${dealt} ${dtype}${crit ? ' (crit)' : ''}.`
+    pushLog(fight, line, trace)
+    return { inventory, classXp, skills, killed: fight.monsterHp <= 0, stopped: false }
+  }
+
+  // save
+  const saveAbility = spell.saveAbility ?? 'DEX'
+  const save = savingThrow({
+    rng,
+    ability: saveAbility,
+    dc: saveDc,
+    abilityMod: monster.saveBonuses[saveAbility] ?? 0,
+    proficient: false,
+    proficiencyBonus: 0,
+  })
+  line += ` DC ${saveDc} ${saveAbility} save: ${save.total} - ${save.success ? 'saved' : 'failed'}.`
+  const parts = rollDamageParts(notation ?? '0', rng, false)
+  let raw = parts.total
+  if (save.success) {
+    if (!spell.halfOnSave) raw = 0
+    else raw = Math.floor(raw / 2)
+  }
+  const dealt = applyDamageModifiers(
+    raw,
+    dtype,
+    monster.resistances,
+    monster.vulnerabilities,
+    monster.immunities,
+  )
+  if (dealt > 0) {
+    fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
+    line += ` [${notation}] ${dealt} ${dtype}.`
+  } else {
+    line += ' No damage.'
+  }
+  pushLog(fight, line, trace)
+  return { inventory, classXp, skills, killed: fight.monsterHp <= 0, stopped: false }
+}
+
 function applyPlayerDamage(input: {
   fight: CombatFight
   amount: number
@@ -529,6 +776,10 @@ function applyPlayerDamage(input: {
   const classTier = tier(levelForXp(input.classXp))
   const hooks = getSignatureHooks(fight.signature.id)
 
+  if (fight.concentration === 'protectionFromEnergyFire' && input.damageType === 'fire') {
+    amount = Math.floor(amount / 2)
+  }
+
   hooks.onDamaged?.({
     runtime: fight.signature,
     tier: classTier,
@@ -546,11 +797,30 @@ function applyPlayerDamage(input: {
   // Adamantine: crits become normal — handled at attack time if needed later.
   const taken = Math.max(0, amount)
   if (taken > 0) {
+    if (fight.shieldBonus > 0) fight.shieldBonus = 0
     fight.playerHp = Math.max(0, fight.playerHp - taken)
     const vitalityXp = applyXpModifiers(taken, 'CON', input.modifiers)
     skills = {
       ...skills,
       vitality: { xp: addXp(skills.vitality.xp, vitalityXp) },
+    }
+
+    if (fight.concentration) {
+      const dc = concentrationDc(taken)
+      const save = savingThrow({
+        rng,
+        ability: 'CON',
+        dc,
+        abilityMod: mods.CON,
+        proficient: cls.saveProficiencies.includes('CON'),
+        proficiencyBonus: proficiency(classTier),
+      })
+      if (save.success) {
+        pushLog(fight, `Concentration DC ${dc}: ${save.total} - held.`, trace)
+      } else {
+        pushLog(fight, `Concentration DC ${dc}: ${save.total} - broken.`, trace)
+        fight.concentration = null
+      }
     }
   }
 
@@ -638,13 +908,19 @@ function onKill(input: {
   return { inventory, classXp, skills: input.skills }
 }
 
-function respawnMonster(fight: CombatFight, monster: MonsterDef, skills: Record<SkillId, SkillProgress>, equipment: Equipment) {
+function respawnMonster(
+  fight: CombatFight,
+  monster: MonsterDef,
+  skills: Record<SkillId, SkillProgress>,
+  equipment: Equipment,
+  casting: boolean,
+) {
   fight.phase = 'fight'
   fight.restProgressMs = 0
   fight.monsterHp = monster.hp
   fight.monsterMaxHp = monster.hp
   fight.openingDone = false
-  fight.playerIntervalMs = computePlayerIntervalMs(skills, equipment)
+  fight.playerIntervalMs = computePlayerIntervalMs(skills, equipment, casting)
   fight.monsterIntervalMs = computeMonsterIntervalMs(monster, false)
   fight.playerProgressMs = 0
   fight.monsterProgressMs = 0
@@ -697,6 +973,15 @@ function doOpeningAttacks(input: {
 }): ReturnType<typeof resolvePlayerAttack> {
   const { fight, monster, equipment } = input
   fight.openingDone = true
+  if (usesSpellLoop(input.activeClassId)) {
+    return {
+      inventory: input.inventory,
+      classXp: input.classXp,
+      skills: input.skills,
+      killed: false,
+      stopped: false,
+    }
+  }
   const weapon = playerWeapon(equipment)
   const ranged = weapon?.range === 'ranged'
   const reach = weapon?.properties.includes('reach') && !monster.reach
@@ -768,6 +1053,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   const equipment = input.equipment ?? emptyEquipment()
   const mods = () => abilityModMap(skills)
   const classTier = () => tier(levelForXp(classXp))
+  const casting = usesSpellLoop(input.activeClassId)
   const trace = input.trace
 
   const finishDefeat = (): CombatAdvanceResult => {
@@ -813,7 +1099,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       remaining -= need
       fight.sessionMs += need
       fight.restProgressMs = 0
-      respawnMonster(fight, monster, skills, equipment)
+      respawnMonster(fight, monster, skills, equipment, casting)
       pushLog(fight, `${monster.name} appears.`, trace)
       continue
     }
@@ -903,7 +1189,15 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       }
     }
 
-    fight.playerIntervalMs = computePlayerIntervalMs(skills, equipment)
+    if (fight.playerProgressMs <= 0) {
+      let nextInterval = computePlayerIntervalMs(skills, equipment, casting)
+      if (casting && fight.signature.quickenedReady) {
+        nextInterval *= QUICKENED_INTERVAL_FACTOR
+        fight.signature.quickenedReady = false
+        pushLog(fight, 'Quickened Spell: interval halved.', trace)
+      }
+      fight.playerIntervalMs = nextInterval
+    }
     fight.monsterIntervalMs = computeMonsterIntervalMs(monster, fight.slowActive)
 
     let playerReady = fight.playerProgressMs >= fight.playerIntervalMs - 1e-6
@@ -946,21 +1240,35 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       skills = eaten.skills
       if (eaten.defeated) return finishDefeat()
       if (!eaten.ate) {
-        const attack = resolvePlayerAttack({
-          fight,
-          monster,
-          skills,
-          equipment,
-          inventory,
-          activeClassId: input.activeClassId,
-          classXp,
-          rng: input.rng,
-          trace,
-          labelPrefix: `Int${fight.playerIntervalCount}: `,
-        })
+        const attack = casting
+          ? resolveSpellCast({
+              fight,
+              monster,
+              skills,
+              inventory,
+              activeClassId: input.activeClassId,
+              classXp,
+              rng: input.rng,
+              trace,
+            })
+          : resolvePlayerAttack({
+              fight,
+              monster,
+              skills,
+              equipment,
+              inventory,
+              activeClassId: input.activeClassId,
+              classXp,
+              rng: input.rng,
+              trace,
+              labelPrefix: `Int${fight.playerIntervalCount}: `,
+            })
         inventory = attack.inventory
         classXp = attack.classXp
         skills = attack.skills
+        if (casting && fight.signature.id === 'metamagicPactMagic') {
+          tryQuicken(fight.signature)
+        }
         if (attack.stopped) {
           flushGold()
           return { fight: null, skills, inventory, gold, classXp, stop: true, lastLog: fight.log, kills: fight.kills, defeated: fight.defeated }
@@ -987,7 +1295,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         }
 
         // Flurry of Blows every 3rd interval
-        if (fight.signature.id === 'flurryOfBlows' && shouldFlurry(fight.playerIntervalCount)) {
+        if (!casting && fight.signature.id === 'flurryOfBlows' && shouldFlurry(fight.playerIntervalCount)) {
           const sides = flurryDieSides(classTier())
           const flurry = resolvePlayerAttack({
             fight,
@@ -1035,8 +1343,11 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
 
     if (monsterReady && fight.phase === 'fight' && fight.monsterHp > 0) {
       fight.monsterProgressMs = 0
-      const playerAc = armorClass(equipment, mods().DEX)
-      const mode = resolveRollMode(fight.monsterNextDisadvantage ? ['disadvantage'] : [])
+      const playerAc = playerArmorClass(fight, equipment, mods().DEX)
+      const disadvSources: Array<'advantage' | 'disadvantage'> = []
+      if (fight.monsterNextDisadvantage) disadvSources.push('disadvantage')
+      if (fight.concentration === 'blur') disadvSources.push('disadvantage')
+      const mode = resolveRollMode(disadvSources)
       fight.monsterNextDisadvantage = false
 
       for (const attack of monster.attacks) {

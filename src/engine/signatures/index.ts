@@ -1,8 +1,10 @@
-import { arcaneRecovery, divineSmite, metamagicPactMagic } from './stubs'
+import { arcaneRecovery } from './arcaneRecovery'
 import { bardicInspiration } from './bardicInspiration'
 import { channelDivinity } from './channelDivinity'
+import { divineSmite } from './divineSmite'
 import { flurryOfBlows } from './flurryOfBlows'
 import { huntersMark } from './huntersMark'
+import { metamagicPactMagic, tryQuicken } from './metamagicPactMagic'
 import { rage } from './rage'
 import { secondWind } from './secondWind'
 import { sneakAttack } from './sneakAttack'
@@ -14,6 +16,8 @@ export { emptySignatureRuntime } from './types'
 export { flurryDieSides, shouldFlurry } from './flurryOfBlows'
 export { tryBardicInspiration } from './bardicInspiration'
 export { tryWildShape } from './wildShape'
+export { tryQuicken }
+export { applyShortRest } from '../spells'
 
 const REGISTRY: Record<string, SignatureHooks> = {
   rage,

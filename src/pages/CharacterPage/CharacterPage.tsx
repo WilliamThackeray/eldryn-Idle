@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CLASSES, getClass, type ClassId } from '../../data/classes'
 import { getItem } from '../../data/items'
+import { getSkill } from '../../data/skills'
+import { spellsForClass, type SpellId } from '../../data/spells'
 import { RARITY_TEXT } from '../../components/rarity'
 import { deriveAbilities } from '../../engine/abilities'
 import {
@@ -9,6 +11,13 @@ import {
   weaponIntervalBase,
   type EquipmentSlot,
 } from '../../engine/equipment'
+import {
+  effectiveCasterType,
+  slotsFor,
+  spellFitsSlot,
+  unlockSkillFor,
+  unlockSkillLevel,
+} from '../../engine/spells'
 import { levelForXp, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
 
@@ -35,6 +44,8 @@ const SLOT_GRID: { slot: EquipmentSlot; label: string }[] = [
   { slot: 'summon2', label: 'Summon 2' },
 ]
 
+type Tab = 'gear' | 'spellbook'
+
 export function CharacterPage() {
   const characterName = useGameStore((state) => state.characterName)
   const skills = useGameStore((state) => state.skills)
@@ -44,13 +55,16 @@ export function CharacterPage() {
   const isInDungeonOrQuest = useGameStore((state) => state.isInDungeonOrQuest)
   const equipment = useGameStore((state) => state.equipment)
   const equipmentSets = useGameStore((state) => state.equipmentSets)
+  const spellLoadouts = useGameStore((state) => state.spellLoadouts)
   const setActiveClass = useGameStore((state) => state.setActiveClass)
   const setClericFocus = useGameStore((state) => state.setClericFocus)
+  const setSpellSlot = useGameStore((state) => state.setSpellSlot)
   const unequipSlot = useGameStore((state) => state.unequipSlot)
   const saveEquipmentSet = useGameStore((state) => state.saveEquipmentSet)
   const loadEquipmentSet = useGameStore((state) => state.loadEquipmentSet)
   const deleteEquipmentSet = useGameStore((state) => state.deleteEquipmentSet)
   const [setName, setSetName] = useState('')
+  const [tab, setTab] = useState<Tab>('gear')
 
   const abilities = deriveAbilities(skills)
   const dexMod = abilities.find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
@@ -62,6 +76,17 @@ export function CharacterPage() {
   const activeXp = activeClassId ? classes[activeClassId].xp : 0
   const activeLevel = levelForXp(activeXp)
   const activeProgress = progressToNext(activeXp)
+  const classTier = tier(activeLevel)
+
+  const unlockSkillId = activeClassId ? unlockSkillFor(activeClassId) : null
+  const unlockLevel = unlockSkillId ? levelForXp(skills[unlockSkillId]?.xp ?? 0) : 0
+  const casterType = activeClassId ? effectiveCasterType(activeClassId) : null
+  const slotStructure = useMemo(
+    () => (casterType ? slotsFor(casterType, classTier) : []),
+    [casterType, classTier],
+  )
+  const classSpells = activeClassId ? spellsForClass(activeClassId) : []
+  const loadout = activeClassId ? spellLoadouts[activeClassId] : undefined
 
   return (
     <div className="space-y-6 text-parchment">
@@ -69,7 +94,7 @@ export function CharacterPage() {
         <h2 className="mb-1 text-2xl font-bold text-gold">{characterName}</h2>
         {active ? (
           <p className="text-sm text-sage">
-            {active.name} · Class Level {activeLevel} · Tier {tier(activeLevel)} ·{' '}
+            {active.name} · Class Level {activeLevel} · Tier {classTier} ·{' '}
             {activeProgress.capped
               ? `${activeProgress.xp} XP`
               : `${activeProgress.xp} / ${activeProgress.xpToNextLevel} XP`}
@@ -121,85 +146,174 @@ export function CharacterPage() {
         </section>
       )}
 
-      <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-        <h3 className="mb-3 font-bold text-gold">Equipment</h3>
-        {isInDungeonOrQuest && (
-          <p className="mb-3 text-sm text-parchment/70">Swapping is locked in a dungeon or quest.</p>
-        )}
-        <div className="mb-4 flex flex-wrap gap-4 text-sm">
-          <Stat label="AC" value={String(ac)} />
-          <Stat label="Weapon" value={mainHand ? `${mainHand.name} · ${damage}` : 'Unarmed'} />
-          <Stat label="Interval" value={`${intervalSec.toFixed(1)}s`} />
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-          {SLOT_GRID.map(({ slot, label }) => {
-            const id = equipment[slot]
-            const def = id ? getItem(id) : undefined
-            return (
-              <button
-                key={slot}
-                type="button"
-                disabled={!def || isInDungeonOrQuest}
-                onClick={() => unequipSlot(slot)}
-                className="rounded-md border border-brown/40 bg-ink/40 px-2 py-3 text-left text-sm disabled:cursor-default"
-              >
-                <div className="text-xs uppercase tracking-wide text-sage/80">{label}</div>
-                <div className={def ? RARITY_TEXT[def.rarity] : 'text-parchment/50'}>
-                  {def?.name ?? 'Empty'}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-        <div className="mt-4 space-y-3">
-          <h4 className="font-semibold text-sage">Loadouts</h4>
-          <div className="flex flex-wrap gap-2">
-            <input
-              value={setName}
-              onChange={(event) => setSetName(event.target.value)}
-              placeholder="Loadout name"
-              className="rounded-lg border border-brown/40 bg-ink/50 px-3 py-1 text-sm text-parchment"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                saveEquipmentSet(setName)
-                setSetName('')
-              }}
-              className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold"
-            >
-              Save
-            </button>
+      <div className="flex gap-2">
+        {(['gear', 'spellbook'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`rounded-lg px-3 py-2 text-sm capitalize ${
+              tab === id ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
+            }`}
+          >
+            {id}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'gear' && (
+        <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
+          <h3 className="mb-3 font-bold text-gold">Equipment</h3>
+          {isInDungeonOrQuest && (
+            <p className="mb-3 text-sm text-parchment/70">Swapping is locked in a dungeon or quest.</p>
+          )}
+          <div className="mb-4 flex flex-wrap gap-4 text-sm">
+            <Stat label="AC" value={String(ac)} />
+            <Stat label="Weapon" value={mainHand ? `${mainHand.name} · ${damage}` : 'Unarmed'} />
+            <Stat label="Interval" value={`${intervalSec.toFixed(1)}s`} />
           </div>
-          <ul className="space-y-2">
-            {equipmentSets.map((entry) => (
-              <li
-                key={entry.name}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink/40 px-3 py-2"
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+            {SLOT_GRID.map(({ slot, label }) => {
+              const id = equipment[slot]
+              const def = id ? getItem(id) : undefined
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  disabled={!def || isInDungeonOrQuest}
+                  onClick={() => unequipSlot(slot)}
+                  className="rounded-md border border-brown/40 bg-ink/40 px-2 py-3 text-left text-sm disabled:cursor-default"
+                >
+                  <div className="text-xs uppercase tracking-wide text-sage/80">{label}</div>
+                  <div className={def ? RARITY_TEXT[def.rarity] : 'text-parchment/50'}>
+                    {def?.name ?? 'Empty'}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-4 space-y-3">
+            <h4 className="font-semibold text-sage">Loadouts</h4>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={setName}
+                onChange={(event) => setSetName(event.target.value)}
+                placeholder="Loadout name"
+                className="rounded-lg border border-brown/40 bg-ink/50 px-3 py-1 text-sm text-parchment"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  saveEquipmentSet(setName)
+                  setSetName('')
+                }}
+                className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold"
               >
-                <span>{entry.name}</span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={isInDungeonOrQuest}
-                    onClick={() => loadEquipmentSet(entry.name)}
-                    className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Load
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteEquipmentSet(entry.name)}
-                    className="rounded-lg bg-brown/60 px-3 py-1 text-sm text-parchment transition-colors hover:bg-crimson"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+                Save
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {equipmentSets.map((entry) => (
+                <li
+                  key={entry.name}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink/40 px-3 py-2"
+                >
+                  <span>{entry.name}</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={isInDungeonOrQuest}
+                      onClick={() => loadEquipmentSet(entry.name)}
+                      className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Load
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteEquipmentSet(entry.name)}
+                      className="rounded-lg bg-brown/60 px-3 py-1 text-sm text-parchment transition-colors hover:bg-crimson"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {tab === 'spellbook' && (
+        <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
+          <h3 className="mb-3 font-bold text-gold">Spellbook</h3>
+          {!activeClassId || !casterType ? (
+            <p className="text-sm text-parchment/70">This class has no spells.</p>
+          ) : (
+            <>
+              <p className="mb-4 text-sm text-sage">
+                Unlock skill: {unlockSkillId ? getSkill(unlockSkillId).name : '—'} level {unlockLevel}
+              </p>
+
+              <h4 className="mb-2 font-semibold text-sage">Slot loadout</h4>
+              <ul className="mb-6 space-y-2">
+                {slotStructure.map((slot, index) => {
+                  const selected = loadout?.slots[index] ?? null
+                  const options = classSpells.filter(
+                    (spell) =>
+                      spellFitsSlot(spell, slot.level) && unlockLevel >= unlockSkillLevel(spell.level),
+                  )
+                  return (
+                    <li
+                      key={`${slot.level}-${index}`}
+                      className="flex flex-wrap items-center gap-3 rounded-md bg-ink/40 px-3 py-2 text-sm"
+                    >
+                      <span className="w-28 text-sage">
+                        {slot.level === 0 ? 'Cantrip' : `Slot ${slot.level}`}
+                      </span>
+                      <select
+                        value={selected ?? ''}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setSpellSlot(activeClassId, index, value ? (value as SpellId) : null)
+                        }}
+                        className="min-w-[12rem] rounded-lg border border-brown/40 bg-ink/50 px-2 py-1 text-parchment"
+                      >
+                        <option value="">Empty</option>
+                        {options.map((spell) => (
+                          <option key={spell.id} value={spell.id}>
+                            {spell.name}
+                          </option>
+                        ))}
+                      </select>
+                    </li>
+                  )
+                })}
+              </ul>
+
+              <h4 className="mb-2 font-semibold text-sage">Known & locked</h4>
+              <ul className="space-y-1 text-sm">
+                {classSpells.map((spell) => {
+                  const need = unlockSkillLevel(spell.level)
+                  const known = unlockLevel >= need
+                  return (
+                    <li key={spell.id} className="flex justify-between gap-2 rounded bg-ink/30 px-3 py-1.5">
+                      <span>
+                        {spell.name}{' '}
+                        <span className="text-sage">
+                          (L{spell.level === 0 ? '0 cantrip' : spell.level})
+                        </span>
+                      </span>
+                      <span className={known ? 'text-sage' : 'text-parchment/50'}>
+                        {known ? 'Known' : `Unlocks at ${need}`}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
         <h3 className="mb-3 font-bold text-gold">Classes</h3>

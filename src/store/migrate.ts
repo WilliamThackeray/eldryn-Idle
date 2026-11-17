@@ -6,16 +6,22 @@ import {
 } from '../data/classes'
 import { isItemId } from '../data/items'
 import { getMonster, isBiomeId } from '../data/monsters'
+import { isSpellId } from '../data/spells'
 import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
 import type { ActiveAction, CombatFight } from '../engine/advance'
 import { emptySignatureRuntime } from '../engine/signatures'
 import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
 import type { Inventory } from '../engine/inventory'
+import {
+  initialSpellLoadouts,
+  type SpellLoadout,
+  type SpellSlot,
+} from '../engine/spells'
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v7: combat fight state for Monster Hunting. */
-export const SAVE_VERSION = 7
+/** v8: spell loadouts and combat spell state. */
+export const SAVE_VERSION = 8
 
 export interface SaveData {
   characterName: string
@@ -32,6 +38,7 @@ export interface SaveData {
   equipment: Equipment
   equipmentSets: EquipmentSet[]
   combat: CombatFight | null
+  spellLoadouts: Record<ClassId, SpellLoadout>
 }
 
 export function createInitialSave(): SaveData {
@@ -50,6 +57,7 @@ export function createInitialSave(): SaveData {
     equipment: emptyEquipment(),
     equipmentSets: [],
     combat: null,
+    spellLoadouts: initialSpellLoadouts(),
   }
 }
 
@@ -96,7 +104,21 @@ export function normalizeSave(raw: unknown): SaveData {
     equipment: readEquipment(source.equipment),
     equipmentSets: readEquipmentSets(source.equipmentSets),
     combat,
+    spellLoadouts: readSpellLoadouts(source.spellLoadouts),
   }
+}
+
+function readSpellLoadouts(value: unknown): Record<ClassId, SpellLoadout> {
+  const loadouts = initialSpellLoadouts()
+  if (!isRecord(value)) return loadouts
+  for (const id of Object.keys(loadouts) as ClassId[]) {
+    const entry = value[id]
+    if (!isRecord(entry) || !Array.isArray(entry.slots)) continue
+    loadouts[id] = {
+      slots: entry.slots.map((slot) => (typeof slot === 'string' && isSpellId(slot) ? slot : null)),
+    }
+  }
+  return loadouts
 }
 
 /** Returns the next activeClassId, or null when the switch is blocked / invalid. */
@@ -307,5 +329,38 @@ function readCombat(value: unknown): CombatFight | null {
     outOfAmmo: value.outOfAmmo === true,
     defeated: value.defeated === true,
     log: Array.isArray(value.log) ? value.log.filter((line): line is string => typeof line === 'string').slice(-30) : [],
+    spellSlots: readSpellSlots(value.spellSlots),
+    rotationIndex: Math.max(0, Math.floor(finite(value.rotationIndex) ?? 0)),
+    concentration: readConcentration(value.concentration),
+    shieldBonus: Math.max(0, Math.floor(finite(value.shieldBonus) ?? 0)),
   }
+}
+
+function readSpellSlots(value: unknown): SpellSlot[] {
+  if (!Array.isArray(value)) return []
+  const slots: SpellSlot[] = []
+  for (const entry of value) {
+    if (!isRecord(entry)) continue
+    const level = finite(entry.level)
+    if (level == null || level < 0) continue
+    const spellId =
+      typeof entry.spellId === 'string' && isSpellId(entry.spellId) ? entry.spellId : null
+    slots.push({ level: Math.floor(level), spellId, spent: entry.spent === true })
+  }
+  return slots
+}
+
+function readConcentration(value: unknown): CombatFight['concentration'] {
+  const ids = [
+    'blur',
+    'shieldOfFaith',
+    'faerieFire',
+    'barkskin',
+    'protectionFromEnergyFire',
+    'huntersMark',
+    'divineFavor',
+    'shield',
+  ] as const
+  if (typeof value !== 'string') return null
+  return (ids as readonly string[]).includes(value) ? (value as CombatFight['concentration']) : null
 }

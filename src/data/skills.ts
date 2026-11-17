@@ -142,6 +142,15 @@ export function isSkillId(id: string): id is SkillId {
   return SKILL_IDS.has(id)
 }
 
+const SKILL_BY_ID = Object.fromEntries(SKILLS.map((skill) => [skill.id, skill])) as Record<
+  SkillId,
+  (typeof SKILLS)[number]
+>
+
+export function getSkill(id: SkillId): (typeof SKILLS)[number] {
+  return SKILL_BY_ID[id]
+}
+
 export function initialSkillProgress(): Record<SkillId, SkillProgress> {
   const skills = {} as Record<SkillId, SkillProgress>
   for (const skill of SKILLS) skills[skill.id] = { xp: 0 }

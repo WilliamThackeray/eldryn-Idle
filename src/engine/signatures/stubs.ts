@@ -1,10 +1,4 @@
-import type { SignatureHooks } from './types'
-
-/** Stub until spell slots exist (Prompt 7). */
-export const divineSmite: SignatureHooks = {}
-
-/** Stub until spell slots exist (Prompt 7). */
-export const arcaneRecovery: SignatureHooks = {}
-
-/** Stub until spell slots / sorcery points exist (Prompt 7). */
-export const metamagicPactMagic: SignatureHooks = {}
+/** Prompt 7 signatures moved to dedicated modules. Kept so old imports keep compiling. */
+export { divineSmite } from './divineSmite'
+export { arcaneRecovery } from './arcaneRecovery'
+export { metamagicPactMagic } from './metamagicPactMagic'

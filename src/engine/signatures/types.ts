@@ -14,6 +14,12 @@ export interface SignatureRuntime {
   wildShapeUsed: boolean
   flurryInterval: number
   markedType: string | null
+  /** Sorcerer/Warlock: points for Quickened Spell. */
+  sorceryPoints: number
+  /** Next spell interval should use the Quickened factor. */
+  quickenedReady: boolean
+  /** Wizard: Arcane Recovery already used since the last long rest. */
+  arcaneRecoveryUsed: boolean
 }
 
 export interface SignatureHooks {
@@ -46,6 +52,8 @@ export interface HitHookContext extends SignatureContext {
   /** Flat bonus damage. */
   bonusFlat: number
   creatureType: string
+  /** Divine Smite: spend the lowest unspent leveled slot. Returns slot level or null. */
+  spendLowestSlot?: () => number | null
 }
 
 export interface DamagedHookContext extends SignatureContext {
@@ -75,5 +83,8 @@ export function emptySignatureRuntime(id: string): SignatureRuntime {
     wildShapeUsed: false,
     flurryInterval: 0,
     markedType: null,
+    sorceryPoints: 0,
+    quickenedReady: false,
+    arcaneRecoveryUsed: false,
   }
 }

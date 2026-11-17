@@ -135,3 +135,28 @@ export const PUSH_DELAY_FRACTION = 0.25
 
 /** Combat log lines kept for the live view. */
 export const COMBAT_LOG_LIMIT = 30
+
+/**
+ * Spell slots inside a fight.
+ * expended: each leveled slot casts once, then cantrips until a rest.
+ * rotation: the loop cycles through all slots forever (components still limit leveled casts).
+ * TODO(design): pick one for shipping; both stay behind this switch.
+ */
+export type SpellSlotModel = 'expended' | 'rotation'
+export const SPELL_SLOT_MODEL: SpellSlotModel = 'expended'
+
+/**
+ * Casting ability for spell attack / save DC.
+ * class: the 5e ability on ClassDefinition.spellcasting.
+ * unlockSkill: the ability of the class's unlock skill (Nature is INT → Druid/Ranger cast INT).
+ * TODO(design): 5e abilities vs unlock-skill ability after the INT/CHA XP swap.
+ */
+export type CastingAbilitySource = 'class' | 'unlockSkill'
+export const CASTING_ABILITY_SOURCE: CastingAbilitySource = 'class'
+
+/** Base spellcasting interval in seconds before DEX speed. */
+export const SPELL_INTERVAL_SEC = 6
+
+/** Sorcery points spent for Quickened Spell (next interval × 0.5). */
+export const QUICKENED_COST = 2
+export const QUICKENED_INTERVAL_FACTOR = 0.5
