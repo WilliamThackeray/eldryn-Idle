@@ -207,7 +207,7 @@ export function equip(
   if ((inventory[itemId] ?? 0) <= 0) return null
 
   let nextInventory = removeItems(inventory, [{ itemId, quantity: 1 }])
-  let nextEquipment = { ...equipment }
+  const nextEquipment = { ...equipment }
   const previous = nextEquipment[slot]
   if (previous) nextInventory = addItems(nextInventory, [{ itemId: previous, quantity: 1 }])
   nextEquipment[slot] = itemId
@@ -276,7 +276,7 @@ export function armorClass(equipment: Equipment, dexMod: number): number {
 
 export function weaponIntervalBase(weapon: GearBlock['weapon'] | undefined): number {
   if (!weapon) return WEAPON_INTERVAL_SEC.standard
-  let base = WEAPON_INTERVAL_SEC.standard
+  let base: number = WEAPON_INTERVAL_SEC.standard
   if (weapon.properties.includes('light')) base = WEAPON_INTERVAL_SEC.light
   else if (weapon.properties.includes('heavy')) base = WEAPON_INTERVAL_SEC.heavy
   if (weapon.properties.includes('loading')) base += WEAPON_INTERVAL_SEC.loadingExtra
@@ -319,7 +319,7 @@ export function applyLoadout(
   inventory: Inventory,
   loadout: Equipment,
 ): { equipment: Equipment; inventory: Inventory } {
-  let nextEquipment = emptyEquipment()
+  const nextEquipment = emptyEquipment()
   let nextInventory = inventory
 
   for (const slot of Object.keys(equipment) as EquipmentSlot[]) {

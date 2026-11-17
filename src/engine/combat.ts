@@ -426,14 +426,14 @@ function resolvePlayerAttack(input: {
   stopped: boolean
 } {
   const { fight, monster, equipment, rng, trace } = input
-  let { inventory, classXp, skills } = input
-  const cls = getClass(input.activeClassId)
+  let { inventory } = input
+  const { classXp, skills } = input
   const mods = abilityModMap(skills)
   const scores = abilityScoreMap(skills)
   const classLevel = levelForXp(classXp)
   const classTier = tier(classLevel)
   const prof = proficiency(classTier)
-  const weapon = input.unarmedOverride ? null : playerWeapon(equipment)
+  const weapon = input.unarmedOverride ? undefined : playerWeapon(equipment)
   const magic = input.unarmedOverride ? 0 : playerMagicBonus(equipment)
   const { mod: abilityBonus } = attackAbilityMod(weapon, mods)
   const mastery = input.unarmedOverride ? null : masteryOf(equipment)
@@ -468,7 +468,7 @@ function resolvePlayerAttack(input: {
   }
   hooks.onBeforeAttack?.({ ...sigCtx, hasAdvantage, intervalIndex: fight.playerIntervalCount })
 
-  let natural = rollD20(rng, mode)
+  const natural = rollD20(rng, mode)
   let total = natural + abilityBonus + prof + magic
   let bardicNote = ''
   if (fight.signature.id === 'bardicInspiration') {
@@ -632,7 +632,8 @@ function resolveSpellCast(input: {
   stopped: boolean
 } {
   const { fight, monster, rng, trace } = input
-  let { inventory, classXp, skills } = input
+  let { inventory } = input
+  const { classXp, skills } = input
   const mods = abilityModMap(skills)
   const classTier = tier(levelForXp(classXp))
   const prof = proficiency(classTier)
@@ -649,7 +650,7 @@ function resolveSpellCast(input: {
   })
   fight.rotationIndex = picked.nextRotationIndex
 
-  let slot = fight.spellSlots[picked.slotIndex]
+  let slot: SpellSlot | undefined = fight.spellSlots[picked.slotIndex]
   let spellId: SpellId | null = slot?.spellId ?? null
   let slotLevel = slot?.level ?? 0
   let usedCantripFallback = false
@@ -847,7 +848,7 @@ function applyPlayerDamage(input: {
         ability: 'CON',
         dc,
         abilityMod: mods.CON,
-        proficient: cls.saveProficiencies.includes('CON'),
+        proficient: cls.saveProficiencies.some((save) => save === 'CON'),
         proficiencyBonus: proficiency(classTier),
       })
       if (save.success) {
@@ -911,7 +912,6 @@ function spawnDungeonMonster(
   trace: boolean,
 ): { killedByCleave: boolean } {
   fight.monsterId = monster.id
-  fight.biome = fight.biome
   fight.phase = 'fight'
   fight.restProgressMs = 0
   fight.restKind = null
@@ -974,7 +974,7 @@ function advanceDungeonNodes(input: {
   const { fight, equipment, rng, trace, casting } = input
   let inventory = input.inventory
   let classXp = input.classXp
-  let skills = input.skills
+  const skills = input.skills
   const dungeon = getDungeon(fight.dungeonId ?? '')
   if (!dungeon) {
     return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
@@ -1442,7 +1442,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         inventory = next.inventory
         classXp = next.classXp
         skills = next.skills
-        monster = next.monster
+        monster = next.monster ?? undefined
         flushGold()
         if (next.stop) return finishStop(next.questStepComplete)
         if (fight.defeated) return finishDefeat()

@@ -2,7 +2,7 @@ import { expect, test } from 'vitest'
 import { getDungeon } from '../data/dungeons'
 import { initialClassProgress } from '../data/classes'
 import { initialSkillProgress } from '../data/skills'
-import { advance } from './advance'
+import { advance, type AdvanceState } from './advance'
 import { beginDungeonFight, createFight } from './combat'
 import {
   buildRunOrder,
@@ -88,7 +88,7 @@ test('dungeon defeat keeps loot and clears the run', () => {
   })!
   expect(fight.dungeonId).toBe('shifting-thicket')
 
-  let state = {
+  let state: AdvanceState = {
     skills,
     inventory: { 'cooked-forest-fish': 20 } as Record<string, number>,
     gold: 0,
@@ -126,10 +126,10 @@ test('dungeon defeat keeps loot and clears the run', () => {
       playerHp: 1,
       phase: 'fight',
     }
-    state.inventory = Object.fromEntries(
-      Object.entries(state.inventory).filter(([id]) => id !== 'cooked-forest-fish'),
-    )
-    state.equipment = { ...state.equipment, food: null }
+    const nextInventory = { ...state.inventory }
+    delete nextInventory['cooked-forest-fish']
+    state.inventory = nextInventory
+    if (state.equipment) state.equipment = { ...state.equipment, food: null }
   }
 
   const defeated = advance(state, 120_000, mulberry32(99), {}, { trace: false })

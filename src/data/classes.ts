@@ -226,7 +226,7 @@ export function modifiersFor(
 ): Partial<Record<AbilityAbbr, number>> {
   if (!classId) return {}
   const entry = CLASS_BY_ID[classId]
-  const mods = { ...entry.xpModifiers }
+  const mods: Partial<Record<AbilityAbbr, number>> = { ...entry.xpModifiers }
   if (entry.id === 'cleric' && entry.focusBonus != null) {
     mods[clericFocus] = (mods[clericFocus] ?? 0) + entry.focusBonus
   }

@@ -7,7 +7,9 @@ import {
   createFight,
   maxHp,
   nickProc,
+  type CombatFight,
 } from './combat'
+import type { Inventory } from './inventory'
 import { applyDamageModifiers } from './damage'
 import { rollDamageParts } from './dice'
 import { emptyEquipment, type Equipment } from './equipment'
@@ -39,7 +41,6 @@ test('maxHp matches the Barbarian tier-20 example', () => {
 test('crit doubles dice and adds the modifier once', () => {
   const rng = mulberry32(42)
   const normal = rollDamageParts('1d6+2', rng, false)
-  const rng2 = mulberry32(42)
   // Force known dice by using flat-only for modifier check via two rolls of 1d6
   const a = rollDamageParts('1d6', mulberry32(7), false)
   const b = rollDamageParts('1d6', mulberry32(7), true)
@@ -216,10 +217,16 @@ test('killing a Deer grants class XP, loot, and enters rest', () => {
   fight.playerProgressMs = fight.playerIntervalMs
 
   // Scripted hit: use a loop until kill
-  let state = {
+  let state: {
+    fight: CombatFight | null
+    skills: ReturnType<typeof initialSkillProgress>
+    inventory: Inventory
+    gold: number
+    classXp: number
+  } = {
     fight,
     skills: initialSkillProgress(),
-    inventory: { 'cooked-forest-fish': 5 } as Record<string, number>,
+    inventory: { 'cooked-forest-fish': 5 },
     gold: 0,
     classXp: classXpStart,
   }
@@ -248,7 +255,7 @@ test('killing a Deer grants class XP, loot, and enters rest', () => {
   expect(state.classXp).toBe(classXpStart + 10)
   expect(state.fight?.phase).toBe('rest')
   expect(state.fight?.kills).toBe(1)
-  expect(Object.values(state.inventory).some((qty) => qty > 0)).toBe(true)
+  expect(Object.values(state.inventory).some((qty) => (qty ?? 0) > 0)).toBe(true)
 })
 
 test('offline simulation of 1 hour finishes quickly and deterministically', () => {

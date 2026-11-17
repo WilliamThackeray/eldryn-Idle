@@ -3,7 +3,7 @@ import type { SignatureHooks } from './types'
 
 /** Always marks the current monster's creature type. No spell slot cost. */
 export const huntersMark: SignatureHooks = {
-  onFightStart(ctx) {
+  onFightStart() {
     // markedType set by combat when the monster is known
   },
   onHit(ctx) {

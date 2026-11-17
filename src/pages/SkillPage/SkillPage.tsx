@@ -142,13 +142,15 @@ export function SkillPage({ skillId }: SkillPageProps) {
           <p className="text-sm text-parchment/70">No rolls yet.</p>
         ) : (
           <ul className="space-y-1 text-sm">
-            {[...log].reverse().map((event, index) => (
-              <li key={`${event.activityId}-${index}`}>
-                {event.kind === 'materials'
-                  ? `Out of materials: ${event.label}. Stopped.`
-                  : `${SKILLS.find((skill) => skill.id === event.skillId)?.name ?? event.label}: roll ${event.roll} (${event.total} vs DC ${event.dc}) ${event.outcome} +${formatXp(event.xp)} XP${formatGains(event)}`}
-              </li>
-            ))}
+            {[...log].reverse().map((event, index) =>
+              event.kind === 'combat' ? null : (
+                <li key={`${event.activityId}-${index}`}>
+                  {event.kind === 'materials'
+                    ? `Out of materials: ${event.label}. Stopped.`
+                    : `${SKILLS.find((skill) => skill.id === event.skillId)?.name ?? event.label}: roll ${event.roll} (${event.total} vs DC ${event.dc}) ${event.outcome} +${formatXp(event.xp)} XP${formatGains(event)}`}
+                </li>
+              ),
+            )}
           </ul>
         )}
       </section>

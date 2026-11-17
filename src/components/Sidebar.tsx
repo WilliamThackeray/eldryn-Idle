@@ -63,7 +63,7 @@ export function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
         <Section
           key={abbr}
           title={abbr}
-          skills={SKILLS.filter((skill) => skill.ability === abbr && skill.id !== 'vitality').map((skill) => {
+          skills={SKILLS.filter((skill) => skill.ability === abbr).map((skill) => {
             const Icon = SKILL_ICONS[skill.id as Exclude<SkillId, 'vitality'>]
             return {
               id: skill.id,
