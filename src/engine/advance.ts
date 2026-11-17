@@ -16,6 +16,10 @@ import { intervalMs } from './interval'
 import { hasItems, removeItems, addItems, type Inventory } from './inventory'
 import { rollGold, rollLoot } from './loot'
 import type { Rng } from './rng'
+import {
+  completeQuestActionStep,
+  type QuestProgress,
+} from './quest'
 import { skillCheck, type SkillCheckOutcome, type SkillCheckResult } from './skillCheck'
 import { addXp, applyXpModifiers, levelForXp } from './xp'
 
@@ -49,6 +53,11 @@ export interface AdvanceState {
   lastDefeat?: boolean
   /** Kills credited when a hunt ends during this advance call. */
   endedHuntKills?: number
+  questProgress?: QuestProgress
+  /** Cleared when leaving a dungeon/quest run. */
+  isInDungeonOrQuest?: boolean
+  /** Quest id completed this tick (combat or dungeon step). */
+  questStepComplete?: string | null
 }
 
 export interface SkillEvent {
@@ -342,6 +351,12 @@ function advanceCombatAction(
     if (newLines.length) log.push({ kind: 'combat', lines: newLines })
   }
 
+  let questProgress = state.questProgress
+  if (result.questStepComplete && questProgress) {
+    const kind = action.mode === 'dungeon' || action.dungeonId ? 'dungeon' : 'combat'
+    questProgress = completeQuestActionStep(result.questStepComplete, questProgress, kind)
+  }
+
   if (result.stop || !result.fight) {
     return {
       state: {
@@ -354,12 +369,21 @@ function advanceCombatAction(
         combat: null,
         lastDefeat: result.defeated,
         endedHuntKills: result.kills,
+        questProgress,
+        isInDungeonOrQuest: result.leftDungeonOrQuest ? false : state.isInDungeonOrQuest,
+        questStepComplete: result.questStepComplete ?? null,
       },
       log,
     }
   }
 
   const monster = getMonster(result.fight.monsterId)
+  const dungeonLabel =
+    result.fight.dungeonId != null
+      ? `Dungeon · ${monster?.name ?? '…'}`
+      : monster
+        ? `Hunting ${monster.name}`
+        : action.label
   return {
     state: {
       ...state,
@@ -368,9 +392,11 @@ function advanceCombatAction(
       gold: result.gold,
       classes,
       combat: result.fight,
+      questProgress,
       activeAction: {
         ...action,
-        label: monster ? `Hunting ${monster.name}` : action.label,
+        label: dungeonLabel,
+        monsterId: result.fight.monsterId,
         progressMs: result.fight.phase === 'rest' ? result.fight.restProgressMs : result.fight.playerProgressMs,
         baseIntervalMs: result.fight.phase === 'rest' ? RESPAWN_MS : result.fight.playerIntervalMs,
       },

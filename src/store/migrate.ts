@@ -4,11 +4,14 @@ import {
   type ClassId,
   type ClericFocus,
 } from '../data/classes'
+import { isDungeonId } from '../data/dungeons'
 import { isItemId } from '../data/items'
 import { getMonster, isBiomeId } from '../data/monsters'
+import { isQuestId } from '../data/quests'
 import { isSpellId } from '../data/spells'
 import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
 import type { ActiveAction, CombatFight } from '../engine/advance'
+import { emptyQuestProgress, type QuestProgress } from '../engine/quest'
 import { emptySignatureRuntime } from '../engine/signatures'
 import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
 import type { Inventory } from '../engine/inventory'
@@ -20,8 +23,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v8: spell loadouts and combat spell state. */
-export const SAVE_VERSION = 8
+/** v9: dungeon run fields and quest progress. */
+export const SAVE_VERSION = 9
 
 export interface SaveData {
   characterName: string
@@ -39,6 +42,7 @@ export interface SaveData {
   equipmentSets: EquipmentSet[]
   combat: CombatFight | null
   spellLoadouts: Record<ClassId, SpellLoadout>
+  questProgress: QuestProgress
 }
 
 export function createInitialSave(): SaveData {
@@ -58,6 +62,7 @@ export function createInitialSave(): SaveData {
     equipmentSets: [],
     combat: null,
     spellLoadouts: initialSpellLoadouts(),
+    questProgress: emptyQuestProgress(),
   }
 }
 
@@ -105,7 +110,20 @@ export function normalizeSave(raw: unknown): SaveData {
     equipmentSets: readEquipmentSets(source.equipmentSets),
     combat,
     spellLoadouts: readSpellLoadouts(source.spellLoadouts),
+    questProgress: readQuestProgress(source.questProgress),
   }
+}
+
+function readQuestProgress(value: unknown): QuestProgress {
+  if (!isRecord(value)) return emptyQuestProgress()
+  const next: QuestProgress = {}
+  for (const [id, entry] of Object.entries(value)) {
+    if (!isQuestId(id) || !isRecord(entry)) continue
+    const step = finite(entry.step)
+    if (step == null || step < 0) continue
+    next[id] = { step: Math.floor(step), done: entry.done === true }
+  }
+  return next
 }
 
 function readSpellLoadouts(value: unknown): Record<ClassId, SpellLoadout> {
@@ -186,6 +204,7 @@ function parseActiveAction(value: unknown): ActiveAction | null {
   if (value.kind === 'combat') {
     if (typeof value.monsterId !== 'string' || !getMonster(value.monsterId)) return null
     if (typeof value.biome !== 'string' || !isBiomeId(value.biome)) return null
+    const mode = value.mode === 'dungeon' ? 'dungeon' : 'hunt'
     return {
       kind: 'combat',
       label: value.label,
@@ -193,6 +212,10 @@ function parseActiveAction(value: unknown): ActiveAction | null {
       biome: value.biome,
       baseIntervalMs,
       progressMs,
+      mode,
+      dungeonId:
+        typeof value.dungeonId === 'string' && isDungeonId(value.dungeonId) ? value.dungeonId : undefined,
+      questId: typeof value.questId === 'string' && isQuestId(value.questId) ? value.questId : undefined,
     }
   }
   if (value.kind !== 'skill' || typeof value.skillId !== 'string' || !isSkillId(value.skillId)) return null
@@ -333,6 +356,15 @@ function readCombat(value: unknown): CombatFight | null {
     rotationIndex: Math.max(0, Math.floor(finite(value.rotationIndex) ?? 0)),
     concentration: readConcentration(value.concentration),
     shieldBonus: Math.max(0, Math.floor(finite(value.shieldBonus) ?? 0)),
+    dungeonId: typeof value.dungeonId === 'string' && isDungeonId(value.dungeonId) ? value.dungeonId : null,
+    nodeIndex: Math.max(0, Math.floor(finite(value.nodeIndex) ?? 0)),
+    runsCompleted: Math.max(0, Math.floor(finite(value.runsCompleted) ?? 0)),
+    restKind: value.restKind === 'short' || value.restKind === 'long' ? value.restKind : null,
+    roomLog: Array.isArray(value.roomLog)
+      ? value.roomLog.filter((line): line is string => typeof line === 'string').slice(-30)
+      : [],
+    questId: typeof value.questId === 'string' && isQuestId(value.questId) ? value.questId : null,
+    pendingCleave: Math.max(0, finite(value.pendingCleave) ?? 0),
   }
 }
 

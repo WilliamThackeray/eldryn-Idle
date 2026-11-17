@@ -114,6 +114,9 @@ export const AUTO_EAT_THRESHOLD = 0.5
 /** Long rest / respawn between Monster Hunting kills. Attack intervals stay frozen during this. */
 export const RESPAWN_MS = 2000
 
+/** Short rest: regain this fraction of max HP (floored), capped at max. */
+export const SHORT_REST_HP_FRACTION = 0.5
+
 /** Fraction of spent ammo returned after a fight. */
 export const AMMO_RECOVERY = 0.5
 

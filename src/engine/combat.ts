@@ -1,4 +1,5 @@
 import { getClass, type ClassId } from '../data/classes'
+import { getDungeon } from '../data/dungeons'
 import { getItem, type DamageType, type ItemId, type WeaponMastery } from '../data/items'
 import { getMonster, type BiomeId, type CreatureSize, type MonsterDef } from '../data/monsters'
 import { getSpell, type BuffEffectId, type SpellId } from '../data/spells'
@@ -21,6 +22,14 @@ import {
 import { applyDamageModifiers } from './damage'
 import { resolveRollMode, roll, rollD20, rollDamageParts, type RollMode } from './dice'
 import {
+  applyLootToInventory,
+  buildRunOrder,
+  consumeEntryItem,
+  resolveSecret,
+  resolveTrap,
+  type DungeonNode,
+} from './dungeon'
+import {
   emptyEquipment,
   armorClass,
   heavyArmorIntervalMultiplier,
@@ -41,6 +50,7 @@ import {
   tryWildShape,
   type SignatureRuntime,
 } from './signatures'
+import { longRest, shortRest } from './rest'
 import {
   buildFightSlots,
   castingAbilityFor,
@@ -50,7 +60,6 @@ import {
   hasComponentBag,
   markSlotSpent,
   pickSlotForCast,
-  refreshSlotsOnLongRest,
   spendLowestSlot,
   unlockSkillFor,
   usesSpellLoop,
@@ -100,6 +109,17 @@ export interface CombatFight {
   concentration: BuffEffectId | null
   /** Shield spell: +5 AC until the next hit taken. */
   shieldBonus: number
+  /** Set when running a dungeon; null for Monster Hunting. */
+  dungeonId: string | null
+  /** Index into the dungeon run order. */
+  nodeIndex: number
+  runsCompleted: number
+  restKind: 'short' | 'long' | null
+  roomLog: string[]
+  /** When set, dungeon stops after one chest (quest step). */
+  questId: string | null
+  /** Pending cleave applied when the next monster node starts. */
+  pendingCleave: number
 }
 
 export interface CombatAction {
@@ -109,6 +129,9 @@ export interface CombatAction {
   biome: BiomeId
   baseIntervalMs: number
   progressMs: number
+  mode?: 'hunt' | 'dungeon'
+  dungeonId?: string
+  questId?: string
 }
 
 export function maxHp(hitDie: number, classTier: number, conMod: number): number {
@@ -283,6 +306,13 @@ export function createFight(input: {
     rotationIndex: 0,
     concentration: null,
     shieldBonus: 0,
+    dungeonId: null,
+    nodeIndex: 0,
+    runsCompleted: 0,
+    restKind: null,
+    roomLog: [],
+    questId: null,
+    pendingCleave: 0,
   }
 
   const hooks = getSignatureHooks(signature.id)
@@ -300,37 +330,42 @@ export function createFight(input: {
   return fight
 }
 
-function longRestAbilities(fight: CombatFight, classTier: number, chaMod: number) {
-  const hooks = getSignatureHooks(fight.signature.id)
-  const runtime = emptySignatureRuntime(fight.signature.id)
-  fight.signature = runtime
-  fight.spellSlots = refreshSlotsOnLongRest(fight.spellSlots)
-  fight.rotationIndex = 0
-  fight.concentration = null
-  fight.shieldBonus = 0
-  // Re-init via onFightStart
-  hooks.onFightStart?.({
-    runtime,
-    tier: classTier,
-    abilityMod: (abbr) => (abbr === 'CHA' ? chaMod : 0),
-    rng: () => 0,
-    trace: false,
-    log: () => undefined,
+/** Start a dungeon at encounter 0. Caller must have already consumed the entry item. */
+export function beginDungeonFight(input: {
+  dungeonId: string
+  skills: Record<SkillId, SkillProgress>
+  equipment: Equipment
+  activeClassId: ClassId
+  classXp: number
+  rng: Rng
+  trace?: boolean
+  spellLoadout?: SpellLoadout
+  questId?: string | null
+}): CombatFight | null {
+  const dungeon = getDungeon(input.dungeonId)
+  if (!dungeon) return null
+  const first = dungeon.encounters[0]
+  if (!first) return null
+  const fight = createFight({
+    monsterId: first,
+    biome: dungeon.biome,
+    skills: input.skills,
+    equipment: input.equipment,
+    activeClassId: input.activeClassId,
+    classXp: input.classXp,
+    rng: input.rng,
+    trace: input.trace,
+    spellLoadout: input.spellLoadout,
   })
-  if (runtime.id === 'huntersMark') {
-    const monster = getMonster(fight.monsterId)
-    runtime.markedType = monster?.creatureType ?? null
-  }
-  // Bardic uses need real CHA; re-set after stub init
-  if (runtime.id === 'bardicInspiration') {
-    runtime.bardicUses = Math.max(1, chaMod)
-  }
-  if (runtime.id === 'rage') {
-    runtime.rageUses = 2 + Math.floor((classTier - 1) / 4)
-  }
-  if (runtime.id === 'metamagicPactMagic') {
-    runtime.sorceryPoints = classTier
-  }
+  if (!fight) return null
+  fight.dungeonId = dungeon.id
+  fight.nodeIndex = 0
+  fight.runsCompleted = 0
+  fight.restKind = null
+  fight.roomLog = []
+  fight.questId = input.questId ?? null
+  fight.pendingCleave = 0
+  return fight
 }
 
 function recoverAmmo(inventory: Inventory, equipment: Equipment, spent: number): Inventory {
@@ -863,6 +898,215 @@ function applyPlayerDamage(input: {
   return { skills, defeated: true }
 }
 
+function pushRoomLog(fight: CombatFight, line: string) {
+  fight.roomLog = [...fight.roomLog, line].slice(-COMBAT_LOG_LIMIT)
+}
+
+function spawnDungeonMonster(
+  fight: CombatFight,
+  monster: MonsterDef,
+  skills: Record<SkillId, SkillProgress>,
+  equipment: Equipment,
+  casting: boolean,
+  trace: boolean,
+): { killedByCleave: boolean } {
+  fight.monsterId = monster.id
+  fight.biome = fight.biome
+  fight.phase = 'fight'
+  fight.restProgressMs = 0
+  fight.restKind = null
+  fight.monsterHp = monster.hp
+  fight.monsterMaxHp = monster.hp
+  fight.openingDone = false
+  fight.playerIntervalMs = computePlayerIntervalMs(skills, equipment, casting)
+  fight.monsterIntervalMs = computeMonsterIntervalMs(monster, false)
+  fight.playerProgressMs = 0
+  fight.monsterProgressMs = 0
+  fight.slowActive = false
+  fight.pushDelayMs = 0
+  fight.nextAttackAdvantage = false
+  fight.monsterNextDisadvantage = false
+  if (fight.signature.id === 'huntersMark') {
+    fight.signature.markedType = monster.creatureType
+  }
+
+  const overflow = fight.pendingCleave + fight.cleaveOverflow
+  fight.pendingCleave = 0
+  fight.cleaveOverflow = 0
+  if (overflow > 0) {
+    const before = fight.monsterHp
+    fight.monsterHp = Math.max(0, fight.monsterHp - overflow)
+    const leftover = overflow - before
+    pushLog(fight, `Cleave overflow ${overflow} → ${monster.name}.`, trace)
+    if (fight.monsterHp === 0) {
+      if (leftover > 0) fight.cleaveOverflow = leftover
+      return { killedByCleave: true }
+    }
+  }
+  pushLog(fight, `${monster.name} appears.`, trace)
+  return { killedByCleave: false }
+}
+
+/**
+ * After a dungeon kill or rest finishes: walk nodes until the next fight or timed rest.
+ * Returns stop when the run ends (quest one-shot, missing entry item).
+ */
+function advanceDungeonNodes(input: {
+  fight: CombatFight
+  inventory: Inventory
+  skills: Record<SkillId, SkillProgress>
+  equipment: Equipment
+  activeClassId: ClassId
+  classXp: number
+  classTier: number
+  chaMod: number
+  rng: Rng
+  trace: boolean
+  casting: boolean
+}): {
+  inventory: Inventory
+  classXp: number
+  skills: Record<SkillId, SkillProgress>
+  stop: boolean
+  questStepComplete: string | null
+  monster: MonsterDef | null
+} {
+  const { fight, equipment, rng, trace, casting } = input
+  let inventory = input.inventory
+  let classXp = input.classXp
+  let skills = input.skills
+  const dungeon = getDungeon(fight.dungeonId ?? '')
+  if (!dungeon) {
+    return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+  }
+  const order = buildRunOrder(dungeon)
+  const restCtx = {
+    classId: input.activeClassId,
+    classTier: input.classTier,
+    chaMod: input.chaMod,
+  }
+
+  const applyKillRewards = (monster: MonsterDef) => {
+    const loot = rollLoot(monster.lootTable, rng, 1)
+    inventory = addItems(inventory, loot)
+    fight.lootGained = mergeLoot(fight.lootGained, loot)
+    const gold = rollGold(monster.gold, rng, 1)
+    fight.goldGained += gold
+    fight.classXpGained += monster.xp
+    classXp = addXp(classXp, monster.xp)
+    fight.kills += 1
+    pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
+  }
+
+  // Guard against infinite cleave chains.
+  for (let guard = 0; guard < 64; guard++) {
+    if (fight.nodeIndex >= order.length) {
+      fight.nodeIndex = 0
+    }
+    const node: DungeonNode = order[fight.nodeIndex]
+
+    if (node.kind === 'shortRest') {
+      shortRest(fight, restCtx)
+      fight.phase = 'rest'
+      fight.restKind = 'short'
+      fight.restProgressMs = 0
+      fight.playerProgressMs = 0
+      fight.monsterProgressMs = 0
+      pushLog(fight, 'Short rest.', trace)
+      return { inventory, classXp, skills, stop: false, questStepComplete: null, monster: getMonster(fight.monsterId) ?? null }
+    }
+
+    if (node.kind === 'longRest') {
+      fight.runsCompleted += 1
+      if (fight.questId) {
+        pushLog(fight, 'Quest dungeon complete. Returning to town.', trace)
+        return {
+          inventory,
+          classXp,
+          skills,
+          stop: true,
+          questStepComplete: fight.questId,
+          monster: null,
+        }
+      }
+      const entry = consumeEntryItem(inventory, dungeon)
+      inventory = entry.inventory
+      if (!entry.ok) {
+        pushLog(fight, 'No entry item for another loop. Returning to town.', trace)
+        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+      }
+      longRest(fight, restCtx)
+      fight.phase = 'rest'
+      fight.restKind = 'long'
+      fight.restProgressMs = 0
+      fight.playerProgressMs = 0
+      fight.monsterProgressMs = 0
+      fight.cleaveOverflow = 0
+      fight.pendingCleave = 0
+      pushLog(fight, 'Long rest between loops.', trace)
+      return { inventory, classXp, skills, stop: false, questStepComplete: null, monster: getMonster(fight.monsterId) ?? null }
+    }
+
+    if (node.kind === 'trap') {
+      const result = resolveTrap(node.room, skills, rng)
+      pushRoomLog(fight, result.line)
+      pushLog(fight, result.line, trace)
+      if (result.damage > 0) {
+        fight.playerHp = Math.max(0, fight.playerHp - result.damage)
+        if (fight.playerHp <= 0) {
+          fight.defeated = true
+          pushLog(fight, 'You fall. Returning to town.', trace)
+          return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+        }
+      }
+      fight.nodeIndex += 1
+      continue
+    }
+
+    if (node.kind === 'secret') {
+      const result = resolveSecret(node.room, skills, rng)
+      pushRoomLog(fight, result.line)
+      pushLog(fight, result.line, trace)
+      if (result.found && result.loot.length) {
+        inventory = applyLootToInventory(inventory, result.loot)
+        fight.lootGained = mergeLoot(fight.lootGained, result.loot)
+      }
+      fight.nodeIndex += 1
+      continue
+    }
+
+    if (node.kind === 'chest') {
+      const loot = rollLoot(dungeon.chest, rng, 1)
+      inventory = applyLootToInventory(inventory, loot)
+      fight.lootGained = mergeLoot(fight.lootGained, loot)
+      const line = loot.length
+        ? `Chest: ${loot.map((s) => `${s.itemId}×${s.quantity}`).join(', ')}.`
+        : 'Chest: empty.'
+      pushRoomLog(fight, line)
+      pushLog(fight, line, trace)
+      fight.nodeIndex += 1
+      continue
+    }
+
+    if (node.kind === 'monster' || node.kind === 'boss') {
+      const nextMonster = getMonster(node.monsterId)
+      if (!nextMonster) {
+        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+      }
+      const spawned = spawnDungeonMonster(fight, nextMonster, skills, equipment, casting, trace)
+      if (spawned.killedByCleave) {
+        applyKillRewards(nextMonster)
+        fight.pendingCleave = fight.cleaveOverflow
+        fight.nodeIndex += 1
+        continue
+      }
+      return { inventory, classXp, skills, stop: false, questStepComplete: null, monster: nextMonster }
+    }
+  }
+
+  return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+}
+
 function onKill(input: {
   fight: CombatFight
   monster: MonsterDef
@@ -875,7 +1119,16 @@ function onKill(input: {
   modifiers: Partial<Record<AbilityAbbr, number>>
   chaMod: number
   classTier: number
-}): { inventory: Inventory; classXp: number; skills: Record<SkillId, SkillProgress> } {
+  activeClassId: ClassId
+  casting: boolean
+}): {
+  inventory: Inventory
+  classXp: number
+  skills: Record<SkillId, SkillProgress>
+  stop: boolean
+  questStepComplete: string | null
+  monster: MonsterDef | null
+} {
   const { fight, monster, equipment, rng, trace } = input
   let inventory = recoverAmmo(input.inventory, equipment, fight.ammoSpent)
   fight.ammoSpent = 0
@@ -888,7 +1141,6 @@ function onKill(input: {
   fight.classXpGained += monster.xp
   const classXp = addXp(input.classXp, monster.xp)
   fight.kills += 1
-  fight.cleaveOverflow = 0
   fight.slowActive = false
   fight.pushDelayMs = 0
   fight.nextAttackAdvantage = false
@@ -896,16 +1148,58 @@ function onKill(input: {
 
   pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
 
-  // Long rest during respawn — attack intervals stay frozen until the next spawn.
-  fight.phase = 'rest'
-  fight.restProgressMs = 0
-  fight.playerProgressMs = 0
-  fight.monsterProgressMs = 0
-  fight.pushDelayMs = 0
-  fight.playerHp = fight.playerMaxHp
-  longRestAbilities(fight, input.classTier, input.chaMod)
+  const inDungeon = fight.dungeonId != null
+  if (!inDungeon) {
+    fight.cleaveOverflow = 0
+    // Quest combat steps are one kill, then return to town.
+    if (fight.questId) {
+      return {
+        inventory,
+        classXp,
+        skills: input.skills,
+        stop: true,
+        questStepComplete: fight.questId,
+        monster,
+      }
+    }
+    fight.phase = 'rest'
+    fight.restProgressMs = 0
+    fight.playerProgressMs = 0
+    fight.monsterProgressMs = 0
+    fight.pushDelayMs = 0
+    longRest(fight, {
+      classId: input.activeClassId,
+      classTier: input.classTier,
+      chaMod: input.chaMod,
+    })
+    fight.restKind = 'long'
+    return {
+      inventory,
+      classXp,
+      skills: input.skills,
+      stop: false,
+      questStepComplete: null,
+      monster,
+    }
+  }
 
-  return { inventory, classXp, skills: input.skills }
+  // Carry cleave to the next dungeon monster.
+  fight.pendingCleave = fight.cleaveOverflow
+  fight.cleaveOverflow = 0
+  fight.nodeIndex += 1
+  return advanceDungeonNodes({
+    fight,
+    inventory,
+    skills: input.skills,
+    equipment,
+    activeClassId: input.activeClassId,
+    classXp,
+    classTier: input.classTier,
+    chaMod: input.chaMod,
+    rng,
+    trace,
+    casting: input.casting,
+  })
 }
 
 function respawnMonster(
@@ -1025,11 +1319,15 @@ export interface CombatAdvanceResult {
   lastLog: string[]
   kills: number
   defeated: boolean
+  /** Quest id when a quest dungeon/combat step finished this tick. */
+  questStepComplete?: string | null
+  /** True when a dungeon run ended (defeat, stop, missing key, or quest one-shot). */
+  leftDungeonOrQuest?: boolean
 }
 
 export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
-  const monster = getMonster(input.fight.monsterId)
-  if (!monster) {
+  let monster = getMonster(input.fight.monsterId)
+  if (!monster && !input.fight.dungeonId) {
     return {
       fight: null,
       skills: input.skills,
@@ -1043,7 +1341,13 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     }
   }
 
-  const fight = { ...input.fight, log: [...input.fight.log], lootGained: [...input.fight.lootGained], signature: { ...input.fight.signature } }
+  const fight = {
+    ...input.fight,
+    log: [...input.fight.log],
+    lootGained: [...input.fight.lootGained],
+    roomLog: [...(input.fight.roomLog ?? [])],
+    signature: { ...input.fight.signature },
+  }
   let skills = input.skills
   let inventory = input.inventory
   let gold = input.gold
@@ -1056,30 +1360,48 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   const casting = usesSpellLoop(input.activeClassId)
   const trace = input.trace
 
+  const flushGold = () => {
+    if (fight.goldGained > 0) {
+      gold += fight.goldGained
+      fight.goldGained = 0
+    }
+  }
+
   const finishDefeat = (): CombatAdvanceResult => {
     inventory = recoverAmmo(inventory, equipment, fight.ammoSpent)
     fight.ammoSpent = 0
+    flushGold()
     return {
       fight: null,
       skills,
       inventory,
-      gold: gold + fight.goldGained,
+      gold,
       classXp,
       stop: true,
       lastLog: fight.log,
       kills: fight.kills,
       defeated: fight.defeated,
+      leftDungeonOrQuest: fight.dungeonId != null || fight.questId != null,
+      questStepComplete: null,
     }
   }
 
-  // Apply pending gold from prior kills stored on fight into gold only when hunt ends;
-  // during hunt goldGained accumulates and is flushed on stop/defeat/out-of-ammo.
-  // Actually plan: loot goes to inventory immediately; gold should too for inventory consistency.
-  // Flush gold as we earn it:
-  const flushGold = () => {
-    if (fight.goldGained > 0) {
-      gold += fight.goldGained
-      fight.goldGained = 0
+  const finishStop = (questId: string | null = null): CombatAdvanceResult => {
+    inventory = recoverAmmo(inventory, equipment, fight.ammoSpent)
+    fight.ammoSpent = 0
+    flushGold()
+    return {
+      fight: null,
+      skills,
+      inventory,
+      gold,
+      classXp,
+      stop: true,
+      lastLog: fight.log,
+      kills: fight.kills,
+      defeated: false,
+      leftDungeonOrQuest: true,
+      questStepComplete: questId,
     }
   }
 
@@ -1099,9 +1421,45 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       remaining -= need
       fight.sessionMs += need
       fight.restProgressMs = 0
+
+      if (fight.dungeonId) {
+        const wasLong = fight.restKind === 'long'
+        if (wasLong) fight.nodeIndex = 0
+        else fight.nodeIndex += 1
+        const next = advanceDungeonNodes({
+          fight,
+          inventory,
+          skills,
+          equipment,
+          activeClassId: input.activeClassId,
+          classXp,
+          classTier: classTier(),
+          chaMod: mods().CHA,
+          rng: input.rng,
+          trace,
+          casting,
+        })
+        inventory = next.inventory
+        classXp = next.classXp
+        skills = next.skills
+        monster = next.monster
+        flushGold()
+        if (next.stop) return finishStop(next.questStepComplete)
+        if (fight.defeated) return finishDefeat()
+        continue
+      }
+
+      if (!monster) {
+        return finishStop(null)
+      }
       respawnMonster(fight, monster, skills, equipment, casting)
+      fight.restKind = null
       pushLog(fight, `${monster.name} appears.`, trace)
       continue
+    }
+
+    if (!monster) {
+      return finishStop(null)
     }
 
     // Opening attacks once per spawn
@@ -1137,11 +1495,16 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
           modifiers,
           chaMod: mods().CHA,
           classTier: classTier(),
+          activeClassId: input.activeClassId,
+        casting,
         })
         inventory = killed.inventory
         classXp = killed.classXp
         skills = killed.skills
+        if (killed.monster) monster = killed.monster
         flushGold()
+        if (killed.stop) return finishStop(killed.questStepComplete)
+        if (fight.defeated) return finishDefeat()
         continue
       }
       // Action Surge: one extra attack at fight start
@@ -1179,11 +1542,16 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             modifiers,
             chaMod: mods().CHA,
             classTier: classTier(),
+            activeClassId: input.activeClassId,
+          casting,
           })
           inventory = killed.inventory
           classXp = killed.classXp
           skills = killed.skills
+          if (killed.monster) monster = killed.monster
           flushGold()
+          if (killed.stop) return finishStop(killed.questStepComplete)
+          if (fight.defeated) return finishDefeat()
           continue
         }
       }
@@ -1286,11 +1654,16 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             modifiers,
             chaMod: mods().CHA,
             classTier: classTier(),
+            activeClassId: input.activeClassId,
+          casting,
           })
           inventory = killed.inventory
           classXp = killed.classXp
           skills = killed.skills
+          if (killed.monster) monster = killed.monster
           flushGold()
+          if (killed.stop) return finishStop(killed.questStepComplete)
+          if (fight.defeated) return finishDefeat()
           continue
         }
 
@@ -1330,11 +1703,16 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               modifiers,
               chaMod: mods().CHA,
               classTier: classTier(),
+              activeClassId: input.activeClassId,
+            casting,
             })
             inventory = killed.inventory
             classXp = killed.classXp
             skills = killed.skills
+            if (killed.monster) monster = killed.monster
             flushGold()
+            if (killed.stop) return finishStop(killed.questStepComplete)
+            if (fight.defeated) return finishDefeat()
             continue
           }
         }
@@ -1384,9 +1762,30 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
 
   flushGold()
   if (fight.defeated || fight.outOfAmmo) {
-    return { fight: null, skills, inventory, gold, classXp, stop: true, lastLog: fight.log, kills: fight.kills, defeated: fight.defeated }
+    return {
+      fight: null,
+      skills,
+      inventory,
+      gold,
+      classXp,
+      stop: true,
+      lastLog: fight.log,
+      kills: fight.kills,
+      defeated: fight.defeated,
+      leftDungeonOrQuest: fight.dungeonId != null || fight.questId != null,
+    }
   }
-  return { fight, skills, inventory, gold, classXp, stop: false, lastLog: fight.log, kills: fight.kills, defeated: fight.defeated }
+  return {
+    fight,
+    skills,
+    inventory,
+    gold,
+    classXp,
+    stop: false,
+    lastLog: fight.log,
+    kills: fight.kills,
+    defeated: fight.defeated,
+  }
 }
 
 export function difficultyHint(input: {

@@ -1,4 +1,4 @@
-import { Coins, Info, Package, Save, ShoppingCart, Swords, User } from 'lucide-react'
+import { Coins, Info, Package, Save, ScrollText, ShoppingCart, Swords, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getClass } from '../data/classes'
@@ -111,10 +111,17 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
         />
         <Link
           icon={<Swords size={20} />}
-          label="Monster Hunting"
+          label="Combat"
           tipSide="below"
           onClick={() => setCurrentPage('monsterHunting')}
           active={currentPage === 'monsterHunting'}
+        />
+        <Link
+          icon={<ScrollText size={20} />}
+          label="Quests"
+          tipSide="below"
+          onClick={() => setCurrentPage('quests')}
+          active={currentPage === 'quests'}
         />
 
         <div className="relative">

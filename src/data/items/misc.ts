@@ -5,4 +5,14 @@ export const MISC = [
   { id: 'scouting-report', name: 'Scouting Report', description: 'Notes that make rare spawns more likely in a biome.', category: 'misc', rarity: 'uncommon', stackable: true, sellValue: 8, tags: ['knowledge'] },
   { id: 'ancient-page', name: 'Ancient Page', description: 'A loose page. History can bind these later.', category: 'misc', rarity: 'rare', stackable: true, sellValue: 10, tags: ['knowledge'] },
   { id: 'valuables', name: 'Valuables', description: 'Gems and trinkets taken from a lockbox.', category: 'misc', rarity: 'uncommon', stackable: true, sellValue: 25, tags: ['treasure'] },
+  {
+    id: 'guild-writ',
+    name: 'Guild Writ',
+    description: 'A forged guild writ. Opens certain dungeons once per run.',
+    category: 'misc',
+    rarity: 'uncommon',
+    stackable: true,
+    sellValue: 15,
+    tags: ['key', 'forgery'],
+  },
 ] as const satisfies readonly ItemDef[]

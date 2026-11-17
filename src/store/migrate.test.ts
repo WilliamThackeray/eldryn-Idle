@@ -37,7 +37,7 @@ test('a broken save resets to a fresh character', () => {
 })
 
 test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(8)
+  expect(SAVE_VERSION).toBe(9)
 
   const next = migrateSave(
     {

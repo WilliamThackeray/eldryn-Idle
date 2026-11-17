@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getClass, type ClassId } from '../../data/classes'
+import { DUNGEONS, getDungeon } from '../../data/dungeons'
 import { getItem } from '../../data/items'
 import {
   BIOMES,
   BIOME_LABELS,
+  getMonster,
   monstersForBiome,
   type BiomeId,
   type MonsterDef,
@@ -18,24 +20,34 @@ import {
 } from '../../engine/combat'
 import { ProgressBar } from '../../components/ProgressBar'
 import { RESPAWN_MS } from '../../engine/config'
+import { buildRunOrder } from '../../engine/dungeon'
 import { levelForXp, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
 import type { SkillProgress } from '../../types/game'
 
+type CombatTab = 'hunting' | 'dungeons'
+
 export function CombatPage() {
+  const combat = useGameStore((state) => state.combat)
+  const [tab, setTab] = useState<CombatTab>(() => (combat?.dungeonId ? 'dungeons' : 'hunting'))
+  useEffect(() => {
+    if (combat?.dungeonId) setTab('dungeons')
+  }, [combat?.dungeonId])
   const [biome, setBiome] = useState<BiomeId>('forest')
   const activeClassId = useGameStore((state) => state.activeClassId)
   const classes = useGameStore((state) => state.classes)
   const skills = useGameStore((state) => state.skills)
   const equipment = useGameStore((state) => state.equipment)
-  const combat = useGameStore((state) => state.combat)
+  const inventory = useGameStore((state) => state.inventory)
   const activeAction = useGameStore((state) => state.activeAction)
   const log = useGameStore((state) => state.log)
   const startHunt = useGameStore((state) => state.startHunt)
+  const startDungeon = useGameStore((state) => state.startDungeon)
   const stopActivity = useGameStore((state) => state.stopActivity)
 
   const monsters = useMemo(() => monstersForBiome(biome), [biome])
-  const hunting = activeAction?.kind === 'combat'
+  const inCombat = activeAction?.kind === 'combat'
+  const inDungeon = Boolean(combat?.dungeonId)
   const classXp = activeClassId ? classes[activeClassId].xp : 0
   const toHit = playerToHitBonus(skills, equipment, classXp)
 
@@ -44,6 +56,8 @@ export function CombatPage() {
 
   const killsPerHour =
     combat && combat.sessionMs > 0 ? (combat.kills / combat.sessionMs) * 3_600_000 : 0
+  const runsPerHour =
+    combat && combat.sessionMs > 0 ? (combat.runsCompleted / combat.sessionMs) * 3_600_000 : 0
 
   const playerIntervalProgress =
     combat == null
@@ -58,24 +72,37 @@ export function CombatPage() {
       ? 0
       : Math.min(100, (combat.monsterProgressMs / combat.monsterIntervalMs) * 100)
 
+  const dungeon = combat?.dungeonId ? getDungeon(combat.dungeonId) : undefined
+  const runOrder = dungeon ? buildRunOrder(dungeon) : []
+  const nodeLabel =
+    dungeon && combat
+      ? runOrder[combat.nodeIndex]?.kind ?? '…'
+      : null
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
-        {BIOMES.map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setBiome(id)}
-            className={`rounded-lg px-3 py-2 text-sm transition-colors ${
-              biome === id ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
-            }`}
-          >
-            {BIOME_LABELS[id]}
-          </button>
-        ))}
+        <button
+          type="button"
+          onClick={() => setTab('hunting')}
+          className={`rounded-lg px-3 py-2 text-sm transition-colors ${
+            tab === 'hunting' ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
+          }`}
+        >
+          Hunting
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('dungeons')}
+          className={`rounded-lg px-3 py-2 text-sm transition-colors ${
+            tab === 'dungeons' ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
+          }`}
+        >
+          Dungeons
+        </button>
       </div>
 
-      {hunting && combat ? (
+      {inCombat && combat && (tab === 'dungeons') === inDungeon ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div className="space-y-4 rounded-lg border border-brown/40 bg-panel p-4">
             <div className="flex items-center justify-between gap-3">
@@ -88,6 +115,19 @@ export function CombatPage() {
                 Stop
               </button>
             </div>
+
+            {inDungeon && dungeon && (
+              <div className="rounded border border-brown/40 p-2 text-sm">
+                <div className="font-bold text-gold">{dungeon.name}</div>
+                <div className="text-parchment/70">
+                  Node {combat.nodeIndex + 1}/{runOrder.length} · {nodeLabel}
+                  {combat.restKind ? ` · ${combat.restKind} rest` : ''}
+                </div>
+                {combat.roomLog.length > 0 && (
+                  <p className="mt-1 text-xs text-parchment/80">{combat.roomLog[combat.roomLog.length - 1]}</p>
+                )}
+              </div>
+            )}
 
             <HpBlock
               label="You"
@@ -108,7 +148,7 @@ export function CombatPage() {
             </div>
 
             <HpBlock
-              label={monsters.find((m) => m.id === combat.monsterId)?.name ?? 'Monster'}
+              label={getMonster(combat.monsterId)?.name ?? 'Monster'}
               hp={combat.monsterHp}
               maxHp={combat.monsterMaxHp}
               barClassName="bg-crimson"
@@ -127,12 +167,14 @@ export function CombatPage() {
 
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded border border-brown/40 p-2">
-                <div className="text-parchment/70">Kills / hour</div>
-                <div className="font-bold text-gold">{killsPerHour.toFixed(1)}</div>
+                <div className="text-parchment/70">{inDungeon ? 'Runs / hour' : 'Kills / hour'}</div>
+                <div className="font-bold text-gold">
+                  {(inDungeon ? runsPerHour : killsPerHour).toFixed(1)}
+                </div>
               </div>
               <div className="rounded border border-brown/40 p-2">
-                <div className="text-parchment/70">Kills this hunt</div>
-                <div className="font-bold text-gold">{combat.kills}</div>
+                <div className="text-parchment/70">{inDungeon ? 'Runs completed' : 'Kills this hunt'}</div>
+                <div className="font-bold text-gold">{inDungeon ? combat.runsCompleted : combat.kills}</div>
               </div>
             </div>
 
@@ -165,8 +207,22 @@ export function CombatPage() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : tab === 'hunting' ? (
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {BIOMES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setBiome(id)}
+                className={`rounded-lg px-3 py-2 text-sm transition-colors ${
+                  biome === id ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
+                }`}
+              >
+                {BIOME_LABELS[id]}
+              </button>
+            ))}
+          </div>
           {!activeClassId && (
             <p className="rounded-lg border border-crimson/50 bg-panel p-3 text-sm text-crimson">
               Pick a class on the Character page before hunting.
@@ -178,10 +234,55 @@ export function CombatPage() {
               monster={monster}
               toHit={toHit}
               playerHpEstimate={estimatePlayerHp(activeClassId, classXp, skills)}
-              disabled={!activeClassId}
+              disabled={!activeClassId || inCombat}
               onFight={() => startHunt(monster.id, biome)}
             />
           ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {!activeClassId && (
+            <p className="rounded-lg border border-crimson/50 bg-panel p-3 text-sm text-crimson">
+              Pick a class on the Character page before entering a dungeon.
+            </p>
+          )}
+          {DUNGEONS.map((d) => {
+            const entry = d.entryItemId ? getItem(d.entryItemId) : null
+            const haveEntry = !d.entryItemId || (inventory[d.entryItemId] ?? 0) > 0
+            const encounterNames = [...d.encounters, d.boss]
+              .map((id) => getMonster(id)?.name ?? id)
+              .join(' → ')
+            return (
+              <div
+                key={d.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brown/40 bg-panel p-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <h3 className="text-lg font-bold text-gold">{d.name}</h3>
+                    <span className="text-sm text-parchment/70">
+                      {BIOME_LABELS[d.biome]} · Tier {d.recommendedTier}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-parchment/80">{encounterNames}</p>
+                  {entry && (
+                    <p className="mt-1 text-xs text-parchment/70">
+                      Entry: {entry.name}
+                      {haveEntry ? '' : ' (missing)'}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={!activeClassId || inCombat || !haveEntry}
+                  onClick={() => startDungeon(d.id)}
+                  className="rounded-lg bg-crimson px-4 py-2 text-sm font-bold text-parchment transition-colors hover:bg-brown disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Enter
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

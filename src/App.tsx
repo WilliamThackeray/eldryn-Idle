@@ -8,13 +8,15 @@ import { isSkillId, SKILLS } from './data/skills'
 import { CharacterPage } from './pages/CharacterPage/CharacterPage'
 import { CombatPage } from './pages/CombatPage/CombatPage'
 import { InventoryPage } from './pages/InventoryPage/InventoryPage'
+import { QuestPage } from './pages/QuestPage/QuestPage'
 import { ShopPage } from './pages/ShopPage/ShopPage'
 import { SkillPage } from './pages/SkillPage/SkillPage'
 
 function pageTitle(page: string): string {
   if (page === 'shop') return 'Shop'
   if (page === 'inventory') return 'Inventory'
-  if (page === 'monsterHunting') return 'Monster Hunting'
+  if (page === 'monsterHunting') return 'Combat'
+  if (page === 'quests') return 'Quests'
   if (page === 'character') return 'Character'
   return SKILLS.find((skill) => skill.id === page)?.name ?? ''
 }
@@ -39,6 +41,7 @@ function App() {
             {currentPage === 'shop' && <ShopPage />}
             {currentPage === 'inventory' && <InventoryPage />}
             {currentPage === 'monsterHunting' && <CombatPage />}
+            {currentPage === 'quests' && <QuestPage />}
             {currentPage === 'character' && <CharacterPage />}
           </div>
         </main>
