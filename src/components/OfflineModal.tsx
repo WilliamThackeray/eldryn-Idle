@@ -19,7 +19,17 @@ export function OfflineModal() {
           While you were away
         </h2>
         <AwayTime report={report} />
-        <h3 className="font-bold mt-4 mb-1">XP</h3>
+        {report.defeated && <p className="mt-2 text-sm text-crimson">You were defeated and returned to town.</p>}
+        {(report.kills > 0 || report.classXp > 0) && (
+          <>
+            <h3 className="mb-1 mt-4 font-bold">Combat</h3>
+            <ul className="space-y-1 text-sm">
+              {report.kills > 0 && <li>Kills: {report.kills}</li>}
+              {report.classXp > 0 && <li>Class XP: +{formatXp(report.classXp)}</li>}
+            </ul>
+          </>
+        )}
+        <h3 className="mb-1 mt-4 font-bold">XP</h3>
         {report.skills.length === 0 ? (
           <p className="text-sm">No XP gained.</p>
         ) : (
@@ -37,11 +47,11 @@ export function OfflineModal() {
         )}
         {report.gold > 0 && (
           <>
-            <h3 className="font-bold mt-4 mb-1">Gold</h3>
+            <h3 className="mb-1 mt-4 font-bold">Gold</h3>
             <p className="text-sm">+{report.gold} gp</p>
           </>
         )}
-        <h3 className="font-bold mt-4 mb-1">Items</h3>
+        <h3 className="mb-1 mt-4 font-bold">Items</h3>
         {report.items.length === 0 ? (
           <p className="text-sm">No items gained.</p>
         ) : (
@@ -79,12 +89,12 @@ function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000))
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
-  const rest = seconds % 60
+  const secs = seconds % 60
   if (hours > 0) return `${hours}h ${minutes}m`
-  if (minutes > 0) return `${minutes}m ${rest}s`
-  return `${rest}s`
+  if (minutes > 0) return `${minutes}m ${secs}s`
+  return `${secs}s`
 }
 
 function formatXp(xp: number): string {
-  return Number.isInteger(xp) ? String(xp) : xp.toFixed(1)
+  return Math.floor(xp).toLocaleString()
 }

@@ -2,16 +2,20 @@ import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
 import { modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
 import type { ItemId } from '../data/items'
+import { getMonster, type BiomeId } from '../data/monsters'
 import { buyItem as buyShopItem } from '../data/shop'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
+import { createFight } from '../engine/combat'
 import {
   applyLoadout,
   canEquip,
   emptyEquipment,
   equip,
   unequip,
+  weaponIntervalBase,
   type EquipmentSlot,
 } from '../engine/equipment'
+import { getItem } from '../data/items'
 import { sellItems } from '../engine/inventory'
 import type { Rng } from '../engine/rng'
 import {
@@ -24,12 +28,19 @@ import {
   type SaveData,
 } from './migrate'
 
-const LOG_LIMIT = 10
+const LOG_LIMIT = 40
 
 interface GameStore extends SaveData {
   log: GameEvent[]
   offlineReport: OfflineReport | null
+  /** Online ticks build combat log lines; offline catch-up skips them. */
+  combatTrace: boolean
+  /** Ephemeral: kills from hunts that ended since the last offline summary. */
+  offlineKills: number
+  /** Ephemeral: defeat since the last offline summary. */
+  lastDefeat: boolean
   startActivity: (activity: Omit<SkillAction, 'kind' | 'progressMs'>) => void
+  startHunt: (monsterId: string, biome: BiomeId) => void
   stopActivity: () => void
   applyElapsed: (elapsedMs: number, lastTick: number) => void
   dismissOffline: () => void
@@ -43,6 +54,8 @@ interface GameStore extends SaveData {
   deleteEquipmentSet: (name: string) => void
   setActiveClass: (classId: ClassId) => void
   setClericFocus: (focus: ClericFocus) => void
+  setCombatTrace: (trace: boolean) => void
+  clearOfflineCombatFlags: () => void
 }
 
 const liveRng: Rng = () => Math.random()
@@ -89,15 +102,53 @@ export const useGameStore = create<GameStore>()(
       ...createInitialSave(),
       log: [],
       offlineReport: null,
+      combatTrace: true,
+      offlineKills: 0,
+      lastDefeat: false,
       startActivity: (activity) =>
         set({
           activeAction: { kind: 'skill', ...activity, progressMs: 0 },
+          combat: null,
           log: [],
         }),
-      stopActivity: () => set({ activeAction: null }),
+      startHunt: (monsterId, biome) =>
+        set((state) => {
+          if (!state.activeClassId) return state
+          const monster = getMonster(monsterId)
+          if (!monster) return state
+          const fight = createFight({
+            monsterId,
+            biome,
+            skills: state.skills,
+            equipment: state.equipment,
+            activeClassId: state.activeClassId,
+            classXp: state.classes[state.activeClassId].xp,
+            rng: liveRng,
+            trace: true,
+          })
+          if (!fight) return state
+          const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
+          const baseSec = weaponIntervalBase(weapon)
+          return {
+            combat: fight,
+            activeAction: {
+              kind: 'combat' as const,
+              label: `Hunting ${monster.name}`,
+              monsterId,
+              biome,
+              baseIntervalMs: baseSec * 1000,
+              progressMs: 0,
+            },
+            log: [],
+          }
+        }),
+      stopActivity: () => set({ activeAction: null, combat: null }),
+      setCombatTrace: (trace) => set({ combatTrace: trace }),
+      clearOfflineCombatFlags: () => set({ offlineKills: 0, lastDefeat: false }),
       applyElapsed: (elapsedMs, lastTick) =>
         set((state) => {
           if (!(elapsedMs > 0)) return { lastTick }
+          const killsBefore = state.combat?.kills ?? 0
           const result = advance(
             {
               skills: state.skills,
@@ -105,17 +156,28 @@ export const useGameStore = create<GameStore>()(
               gold: state.gold,
               activeAction: state.activeAction,
               equipment: state.equipment,
+              classes: state.classes,
+              activeClassId: state.activeClassId,
+              combat: state.combat,
             },
             elapsedMs,
             liveRng,
             modifiersFor(state.activeClassId, state.clericFocus),
+            { trace: state.combatTrace },
           )
+          const killsAfter = result.state.combat?.kills ?? result.state.endedHuntKills ?? killsBefore
+          const gainedKills = Math.max(0, killsAfter - killsBefore)
+          const tracking = !state.combatTrace
           return {
             skills: result.state.skills,
             inventory: result.state.inventory,
             gold: result.state.gold,
             activeAction: result.state.activeAction,
+            classes: result.state.classes ?? state.classes,
+            combat: result.state.combat ?? null,
             log: [...state.log, ...result.log].slice(-LOG_LIMIT),
+            offlineKills: tracking ? state.offlineKills + gainedKills : state.offlineKills,
+            lastDefeat: tracking ? state.lastDefeat || Boolean(result.state.lastDefeat) : state.lastDefeat,
             lastTick,
           }
         }),
@@ -185,6 +247,7 @@ export const useGameStore = create<GameStore>()(
         isInDungeonOrQuest: state.isInDungeonOrQuest,
         equipment: state.equipment ?? emptyEquipment(),
         equipmentSets: state.equipmentSets ?? [],
+        combat: state.combat ?? null,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

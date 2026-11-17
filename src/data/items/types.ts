@@ -43,7 +43,21 @@ export type WeaponProperty = (typeof WEAPON_PROPERTIES)[number]
 export const WEAPON_MASTERIES = ['cleave', 'graze', 'nick', 'push', 'sap', 'slow', 'topple', 'vex'] as const
 export type WeaponMastery = (typeof WEAPON_MASTERIES)[number]
 
-export const DAMAGE_TYPES = ['bludgeoning', 'piercing', 'slashing'] as const
+export const DAMAGE_TYPES = [
+  'bludgeoning',
+  'piercing',
+  'slashing',
+  'acid',
+  'cold',
+  'fire',
+  'lightning',
+  'thunder',
+  'force',
+  'necrotic',
+  'poison',
+  'psychic',
+  'radiant',
+] as const
 export type DamageType = (typeof DAMAGE_TYPES)[number]
 
 export const ARMOR_WEIGHT_CLASSES = ['light', 'medium', 'heavy'] as const
@@ -87,6 +101,8 @@ export interface ItemDef {
   sellValue: number
   tags?: string[]
   gear?: GearBlock
+  /** HP restored when eaten from the food slot in combat. */
+  heal?: number
 }
 
 export function magicBonusForRarity(rarity: ItemRarity): number {

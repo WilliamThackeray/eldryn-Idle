@@ -1,9 +1,16 @@
 import { getActivity } from '../data/activities'
+import type { ClassId } from '../data/classes'
 import { getItem } from '../data/items'
+import { getMonster } from '../data/monsters'
 import { SKILLS, type SkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { deriveAbilities } from './abilities'
-import { OFFLINE_CAP_MS } from './config'
+import {
+  advanceCombat,
+  type CombatAction,
+  type CombatFight,
+} from './combat'
+import { OFFLINE_CAP_MS, RESPAWN_MS } from './config'
 import { emptyEquipment, gearRollMode, heavyArmorIntervalMultiplier, type Equipment } from './equipment'
 import { intervalMs } from './interval'
 import { hasItems, removeItems, addItems, type Inventory } from './inventory'
@@ -11,6 +18,8 @@ import { rollGold, rollLoot } from './loot'
 import type { Rng } from './rng'
 import { skillCheck, type SkillCheckOutcome, type SkillCheckResult } from './skillCheck'
 import { addXp, applyXpModifiers, levelForXp } from './xp'
+
+export type { CombatAction, CombatFight } from './combat'
 
 export interface SkillAction {
   kind: 'skill'
@@ -20,13 +29,6 @@ export interface SkillAction {
   baseIntervalMs: number
   requiredLevel: number
   baseXp: number
-  progressMs: number
-}
-
-export interface CombatAction {
-  kind: 'combat'
-  label: string
-  baseIntervalMs: number
   progressMs: number
 }
 
@@ -40,6 +42,13 @@ export interface AdvanceState {
   activeAction: ActiveAction | null
   /** Missing means empty; keeps older advance tests valid. */
   equipment?: Equipment
+  classes?: Record<ClassId, { xp: number }>
+  activeClassId?: ClassId | null
+  combat?: CombatFight | null
+  /** Set when a hunt ends in defeat during this advance call. */
+  lastDefeat?: boolean
+  /** Kills credited when a hunt ends during this advance call. */
+  endedHuntKills?: number
 }
 
 export interface SkillEvent {
@@ -63,7 +72,12 @@ export interface MaterialsEvent {
   label: string
 }
 
-export type GameEvent = SkillEvent | MaterialsEvent
+export interface CombatLogEvent {
+  kind: 'combat'
+  lines: string[]
+}
+
+export type GameEvent = SkillEvent | MaterialsEvent | CombatLogEvent
 
 export interface SkillGain {
   skillId: SkillId
@@ -83,6 +97,9 @@ export interface OfflineReport {
   skills: SkillGain[]
   items: ItemGain[]
   gold: number
+  kills: number
+  classXp: number
+  defeated: boolean
 }
 
 export function cappedAway(awayMs: number): { elapsedMs: number; cappedMs: number } {
@@ -98,7 +115,11 @@ export function summarizeGains(
   afterItems: Inventory,
   beforeGold = 0,
   afterGold = 0,
-): { skills: SkillGain[]; items: ItemGain[]; gold: number } {
+  beforeClassXp = 0,
+  afterClassXp = 0,
+  kills = 0,
+  defeated = false,
+): { skills: SkillGain[]; items: ItemGain[]; gold: number; classXp: number; kills: number; defeated: boolean } {
   const skills = SKILLS.flatMap((skill) => {
     const beforeXp = beforeSkills[skill.id]?.xp ?? 0
     const afterXp = afterSkills[skill.id]?.xp ?? 0
@@ -111,6 +132,9 @@ export function summarizeGains(
     skills,
     items: gainedItems(beforeItems, afterItems),
     gold: Math.max(0, afterGold - beforeGold),
+    classXp: Math.max(0, afterClassXp - beforeClassXp),
+    kills,
+    defeated,
   }
 }
 
@@ -163,8 +187,11 @@ export function actionIntervalMs(
   action: ActiveAction,
   skills: Record<SkillId, SkillProgress>,
   equipment: Equipment = emptyEquipment(),
+  combat?: CombatFight | null,
 ): number {
   if (action.kind === 'combat') {
+    if (combat?.phase === 'rest') return RESPAWN_MS
+    if (combat && combat.playerIntervalMs > 0) return combat.playerIntervalMs
     const abilities = deriveAbilities(skills)
     const dex = abilities.find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
     const str = abilities.find((ability) => ability.abbr === 'STR')?.score ?? 10
@@ -178,9 +205,14 @@ export function advance(
   elapsedMs: number,
   rng: Rng,
   modifiers: Partial<Record<AbilityAbbr, number>> = {},
+  options: { trace?: boolean } = {},
 ): { state: AdvanceState; log: GameEvent[] } {
   const current = state.activeAction
-  if (!(elapsedMs > 0) || !current || current.kind === 'combat') return { state, log: [] }
+  if (!(elapsedMs > 0) || !current) return { state, log: [] }
+
+  if (current.kind === 'combat') {
+    return advanceCombatAction(state, current, elapsedMs, rng, modifiers, options.trace ?? false)
+  }
 
   let skills = state.skills
   let inventory = state.inventory
@@ -260,10 +292,88 @@ export function advance(
 
   return {
     state: {
+      ...state,
       skills,
       inventory,
       gold,
       activeAction: action?.kind === 'skill' ? { ...action, progressMs: progress } : action,
+    },
+    log,
+  }
+}
+
+function advanceCombatAction(
+  state: AdvanceState,
+  action: CombatAction,
+  elapsedMs: number,
+  rng: Rng,
+  modifiers: Partial<Record<AbilityAbbr, number>>,
+  trace: boolean,
+): { state: AdvanceState; log: GameEvent[] } {
+  const fight = state.combat
+  const classId = state.activeClassId
+  if (!fight || !classId || !state.classes) {
+    return { state: { ...state, activeAction: null, combat: null }, log: [] }
+  }
+
+  const beforeLogLen = fight.log.length
+  const result = advanceCombat({
+    fight,
+    skills: state.skills,
+    inventory: state.inventory,
+    gold: state.gold,
+    equipment: state.equipment ?? emptyEquipment(),
+    activeClassId: classId,
+    classXp: state.classes[classId].xp,
+    elapsedMs,
+    rng,
+    trace,
+    modifiers,
+  })
+
+  const classes = {
+    ...state.classes,
+    [classId]: { xp: result.classXp },
+  }
+
+  const log: GameEvent[] = []
+  if (trace) {
+    const newLines = result.lastLog.slice(beforeLogLen)
+    if (newLines.length) log.push({ kind: 'combat', lines: newLines })
+  }
+
+  if (result.stop || !result.fight) {
+    return {
+      state: {
+        ...state,
+        skills: result.skills,
+        inventory: result.inventory,
+        gold: result.gold,
+        classes,
+        activeAction: null,
+        combat: null,
+        lastDefeat: result.defeated,
+        endedHuntKills: result.kills,
+      },
+      log,
+    }
+  }
+
+  const monster = getMonster(result.fight.monsterId)
+  return {
+    state: {
+      ...state,
+      skills: result.skills,
+      inventory: result.inventory,
+      gold: result.gold,
+      classes,
+      combat: result.fight,
+      activeAction: {
+        ...action,
+        label: monster ? `Hunting ${monster.name}` : action.label,
+        progressMs: result.fight.phase === 'rest' ? result.fight.restProgressMs : result.fight.playerProgressMs,
+        baseIntervalMs: result.fight.phase === 'rest' ? RESPAWN_MS : result.fight.playerIntervalMs,
+      },
     },
     log,
   }

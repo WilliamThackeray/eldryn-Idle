@@ -107,3 +107,31 @@ export const MATERIAL_FLAGS = {
   mithral: { ignoresStrAndStealth: true },
   adamantine: { negatesCriticalHits: true },
 } as const
+
+/** Auto-eat when HP falls below this fraction of max. */
+export const AUTO_EAT_THRESHOLD = 0.5
+
+/** Long rest / respawn between Monster Hunting kills. Attack intervals stay frozen during this. */
+export const RESPAWN_MS = 2000
+
+/** Fraction of spent ammo returned after a fight. */
+export const AMMO_RECOVERY = 0.5
+
+/** Monster attack interval by size (seconds). */
+export const MONSTER_INTERVAL_SEC = {
+  tiny: 4.8,
+  small: 4.8,
+  medium: 6,
+  large: 7.2,
+  huge: 8.4,
+  gargantuan: 9.6,
+} as const
+
+/** Slow mastery: enemy interval × this (non-stacking). */
+export const SLOW_INTERVAL_FACTOR = 1.1
+
+/** Push mastery: delay the next enemy attack by this fraction of its interval. */
+export const PUSH_DELAY_FRACTION = 0.25
+
+/** Combat log lines kept for the live view. */
+export const COMBAT_LOG_LIMIT = 30

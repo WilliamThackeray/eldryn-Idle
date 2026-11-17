@@ -5,15 +5,17 @@ import {
   type ClericFocus,
 } from '../data/classes'
 import { isItemId } from '../data/items'
+import { getMonster, isBiomeId } from '../data/monsters'
 import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
-import type { ActiveAction } from '../engine/advance'
+import type { ActiveAction, CombatFight } from '../engine/advance'
+import { emptySignatureRuntime } from '../engine/signatures'
 import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
 import type { Inventory } from '../engine/inventory'
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v6: equipment slots and named loadouts. */
-export const SAVE_VERSION = 6
+/** v7: combat fight state for Monster Hunting. */
+export const SAVE_VERSION = 7
 
 export interface SaveData {
   characterName: string
@@ -29,6 +31,7 @@ export interface SaveData {
   isInDungeonOrQuest: boolean
   equipment: Equipment
   equipmentSets: EquipmentSet[]
+  combat: CombatFight | null
 }
 
 export function createInitialSave(): SaveData {
@@ -46,6 +49,7 @@ export function createInitialSave(): SaveData {
     isInDungeonOrQuest: false,
     equipment: emptyEquipment(),
     equipmentSets: [],
+    combat: null,
   }
 }
 
@@ -72,6 +76,11 @@ export function normalizeSave(raw: unknown): SaveData {
   const characterName =
     typeof source.characterName === 'string' && source.characterName.trim() ? source.characterName : 'bob'
 
+  const combat = readCombat(source.combat)
+  let activeAction = parseActiveAction(source.activeAction)
+  // Drop a combat action if the fight state is missing or invalid.
+  if (activeAction?.kind === 'combat' && !combat) activeAction = null
+
   return {
     characterName,
     skills,
@@ -79,13 +88,14 @@ export function normalizeSave(raw: unknown): SaveData {
     gold: readGold(source.gold),
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
-    activeAction: parseActiveAction(source.activeAction),
+    activeAction,
     activeClassId: readActiveClassId(source.activeClassId),
     classes: readClasses(source.classes),
     clericFocus: source.clericFocus === 'STR' ? 'STR' : 'INT',
     isInDungeonOrQuest: source.isInDungeonOrQuest === true,
     equipment: readEquipment(source.equipment),
     equipmentSets: readEquipmentSets(source.equipmentSets),
+    combat,
   }
 }
 
@@ -151,7 +161,18 @@ function parseActiveAction(value: unknown): ActiveAction | null {
   if (progressMs == null || progressMs < 0 || baseIntervalMs == null || baseIntervalMs <= 0) return null
   if (typeof value.label !== 'string') return null
 
-  if (value.kind === 'combat') return { kind: 'combat', label: value.label, baseIntervalMs, progressMs }
+  if (value.kind === 'combat') {
+    if (typeof value.monsterId !== 'string' || !getMonster(value.monsterId)) return null
+    if (typeof value.biome !== 'string' || !isBiomeId(value.biome)) return null
+    return {
+      kind: 'combat',
+      label: value.label,
+      monsterId: value.monsterId,
+      biome: value.biome,
+      baseIntervalMs,
+      progressMs,
+    }
+  }
   if (value.kind !== 'skill' || typeof value.skillId !== 'string' || !isSkillId(value.skillId)) return null
   if (typeof value.activityId !== 'string') return null
   const requiredLevel = finite(value.requiredLevel)
@@ -225,4 +246,66 @@ function readEquipmentSets(value: unknown): EquipmentSet[] {
     sets.push({ name: entry.name.trim(), slots: readEquipment(entry.slots) })
   }
   return sets
+}
+
+function readCombat(value: unknown): CombatFight | null {
+  if (!isRecord(value)) return null
+  if (typeof value.monsterId !== 'string' || !getMonster(value.monsterId)) return null
+  if (typeof value.biome !== 'string' || !isBiomeId(value.biome)) return null
+  const playerHp = finite(value.playerHp)
+  const playerMaxHp = finite(value.playerMaxHp)
+  const monsterHp = finite(value.monsterHp)
+  const monsterMaxHp = finite(value.monsterMaxHp)
+  if (playerHp == null || playerMaxHp == null || playerMaxHp <= 0) return null
+  if (monsterHp == null || monsterMaxHp == null || monsterMaxHp <= 0) return null
+  const phase = value.phase === 'rest' ? 'rest' : 'fight'
+  const signatureId = isRecord(value.signature) && typeof value.signature.id === 'string' ? value.signature.id : 'rage'
+  return {
+    monsterId: value.monsterId,
+    biome: value.biome,
+    playerHp: Math.max(0, playerHp),
+    playerMaxHp,
+    monsterHp: Math.max(0, monsterHp),
+    monsterMaxHp,
+    playerProgressMs: Math.max(0, finite(value.playerProgressMs) ?? 0),
+    monsterProgressMs: Math.max(0, finite(value.monsterProgressMs) ?? 0),
+    phase,
+    restProgressMs: Math.max(0, finite(value.restProgressMs) ?? 0),
+    playerIntervalMs: Math.max(1, finite(value.playerIntervalMs) ?? 6000),
+    monsterIntervalMs: Math.max(1, finite(value.monsterIntervalMs) ?? 6000),
+    playerIntervalCount: Math.max(0, Math.floor(finite(value.playerIntervalCount) ?? 0)),
+    nextAttackAdvantage: value.nextAttackAdvantage === true,
+    monsterNextDisadvantage: value.monsterNextDisadvantage === true,
+    slowActive: value.slowActive === true,
+    pushDelayMs: Math.max(0, finite(value.pushDelayMs) ?? 0),
+    cleaveOverflow: Math.max(0, finite(value.cleaveOverflow) ?? 0),
+    ammoSpent: Math.max(0, Math.floor(finite(value.ammoSpent) ?? 0)),
+    signature: {
+      ...emptySignatureRuntime(signatureId),
+      ...(isRecord(value.signature) ? (value.signature as object) : {}),
+      id: signatureId,
+    },
+    kills: Math.max(0, Math.floor(finite(value.kills) ?? 0)),
+    sessionMs: Math.max(0, finite(value.sessionMs) ?? 0),
+    lootGained: Array.isArray(value.lootGained)
+      ? value.lootGained.flatMap((entry) => {
+          if (!isRecord(entry) || typeof entry.id !== 'string') return []
+          const quantity = finite(entry.quantity)
+          if (quantity == null || quantity <= 0) return []
+          return [
+            {
+              id: entry.id,
+              name: typeof entry.name === 'string' ? entry.name : entry.id,
+              quantity: Math.floor(quantity),
+            },
+          ]
+        })
+      : [],
+    goldGained: Math.max(0, Math.floor(finite(value.goldGained) ?? 0)),
+    classXpGained: Math.max(0, Math.floor(finite(value.classXpGained) ?? 0)),
+    openingDone: value.openingDone === true,
+    outOfAmmo: value.outOfAmmo === true,
+    defeated: value.defeated === true,
+    log: Array.isArray(value.log) ? value.log.filter((line): line is string => typeof line === 'string').slice(-30) : [],
+  }
 }

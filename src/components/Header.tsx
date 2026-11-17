@@ -1,11 +1,13 @@
-import { Coins, Package, Save, ShoppingCart, Swords, User } from 'lucide-react'
+import { Coins, Info, Package, Save, ShoppingCart, Swords, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getClass } from '../data/classes'
 import { SKILLS } from '../data/skills'
 import { actionIntervalMs } from '../engine/advance'
+import { RESPAWN_MS } from '../engine/config'
 import { levelForXp } from '../engine/xp'
 import { useGameStore } from '../store/gameStore'
+import { CreditsModal } from './CreditsModal'
 import { Link } from './Link'
 import { ProgressBar } from './ProgressBar'
 
@@ -17,6 +19,7 @@ interface HeaderProps {
 
 export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
   const [charTip, setCharTip] = useState<{ top: number; left: number } | null>(null)
+  const [creditsOpen, setCreditsOpen] = useState(false)
   const charRef = useRef<HTMLButtonElement>(null)
   const characterName = useGameStore((state) => state.characterName)
   const activeClassId = useGameStore((state) => state.activeClassId)
@@ -25,10 +28,25 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
   const equipment = useGameStore((state) => state.equipment)
   const gold = useGameStore((state) => state.gold)
   const activeAction = useGameStore((state) => state.activeAction)
+  const combat = useGameStore((state) => state.combat)
   const saveGame = useGameStore((state) => state.saveGame)
-  const actionInterval = activeAction ? actionIntervalMs(activeAction, skills, equipment) : 0
+  const actionInterval =
+    activeAction?.kind === 'combat' && combat?.phase === 'rest'
+      ? RESPAWN_MS
+      : activeAction
+        ? actionIntervalMs(activeAction, skills, equipment, combat)
+        : 0
   const actionProgress =
-    activeAction && actionInterval > 0 ? Math.min(100, (activeAction.progressMs / actionInterval) * 100) : 0
+    activeAction && actionInterval > 0
+      ? Math.min(
+          100,
+          ((activeAction.kind === 'combat' && combat?.phase === 'rest'
+            ? combat.restProgressMs
+            : activeAction.progressMs) /
+            actionInterval) *
+            100,
+        )
+      : 0
   const actionLabel = activeAction
     ? activeAction.kind === 'skill'
       ? `${SKILLS.find((skill) => skill.id === activeAction.skillId)?.name ?? 'Skill'} · ${activeAction.label}`
@@ -47,6 +65,7 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
 
   return (
     <div className="flex items-center justify-between border-b border-brown/40 bg-panel px-4 py-3 text-parchment">
+      <CreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />
       <h1 className="text-2xl font-bold text-gold">{title}</h1>
 
       <div className="mx-4 flex min-w-0 items-center gap-2" aria-label="Active action">
@@ -129,6 +148,14 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
               tipHost,
             )}
         </div>
+
+        <Link
+          icon={<Info size={20} />}
+          label="About"
+          tipSide="below"
+          onClick={() => setCreditsOpen(true)}
+          active={false}
+        />
 
         <button
           type="button"

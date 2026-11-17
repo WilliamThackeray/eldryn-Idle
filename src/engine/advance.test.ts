@@ -91,6 +91,9 @@ test('summarizeGains reports skill XP, levels, item gains, and gold', () => {
     skills: [{ skillId: 'athletics', xp: 100, levels: 1 }],
     items: [{ id: 'steel-bar', name: 'Steel Bar', quantity: 2 }],
     gold: 4,
+    classXp: 0,
+    kills: 0,
+    defeated: false,
   })
 })
 

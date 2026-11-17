@@ -25,7 +25,8 @@ function delay(): Promise<void> {
   })
 }
 
-async function play(elapsedMs: number) {
+async function play(elapsedMs: number, trace: boolean) {
+  useGameStore.getState().setCombatTrace(trace)
   let left = elapsedMs
   while (left > 0) {
     const slice = Math.min(CHUNK_MS, left)
@@ -34,6 +35,7 @@ async function play(elapsedMs: number) {
     left -= slice
     if (left > 0) await delay()
   }
+  useGameStore.getState().setCombatTrace(true)
 }
 
 async function catchUp(showReport: boolean) {
@@ -44,16 +46,42 @@ async function catchUp(showReport: boolean) {
   const beforeSkills = state.skills
   const beforeItems = state.inventory
   const beforeGold = state.gold
-  if (elapsedMs > 0) await play(elapsedMs)
+  const classId = state.activeClassId
+  const beforeClassXp = classId ? state.classes[classId].xp : 0
+  useGameStore.getState().clearOfflineCombatFlags()
+  if (elapsedMs > 0) await play(elapsedMs, false)
   const after = useGameStore.getState()
-  const gains = summarizeGains(beforeSkills, after.skills, beforeItems, after.inventory, beforeGold, after.gold)
+  const afterClassId = after.activeClassId
+  const afterClassXp = afterClassId ? after.classes[afterClassId].xp : beforeClassXp
+  const gains = summarizeGains(
+    beforeSkills,
+    after.skills,
+    beforeItems,
+    after.inventory,
+    beforeGold,
+    after.gold,
+    beforeClassXp,
+    afterClassXp,
+    after.offlineKills,
+    after.lastDefeat,
+  )
   useGameStore.setState({
     lastTick: Date.now(),
     offlineReport:
       showReport && awayMs >= REPORT_AFTER_MS
-        ? { awayMs, cappedMs, skills: gains.skills, items: gains.items, gold: gains.gold }
+        ? {
+            awayMs,
+            cappedMs,
+            skills: gains.skills,
+            items: gains.items,
+            gold: gains.gold,
+            kills: gains.kills,
+            classXp: gains.classXp,
+            defeated: gains.defeated,
+          }
         : after.offlineReport,
   })
+  useGameStore.getState().clearOfflineCombatFlags()
 }
 
 function ensureLoadCatchup(): Promise<void> {
