@@ -1,0 +1,348 @@
+import { getClass, type ClassId } from '../../data/classes'
+import { getDungeon } from '../../data/dungeons'
+import { getItem, type DamageType, type WeaponMastery } from '../../data/items'
+import { getMonster, type BiomeId, type CreatureSize, type MonsterDef } from '../../data/monsters'
+import type { BuffEffectId } from '../../data/spells'
+import type { AbilityAbbr, SkillProgress } from '../../types/game'
+import type { SkillId } from '../../data/skills'
+import { deriveAbilities } from '../abilities'
+import { COMBAT_LOG_LIMIT, MONSTER_INTERVAL_SEC, SLOW_INTERVAL_FACTOR, SPELL_INTERVAL_SEC } from '../config'
+import { rollD20, type RollMode } from '../dice'
+import { armorClass, heavyArmorIntervalMultiplier, weaponIntervalBase, type Equipment } from '../equipment'
+import { intervalMs } from '../interval'
+import type { Inventory } from '../inventory'
+import type { Rng } from '../rng'
+import { emptySignatureRuntime, getSignatureHooks, type SignatureRuntime } from '../signatures'
+import { buildFightSlots, unlockSkillFor, usesSpellLoop, type SpellLoadout, type SpellSlot } from '../spells'
+import { levelForXp, tier } from '../xp'
+
+export interface CombatLootGain {
+  id: string
+  name: string
+  quantity: number
+}
+
+export interface CombatFight {
+  monsterId: string
+  biome: BiomeId
+  playerHp: number
+  playerMaxHp: number
+  monsterHp: number
+  monsterMaxHp: number
+  playerProgressMs: number
+  monsterProgressMs: number
+  phase: 'fight' | 'rest'
+  restProgressMs: number
+  playerIntervalMs: number
+  monsterIntervalMs: number
+  playerIntervalCount: number
+  nextAttackAdvantage: boolean
+  monsterNextDisadvantage: boolean
+  slowActive: boolean
+  pushDelayMs: number
+  cleaveOverflow: number
+  ammoSpent: number
+  signature: SignatureRuntime
+  kills: number
+  sessionMs: number
+  lootGained: CombatLootGain[]
+  goldGained: number
+  classXpGained: number
+  openingDone: boolean
+  outOfAmmo: boolean
+  defeated: boolean
+  log: string[]
+  spellSlots: SpellSlot[]
+  rotationIndex: number
+  concentration: BuffEffectId | null
+  /** Shield spell: +5 AC until the next hit taken. */
+  shieldBonus: number
+  /** Set when running a dungeon; null for Monster Hunting. */
+  dungeonId: string | null
+  /** Index into the dungeon run order. */
+  nodeIndex: number
+  runsCompleted: number
+  restKind: 'short' | 'long' | null
+  roomLog: string[]
+  /** When set, dungeon stops after one chest (quest step). */
+  questId: string | null
+  /** Pending cleave applied when the next monster node starts. */
+  pendingCleave: number
+}
+
+export interface CombatAction {
+  kind: 'combat'
+  label: string
+  monsterId: string
+  biome: BiomeId
+  baseIntervalMs: number
+  progressMs: number
+  mode?: 'hunt' | 'dungeon'
+  dungeonId?: string
+  questId?: string
+}
+
+export function maxHp(hitDie: number, classTier: number, conMod: number): number {
+  const avg = Math.floor(hitDie / 2) + 1
+  const perTier = Math.max(1, avg + conMod)
+  return hitDie + perTier * Math.max(0, classTier - 1)
+}
+
+export function monsterIntervalBaseMs(size: CreatureSize): number {
+  return MONSTER_INTERVAL_SEC[size] * 1000
+}
+
+export function savingThrow(input: {
+  rng: Rng
+  ability: AbilityAbbr
+  dc: number
+  abilityMod: number
+  proficient: boolean
+  proficiencyBonus: number
+  mode?: RollMode
+}): { natural: number; total: number; success: boolean } {
+  const natural = rollD20(input.rng, input.mode ?? 'normal')
+  const bonus = input.abilityMod + (input.proficient ? input.proficiencyBonus : 0)
+  const total = natural + bonus
+  return { natural, total, success: total >= input.dc }
+}
+
+export function abilityModMap(skills: Record<SkillId, SkillProgress>): Record<AbilityAbbr, number> {
+  const mods = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 }
+  for (const ability of deriveAbilities(skills)) mods[ability.abbr] = ability.modifier
+  return mods
+}
+
+export function abilityScoreMap(skills: Record<SkillId, SkillProgress>): Record<AbilityAbbr, number> {
+  const scores = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 }
+  for (const ability of deriveAbilities(skills)) scores[ability.abbr] = ability.score
+  return scores
+}
+
+export function pushLog(fight: CombatFight, line: string, trace: boolean) {
+  if (!trace) return
+  fight.log = [...fight.log, line].slice(-COMBAT_LOG_LIMIT)
+}
+
+export function playerWeapon(equipment: Equipment) {
+  const main = equipment.mainHand ? getItem(equipment.mainHand) : undefined
+  return main?.gear?.weapon
+}
+
+export function playerMagicBonus(equipment: Equipment): number {
+  const main = equipment.mainHand ? getItem(equipment.mainHand) : undefined
+  return main?.gear?.magicBonus ?? 0
+}
+
+export function attackAbilityMod(
+  weapon: ReturnType<typeof playerWeapon>,
+  mods: Record<AbilityAbbr, number>,
+): { mod: number; abbr: AbilityAbbr } {
+  if (!weapon) return { mod: mods.STR, abbr: 'STR' }
+  if (weapon.range === 'ranged') return { mod: mods.DEX, abbr: 'DEX' }
+  if (weapon.properties.includes('finesse')) {
+    return mods.DEX >= mods.STR ? { mod: mods.DEX, abbr: 'DEX' } : { mod: mods.STR, abbr: 'STR' }
+  }
+  return { mod: mods.STR, abbr: 'STR' }
+}
+
+export function damageDice(equipment: Equipment): string {
+  const weapon = playerWeapon(equipment)
+  if (!weapon) return '1'
+  if (weapon.properties.includes('versatile') && weapon.versatileDice && equipment.offHand == null) {
+    return weapon.versatileDice
+  }
+  return weapon.dice
+}
+
+export function damageTypeOf(equipment: Equipment): DamageType {
+  return playerWeapon(equipment)?.damageType ?? 'bludgeoning'
+}
+
+export function masteryOf(equipment: Equipment): WeaponMastery | null {
+  return playerWeapon(equipment)?.mastery ?? null
+}
+
+export function computePlayerIntervalMs(
+  skills: Record<SkillId, SkillProgress>,
+  equipment: Equipment,
+  spellcasting = false,
+): number {
+  const mods = abilityModMap(skills)
+  const scores = abilityScoreMap(skills)
+  const baseSec = spellcasting ? SPELL_INTERVAL_SEC : weaponIntervalBase(playerWeapon(equipment))
+  const base = intervalMs(baseSec * 1000, mods.DEX, 0, true)
+  return base * heavyArmorIntervalMultiplier(equipment, scores.STR)
+}
+
+export function playerArmorClass(fight: CombatFight, equipment: Equipment, dexMod: number): number {
+  let ac = armorClass(equipment, dexMod) + fight.shieldBonus
+  if (fight.concentration === 'shieldOfFaith') ac += 2
+  if (fight.concentration === 'barkskin') ac = Math.max(ac, 16)
+  return ac
+}
+
+export function skillLevel(skills: Record<SkillId, SkillProgress>, skillId: SkillId | null): number {
+  if (!skillId) return 1
+  return levelForXp(skills[skillId]?.xp ?? 0)
+}
+
+export function computeMonsterIntervalMs(monster: MonsterDef, slowActive: boolean): number {
+  const base = monsterIntervalBaseMs(monster.size)
+  return slowActive ? base * SLOW_INTERVAL_FACTOR : base
+}
+
+export function createFight(input: {
+  monsterId: string
+  biome: BiomeId
+  skills: Record<SkillId, SkillProgress>
+  equipment: Equipment
+  activeClassId: ClassId
+  classXp: number
+  rng: Rng
+  trace?: boolean
+  spellLoadout?: SpellLoadout
+}): CombatFight | null {
+  const monster = getMonster(input.monsterId)
+  if (!monster) return null
+  const cls = getClass(input.activeClassId)
+  const mods = abilityModMap(input.skills)
+  const classLevel = levelForXp(input.classXp)
+  const classTier = tier(classLevel)
+  const playerMax = maxHp(cls.hitDie, classTier, mods.CON)
+  const casting = usesSpellLoop(input.activeClassId)
+  const playerInterval = computePlayerIntervalMs(input.skills, input.equipment, casting)
+  const signature = emptySignatureRuntime(cls.signatureAbility.id)
+  const unlockSkill = unlockSkillFor(input.activeClassId)
+  const spellSlots = buildFightSlots({
+    classId: input.activeClassId,
+    classTier,
+    skillLevel: skillLevel(input.skills, unlockSkill),
+    loadout: input.spellLoadout,
+  })
+  const fight: CombatFight = {
+    monsterId: monster.id,
+    biome: input.biome,
+    playerHp: playerMax,
+    playerMaxHp: playerMax,
+    monsterHp: monster.hp,
+    monsterMaxHp: monster.hp,
+    playerProgressMs: 0,
+    monsterProgressMs: 0,
+    phase: 'fight',
+    restProgressMs: 0,
+    playerIntervalMs: playerInterval,
+    monsterIntervalMs: computeMonsterIntervalMs(monster, false),
+    playerIntervalCount: 0,
+    nextAttackAdvantage: false,
+    monsterNextDisadvantage: false,
+    slowActive: false,
+    pushDelayMs: 0,
+    cleaveOverflow: 0,
+    ammoSpent: 0,
+    signature,
+    kills: 0,
+    sessionMs: 0,
+    lootGained: [],
+    goldGained: 0,
+    classXpGained: 0,
+    openingDone: false,
+    outOfAmmo: false,
+    defeated: false,
+    log: [],
+    spellSlots,
+    rotationIndex: 0,
+    concentration: null,
+    shieldBonus: 0,
+    dungeonId: null,
+    nodeIndex: 0,
+    runsCompleted: 0,
+    restKind: null,
+    roomLog: [],
+    questId: null,
+    pendingCleave: 0,
+  }
+
+  const hooks = getSignatureHooks(signature.id)
+  const ctxBase = {
+    runtime: signature,
+    tier: classTier,
+    abilityMod: (abbr: AbilityAbbr) => mods[abbr],
+    rng: input.rng,
+    trace: input.trace ?? false,
+    log: (line: string) => pushLog(fight, line, input.trace ?? false),
+  }
+  hooks.onFightStart?.(ctxBase)
+  if (signature.id === 'huntersMark') signature.markedType = monster.creatureType
+
+  return fight
+}
+
+/** Start a dungeon at encounter 0. Caller must have already consumed the entry item. */
+export function beginDungeonFight(input: {
+  dungeonId: string
+  skills: Record<SkillId, SkillProgress>
+  equipment: Equipment
+  activeClassId: ClassId
+  classXp: number
+  rng: Rng
+  trace?: boolean
+  spellLoadout?: SpellLoadout
+  questId?: string | null
+}): CombatFight | null {
+  const dungeon = getDungeon(input.dungeonId)
+  if (!dungeon) return null
+  const first = dungeon.encounters[0]
+  if (!first) return null
+  const fight = createFight({
+    monsterId: first,
+    biome: dungeon.biome,
+    skills: input.skills,
+    equipment: input.equipment,
+    activeClassId: input.activeClassId,
+    classXp: input.classXp,
+    rng: input.rng,
+    trace: input.trace,
+    spellLoadout: input.spellLoadout,
+  })
+  if (!fight) return null
+  fight.dungeonId = dungeon.id
+  fight.nodeIndex = 0
+  fight.runsCompleted = 0
+  fight.restKind = null
+  fight.roomLog = []
+  fight.questId = input.questId ?? null
+  fight.pendingCleave = 0
+  return fight
+}
+
+export interface CombatAdvanceInput {
+  fight: CombatFight
+  skills: Record<SkillId, SkillProgress>
+  inventory: Inventory
+  gold: number
+  equipment: Equipment
+  activeClassId: ClassId
+  classXp: number
+  elapsedMs: number
+  rng: Rng
+  trace: boolean
+  modifiers?: Partial<Record<AbilityAbbr, number>>
+}
+
+export interface CombatAdvanceResult {
+  fight: CombatFight | null
+  skills: Record<SkillId, SkillProgress>
+  inventory: Inventory
+  gold: number
+  classXp: number
+  stop: boolean
+  /** Last fight snapshot for log lines when the hunt ends. */
+  lastLog: string[]
+  kills: number
+  defeated: boolean
+  /** Quest id when a quest dungeon/combat step finished this tick. */
+  questStepComplete?: string | null
+  /** True when a dungeon run ended (defeat, stop, missing key, or quest one-shot). */
+  leftDungeonOrQuest?: boolean
+}
