@@ -9,6 +9,7 @@ import { CharacterPage } from './pages/CharacterPage/CharacterPage'
 import { CombatPage } from './pages/CombatPage/CombatPage'
 import { InventoryPage } from './pages/InventoryPage/InventoryPage'
 import { MainMenuPage } from './pages/MainMenuPage/MainMenuPage'
+import type { PageFocus } from './pages/pageFocus'
 import { QuestPage } from './pages/QuestPage/QuestPage'
 import { ShopPage } from './pages/ShopPage/ShopPage'
 import { SkillPage } from './pages/SkillPage/SkillPage'
@@ -28,7 +29,13 @@ function App() {
   const [playing, setPlaying] = useState(() => currentSlot() != null)
   useGameLoop(playing)
   const [currentPage, setCurrentPage] = useState('shop')
+  const [pageFocus, setPageFocus] = useState<PageFocus | null>(null)
   const skillId = isSkillId(currentPage) ? currentPage : null
+
+  function navigate(page: string, focus?: PageFocus) {
+    setCurrentPage(page)
+    setPageFocus(focus ?? null)
+  }
 
   if (!playing) return <MainMenuPage onStart={() => setPlaying(true)} />
 
@@ -36,13 +43,13 @@ function App() {
     <>
       <div className="flex h-screen overflow-hidden bg-ink text-parchment">
         <OfflineModal />
-        <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+        <Sidebar currentPage={currentPage} setCurrentPage={(page) => navigate(page)} />
 
         <main className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
           <Header
             title={pageTitle(currentPage)}
             currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
+            setCurrentPage={(page) => navigate(page)}
             onMainMenu={() => {
               flushSave()
               bindSlot(null)
@@ -51,12 +58,30 @@ function App() {
           />
 
           <div className="min-h-0 flex-1 overflow-auto p-6">
-            {skillId && <SkillPage skillId={skillId} />}
+            {skillId && (
+              <SkillPage
+                skillId={skillId}
+                focus={pageFocus?.kind === 'activity' && pageFocus.skillId === skillId ? pageFocus : null}
+                onFocusConsumed={() => setPageFocus(null)}
+              />
+            )}
             {currentPage === 'shop' && <ShopPage />}
-            {currentPage === 'inventory' && <InventoryPage />}
-            {currentPage === 'monsterHunting' && <CombatPage />}
+            {currentPage === 'inventory' && <InventoryPage onNavigate={navigate} />}
+            {currentPage === 'monsterHunting' && (
+              <CombatPage
+                focus={
+                  pageFocus?.kind === 'monster' || pageFocus?.kind === 'dungeon' ? pageFocus : null
+                }
+                onFocusConsumed={() => setPageFocus(null)}
+              />
+            )}
             {currentPage === 'quests' && <QuestPage />}
-            {currentPage === 'character' && <CharacterPage />}
+            {currentPage === 'character' && (
+              <CharacterPage
+                focus={pageFocus?.kind === 'spell' ? pageFocus : null}
+                onFocusConsumed={() => setPageFocus(null)}
+              />
+            )}
           </div>
         </main>
       </div>

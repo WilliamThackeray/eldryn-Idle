@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getClass } from '../../data/classes'
 import { getItem } from '../../data/items'
 import { getSkill } from '../../data/skills'
@@ -48,7 +48,12 @@ const SLOT_GRID: { slot: EquipmentSlot; label: string }[] = [
 
 type Tab = 'gear' | 'spellbook'
 
-export function CharacterPage() {
+interface CharacterPageProps {
+  focus?: { kind: 'spell'; spellId: string } | null
+  onFocusConsumed?: () => void
+}
+
+export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPageProps) {
   const characterName = useGameStore((state) => state.characterName)
   const skills = useGameStore((state) => state.skills)
   const classId = useGameStore((state) => state.classId)
@@ -65,6 +70,19 @@ export function CharacterPage() {
   const deleteEquipmentSet = useGameStore((state) => state.deleteEquipmentSet)
   const [setName, setSetName] = useState('')
   const [tab, setTab] = useState<Tab>('gear')
+  const [highlightSpellId, setHighlightSpellId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!focus) return
+    setTab('spellbook')
+    setHighlightSpellId(focus.spellId)
+    onFocusConsumed?.()
+  }, [focus, onFocusConsumed])
+
+  useEffect(() => {
+    if (!highlightSpellId || tab !== 'spellbook') return
+    document.getElementById(`spell-${highlightSpellId}`)?.scrollIntoView({ block: 'nearest' })
+  }, [highlightSpellId, tab])
 
   const abilities = deriveAbilities(skills)
   const dexMod = abilities.find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
@@ -325,7 +343,13 @@ export function CharacterPage() {
                   const need = unlockSkillLevel(spell.level)
                   const known = unlockLevel >= need
                   return (
-                    <li key={spell.id} className="flex justify-between gap-2 rounded bg-ink/30 px-3 py-1.5">
+                    <li
+                      key={spell.id}
+                      id={`spell-${spell.id}`}
+                      className={`flex justify-between gap-2 rounded px-3 py-1.5 ${
+                        highlightSpellId === spell.id ? 'bg-gold/20 ring-1 ring-gold' : 'bg-ink/30'
+                      }`}
+                    >
                       <span>
                         {spell.name}{' '}
                         <span className="text-sage">

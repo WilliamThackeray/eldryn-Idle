@@ -16,6 +16,11 @@ import { emptySignatureRuntime } from '../engine/signatures'
 import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
 import type { Inventory } from '../engine/inventory'
 import {
+  defaultInventoryTabs,
+  normalizeInventoryTabs,
+  type InventoryTab,
+} from '../engine/inventoryTabs'
+import {
   initialSpellLoadouts,
   type SpellLoadout,
   type SpellSlot,
@@ -23,13 +28,14 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v10: one locked class (`classId` + `classXp`) instead of per-class XP. */
-export const SAVE_VERSION = 10
+/** v11: inventory organization tabs. */
+export const SAVE_VERSION = 11
 
 export interface SaveData {
   characterName: string
   skills: Record<SkillId, SkillProgress>
   inventory: Inventory
+  inventoryTabs: InventoryTab[]
   gold: number
   lastSaved: string
   lastTick: number
@@ -51,6 +57,7 @@ export function createInitialSave(): SaveData {
     characterName: 'bob',
     skills: initialSkillProgress(),
     inventory: {},
+    inventoryTabs: defaultInventoryTabs(),
     gold: 0,
     lastSaved: new Date().toISOString(),
     lastTick: Date.now(),
@@ -95,10 +102,12 @@ export function normalizeSave(raw: unknown): SaveData {
   // Drop a combat action if the fight state is missing or invalid.
   if (activeAction?.kind === 'combat' && !combat) activeAction = null
 
+  const inventory = readInventory(source.inventory)
   return {
     characterName,
     skills,
-    inventory: readInventory(source.inventory),
+    inventory,
+    inventoryTabs: normalizeInventoryTabs(source.inventoryTabs, inventory),
     gold: readGold(source.gold),
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),

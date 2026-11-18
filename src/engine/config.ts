@@ -1,6 +1,9 @@
 /** Leveling: skills and class levels go 1–99. */
 export const MAX_LEVEL = 99
 
+/** Inventory organization tabs. TODO(Prompt 14): more tabs as a shop upgrade. */
+export const MAX_INVENTORY_TABS = 5
+
 /** Leveling: RuneScape curve for now. XP to reach level L = floor(1/4 * Σ floor(l + 300 * 2^(l/7))). */
 export const XP_SUM_DIVISOR = 4
 export const XP_LEVEL_COEFFICIENT = 300

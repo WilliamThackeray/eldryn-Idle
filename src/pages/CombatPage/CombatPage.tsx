@@ -27,13 +27,38 @@ import type { SkillProgress } from '../../types/game'
 
 type CombatTab = 'hunting' | 'dungeons'
 
-export function CombatPage() {
+interface CombatPageProps {
+  focus?:
+    | { kind: 'monster'; monsterId: string; biome: BiomeId }
+    | { kind: 'dungeon'; dungeonId: string }
+    | null
+  onFocusConsumed?: () => void
+}
+
+export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const combat = useGameStore((state) => state.combat)
   const [tab, setTab] = useState<CombatTab>(() => (combat?.dungeonId ? 'dungeons' : 'hunting'))
   useEffect(() => {
     if (combat?.dungeonId) setTab('dungeons')
   }, [combat?.dungeonId])
   const [biome, setBiome] = useState<BiomeId>('forest')
+  const [highlightMonsterId, setHighlightMonsterId] = useState<string | null>(null)
+  const [highlightDungeonId, setHighlightDungeonId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!focus) return
+    if (focus.kind === 'monster') {
+      setTab('hunting')
+      setBiome(focus.biome)
+      setHighlightMonsterId(focus.monsterId)
+      setHighlightDungeonId(null)
+    } else {
+      setTab('dungeons')
+      setHighlightDungeonId(focus.dungeonId)
+      setHighlightMonsterId(null)
+    }
+    onFocusConsumed?.()
+  }, [focus, onFocusConsumed])
   const classId = useGameStore((state) => state.classId)
   const classXp = useGameStore((state) => state.classXp)
   const skills = useGameStore((state) => state.skills)
@@ -229,6 +254,7 @@ export function CombatPage() {
               toHit={toHit}
               playerHpEstimate={estimatePlayerHp(classId, classXp, skills)}
               disabled={!classId || inCombat}
+              highlighted={highlightMonsterId === monster.id}
               onFight={() => startHunt(monster.id, biome)}
             />
           ))}
@@ -244,7 +270,9 @@ export function CombatPage() {
             return (
               <div
                 key={d.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brown/40 bg-panel p-4"
+                className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-panel p-4 ${
+                  highlightDungeonId === d.id ? 'border-gold' : 'border-brown/40'
+                }`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-2">
@@ -295,12 +323,14 @@ function MonsterRow({
   toHit,
   playerHpEstimate,
   disabled,
+  highlighted = false,
   onFight,
 }: {
   monster: MonsterDef
   toHit: number
   playerHpEstimate: number
   disabled: boolean
+  highlighted?: boolean
   onFight: () => void
 }) {
   const avgDamage = monster.attacks.reduce((sum, attack) => sum + averageDamage(attack.damage), 0)
@@ -315,7 +345,11 @@ function MonsterRow({
     .join(', ')
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brown/40 bg-panel p-4">
+    <div
+      className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-panel p-4 ${
+        highlighted ? 'border-gold' : 'border-brown/40'
+      }`}
+    >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
           <h3 className="text-lg font-bold text-gold">{monster.name}</h3>

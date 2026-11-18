@@ -15,9 +15,11 @@ import { SkillProgress } from './components/SkillProgress'
 
 interface SkillPageProps {
   skillId: SkillId
+  focus?: { kind: 'activity'; skillId: SkillId; activityId: string } | null
+  onFocusConsumed?: () => void
 }
 
-export function SkillPage({ skillId }: SkillPageProps) {
+export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageProps) {
   const xp = useGameStore((state) => state.skills[skillId].xp)
   const skills = useGameStore((state) => state.skills)
   const inventory = useGameStore((state) => state.inventory)
@@ -53,6 +55,14 @@ export function SkillPage({ skillId }: SkillPageProps) {
       defaultActivityId(skillId, running?.kind === 'skill' ? running : null, activitiesFor(skillId)),
     )
   }, [skillId])
+
+  useEffect(() => {
+    if (!focus || focus.skillId !== skillId) return
+    if (activitiesFor(skillId).some((activity) => activity.id === focus.activityId)) {
+      setSelectedId(focus.activityId)
+    }
+    onFocusConsumed?.()
+  }, [focus, skillId, onFocusConsumed])
 
   const selected = activities.find((activity) => activity.id === selectedId) ?? activities[0]
 

@@ -37,7 +37,7 @@ test('a broken save resets to a fresh character', () => {
 })
 
 test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(10)
+  expect(SAVE_VERSION).toBe(11)
 
   const next = migrateSave(
     {
@@ -212,4 +212,44 @@ test('migration keeps the active class when class XP is tied', () => {
 
   expect(next.classId).toBe('wizard')
   expect(next.classXp).toBe(100)
+})
+
+test('a save without inventoryTabs puts every owned item on Tab 1', () => {
+  const next = migrateSave(
+    {
+      characterName: 'ada',
+      skills: { athletics: { xp: 10 } },
+      inventory: { 'iron-ore': 3, coal: 1 },
+      gold: 0,
+      classId: 'fighter',
+      classXp: 0,
+    },
+    10,
+  )
+
+  expect(next.inventoryTabs).toHaveLength(5)
+  expect(next.inventoryTabs[0].name).toBe('Tab 1')
+  expect(next.inventoryTabs[0].itemIds).toEqual(expect.arrayContaining(['iron-ore', 'coal']))
+  expect(next.inventoryTabs[0].itemIds).toHaveLength(2)
+  expect(next.inventoryTabs.slice(1).every((tab) => tab.itemIds.length === 0)).toBe(true)
+})
+
+test('a save without inventoryTabs puts every owned item on Tab 1', () => {
+  const next = migrateSave(
+    {
+      characterName: 'ada',
+      skills: { athletics: { xp: 10 } },
+      inventory: { 'iron-ore': 3, coal: 1 },
+      gold: 0,
+      classId: 'fighter',
+      classXp: 0,
+    },
+    10,
+  )
+
+  expect(next.inventoryTabs).toHaveLength(5)
+  expect(next.inventoryTabs[0].name).toBe('Tab 1')
+  expect(next.inventoryTabs[0].itemIds).toEqual(expect.arrayContaining(['iron-ore', 'coal']))
+  expect(next.inventoryTabs[0].itemIds).toHaveLength(2)
+  expect(next.inventoryTabs.slice(1).every((tab) => tab.itemIds.length === 0)).toBe(true)
 })

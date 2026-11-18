@@ -148,7 +148,7 @@ export function canEquip(equipment: Equipment, itemId: string): boolean {
   return false
 }
 
-function targetSlot(equipment: Equipment, itemId: string): EquipmentSlot | null {
+export function targetSlot(equipment: Equipment, itemId: string): EquipmentSlot | null {
   const item = getItem(itemId)
   if (!item) return null
 

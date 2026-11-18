@@ -30,7 +30,14 @@ import {
 } from '../engine/equipment'
 import { getItem } from '../data/items'
 import { activePerks, effectTotal } from '../engine/abilities'
-import { sellItems } from '../engine/inventory'
+import { sellItems, type Inventory } from '../engine/inventory'
+import {
+  moveItemToTab,
+  placeIncoming,
+  renameTab,
+  reorderItem,
+  type InventoryTab,
+} from '../engine/inventoryTabs'
 import type { Rng } from '../engine/rng'
 import {
   SAVE_VERSION,
@@ -67,13 +74,16 @@ interface GameStore extends SaveData {
   applyElapsed: (elapsedMs: number, lastTick: number) => void
   dismissOffline: () => void
   saveGame: () => void
-  sellItem: (itemId: ItemId) => void
+  sellItem: (itemId: ItemId, quantity?: number) => void
   buyItem: (itemId: ItemId) => void
   equipItem: (itemId: ItemId) => void
   unequipSlot: (slot: EquipmentSlot) => void
   saveEquipmentSet: (name: string) => void
   loadEquipmentSet: (name: string) => void
   deleteEquipmentSet: (name: string) => void
+  renameInventoryTab: (tabId: string, name: string) => void
+  moveInventoryItem: (itemId: ItemId, toTabId: string) => void
+  reorderInventoryItem: (tabId: string, itemId: ItemId, beforeItemId: ItemId) => void
   beginCharacter: (input: { slot: SlotId; name: string; classId: ClassId; clericFocus: ClericFocus }) => void
   setCombatTrace: (trace: boolean) => void
   clearOfflineCombatFlags: () => void
@@ -216,7 +226,7 @@ export const useGameStore = create<GameStore>()(
             : weaponIntervalBase(weapon)
           const monster = getMonster(fight.monsterId)
           return {
-            inventory: entry.inventory,
+            ...withPlacedInventory(state, entry.inventory),
             combat: fight,
             isInDungeonOrQuest: true,
             activeAction: {
@@ -263,7 +273,7 @@ export const useGameStore = create<GameStore>()(
           const tracking = !state.combatTrace
           return {
             skills: result.state.skills,
-            inventory: result.state.inventory,
+            ...withPlacedInventory(state, result.state.inventory),
             gold: result.state.gold,
             activeAction: result.state.activeAction,
             classXp: result.state.classXp ?? state.classXp,
@@ -284,29 +294,34 @@ export const useGameStore = create<GameStore>()(
         set({ lastSaved: new Date().toISOString() })
         flushSave()
       },
-      sellItem: (itemId) =>
-        set((state) =>
-          sellItems(
+      sellItem: (itemId, quantity) =>
+        set((state) => {
+          const sold = sellItems(
             state.inventory,
             state.gold,
             itemId,
-            undefined,
+            quantity,
             1 + effectTotal(activePerks(state), 'sellPricePct'),
-          ),
-        ),
-      buyItem: (itemId) => set((state) => buyShopItem(state.inventory, state.gold, itemId)),
+          )
+          return { ...withPlacedInventory(state, sold.inventory), gold: sold.gold }
+        }),
+      buyItem: (itemId) =>
+        set((state) => {
+          const bought = buyShopItem(state.inventory, state.gold, itemId)
+          return { ...withPlacedInventory(state, bought.inventory), gold: bought.gold }
+        }),
       equipItem: (itemId) =>
         set((state) => {
           if (state.isInDungeonOrQuest || !canEquip(state.equipment, itemId)) return state
           const next = equip(state.equipment, state.inventory, itemId)
           if (!next) return state
-          return { equipment: next.equipment, inventory: next.inventory }
+          return { equipment: next.equipment, ...withPlacedInventory(state, next.inventory) }
         }),
       unequipSlot: (slot) =>
         set((state) => {
           if (state.isInDungeonOrQuest) return state
           const next = unequip(state.equipment, state.inventory, slot)
-          return { equipment: next.equipment, inventory: next.inventory }
+          return { equipment: next.equipment, ...withPlacedInventory(state, next.inventory) }
         }),
       saveEquipmentSet: (name) =>
         set((state) => {
@@ -322,11 +337,19 @@ export const useGameStore = create<GameStore>()(
           const found = state.equipmentSets.find((entry) => entry.name === name)
           if (!found) return state
           const next = applyLoadout(state.equipment, state.inventory, found.slots)
-          return { equipment: next.equipment, inventory: next.inventory }
+          return { equipment: next.equipment, ...withPlacedInventory(state, next.inventory) }
         }),
       deleteEquipmentSet: (name) =>
         set((state) => ({
           equipmentSets: state.equipmentSets.filter((entry) => entry.name !== name),
+        })),
+      renameInventoryTab: (tabId, name) =>
+        set((state) => ({ inventoryTabs: renameTab(state.inventoryTabs, tabId, name) })),
+      moveInventoryItem: (itemId, toTabId) =>
+        set((state) => ({ inventoryTabs: moveItemToTab(state.inventoryTabs, itemId, toTabId) })),
+      reorderInventoryItem: (tabId, itemId, beforeItemId) =>
+        set((state) => ({
+          inventoryTabs: reorderItem(state.inventoryTabs, tabId, itemId, beforeItemId),
         })),
       beginCharacter: ({ slot, name, classId, clericFocus }) => {
         const trimmed = name.trim().slice(0, 20)
@@ -335,13 +358,14 @@ export const useGameStore = create<GameStore>()(
         bindSlot(slot)
         writeSlotIndex(browserStorage, { active: slot })
         enableSaveWrites()
+        const blank = createInitialSave()
         set({
-          ...createInitialSave(),
+          ...blank,
           characterName: trimmed,
           classId,
           classXp: 0,
           clericFocus: classId === 'cleric' && clericFocus === 'STR' ? 'STR' : 'INT',
-          inventory: kit.inventory,
+          ...withPlacedInventory(blank, kit.inventory),
           equipment: kit.equipment,
           lastTick: Date.now(),
           lastSaved: new Date().toISOString(),
@@ -394,7 +418,7 @@ export const useGameStore = create<GameStore>()(
           line = result.line
           return {
             questProgress: result.progress,
-            inventory: result.inventory,
+            ...withPlacedInventory(state, result.inventory),
             questMessage: result.line,
           }
         })
@@ -469,7 +493,7 @@ export const useGameStore = create<GameStore>()(
             : weaponIntervalBase(weapon)
           const monster = getMonster(fight.monsterId)
           return {
-            inventory: entry.inventory,
+            ...withPlacedInventory(state, entry.inventory),
             combat: fight,
             isInDungeonOrQuest: true,
             activeAction: {
@@ -496,6 +520,7 @@ export const useGameStore = create<GameStore>()(
         characterName: state.characterName,
         skills: state.skills,
         inventory: state.inventory,
+        inventoryTabs: state.inventoryTabs,
         gold: state.gold,
         lastSaved: state.lastSaved,
         lastTick: state.lastTick,
@@ -521,4 +546,14 @@ export const useGameStore = create<GameStore>()(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function withPlacedInventory(
+  state: { inventory: Inventory; inventoryTabs: InventoryTab[] },
+  nextInventory: Inventory,
+): { inventory: Inventory; inventoryTabs: InventoryTab[] } {
+  return {
+    inventory: nextInventory,
+    inventoryTabs: placeIncoming(state.inventoryTabs, state.inventory, nextInventory),
+  }
 }
