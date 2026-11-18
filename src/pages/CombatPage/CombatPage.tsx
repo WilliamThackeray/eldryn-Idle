@@ -34,8 +34,8 @@ export function CombatPage() {
     if (combat?.dungeonId) setTab('dungeons')
   }, [combat?.dungeonId])
   const [biome, setBiome] = useState<BiomeId>('forest')
-  const activeClassId = useGameStore((state) => state.activeClassId)
-  const classes = useGameStore((state) => state.classes)
+  const classId = useGameStore((state) => state.classId)
+  const classXp = useGameStore((state) => state.classXp)
   const skills = useGameStore((state) => state.skills)
   const equipment = useGameStore((state) => state.equipment)
   const inventory = useGameStore((state) => state.inventory)
@@ -48,7 +48,6 @@ export function CombatPage() {
   const monsters = useMemo(() => monstersForBiome(biome), [biome])
   const inCombat = activeAction?.kind === 'combat'
   const inDungeon = Boolean(combat?.dungeonId)
-  const classXp = activeClassId ? classes[activeClassId].xp : 0
   const toHit = playerToHitBonus(skills, equipment, classXp)
 
   const combatLines = log.flatMap((entry) => (entry.kind === 'combat' ? entry.lines : []))
@@ -223,29 +222,19 @@ export function CombatPage() {
               </button>
             ))}
           </div>
-          {!activeClassId && (
-            <p className="rounded-lg border border-crimson/50 bg-panel p-3 text-sm text-crimson">
-              Pick a class on the Character page before hunting.
-            </p>
-          )}
           {monsters.map((monster) => (
             <MonsterRow
               key={monster.id}
               monster={monster}
               toHit={toHit}
-              playerHpEstimate={estimatePlayerHp(activeClassId, classXp, skills)}
-              disabled={!activeClassId || inCombat}
+              playerHpEstimate={estimatePlayerHp(classId, classXp, skills)}
+              disabled={!classId || inCombat}
               onFight={() => startHunt(monster.id, biome)}
             />
           ))}
         </div>
       ) : (
         <div className="space-y-3">
-          {!activeClassId && (
-            <p className="rounded-lg border border-crimson/50 bg-panel p-3 text-sm text-crimson">
-              Pick a class on the Character page before entering a dungeon.
-            </p>
-          )}
           {DUNGEONS.map((d) => {
             const entry = d.entryItemId ? getItem(d.entryItemId) : null
             const haveEntry = !d.entryItemId || (inventory[d.entryItemId] ?? 0) > 0
@@ -274,7 +263,7 @@ export function CombatPage() {
                 </div>
                 <button
                   type="button"
-                  disabled={!activeClassId || inCombat || !haveEntry}
+                  disabled={!classId || inCombat || !haveEntry}
                   onClick={() => startDungeon(d.id)}
                   className="rounded-lg bg-crimson px-4 py-2 text-sm font-bold text-parchment transition-colors hover:bg-brown disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -290,12 +279,12 @@ export function CombatPage() {
 }
 
 function estimatePlayerHp(
-  activeClassId: ClassId | null,
+  classId: ClassId | null,
   classXp: number,
   skills: Record<SkillId, SkillProgress>,
 ): number {
-  if (!activeClassId) return 10
-  const cls = getClass(activeClassId)
+  if (!classId) return 10
+  const cls = getClass(classId)
   const con = deriveAbilities(skills).find((ability) => ability.abbr === 'CON')?.modifier ?? 0
   return maxHp(cls.hitDie, tier(levelForXp(classXp)), con)
 }

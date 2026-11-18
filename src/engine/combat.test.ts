@@ -1,5 +1,4 @@
 import { expect, test } from 'vitest'
-import { initialClassProgress } from '../data/classes'
 import { initialSkillProgress } from '../data/skills'
 import { advance, summarizeGains, type AdvanceState } from './advance'
 import {
@@ -27,8 +26,8 @@ function baseState(overrides: Partial<AdvanceState> = {}): AdvanceState {
     gold: 0,
     activeAction: null,
     equipment: gear('shortsword', 'cooked-forest-fish'),
-    classes: { ...initialClassProgress(), fighter: { xp: 0 } },
-    activeClassId: 'fighter',
+    classId: 'fighter',
+    classXp: 0,
     combat: null,
     ...overrides,
   }
@@ -291,7 +290,7 @@ test('offline simulation of 1 hour finishes quickly and deterministically', () =
     const result = advance(before, hour, mulberry32(seed), {}, { trace: false })
     const elapsed = Date.now() - started
     expect(elapsed).toBeLessThan(1000)
-    const classXp = result.state.classes?.fighter.xp ?? 0
+    const classXp = result.state.classXp ?? 0
     const kills = result.state.combat?.kills ?? result.state.endedHuntKills ?? 0
     return {
       kills,

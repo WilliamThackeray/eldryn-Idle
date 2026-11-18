@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
-import { modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
+import { getClass, modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
 import { getDungeon } from '../data/dungeons'
 import type { ItemId } from '../data/items'
 import { getMonster, type BiomeId } from '../data/monsters'
@@ -20,6 +20,7 @@ import {
 import { effectiveCasterType, usesSpellLoop } from '../engine/spells'
 import {
   applyLoadout,
+  applyStartingKit,
   canEquip,
   emptyEquipment,
   equip,
@@ -31,14 +32,21 @@ import { getItem } from '../data/items'
 import { sellItems } from '../engine/inventory'
 import type { Rng } from '../engine/rng'
 import {
-  SAVE_KEY,
   SAVE_VERSION,
   createInitialSave,
   migrateSave,
-  nextActiveClassId,
   normalizeSave,
   type SaveData,
 } from './migrate'
+import {
+  adoptLegacySave,
+  bindSlot,
+  currentSlot,
+  resumableSlot,
+  slotStorageKey,
+  writeSlotIndex,
+  type SlotId,
+} from './slots'
 
 const LOG_LIMIT = 40
 
@@ -65,8 +73,7 @@ interface GameStore extends SaveData {
   saveEquipmentSet: (name: string) => void
   loadEquipmentSet: (name: string) => void
   deleteEquipmentSet: (name: string) => void
-  setActiveClass: (classId: ClassId) => void
-  setClericFocus: (focus: ClericFocus) => void
+  beginCharacter: (input: { slot: SlotId; name: string; classId: ClassId; clericFocus: ClericFocus }) => void
   setCombatTrace: (trace: boolean) => void
   clearOfflineCombatFlags: () => void
   setSpellSlot: (classId: ClassId, slotIndex: number, spellId: SpellId | null) => void
@@ -92,9 +99,17 @@ export function flushSave() {
   localStorage.setItem(pending.name, pending.raw)
 }
 
+const browserStorage = typeof localStorage === 'undefined' ? null : localStorage
+if (browserStorage) {
+  adoptLegacySave(browserStorage)
+  bindSlot(resumableSlot(browserStorage))
+}
+
 const storage: PersistStorage<SaveData> = {
-  getItem: (name) => {
-    const raw = localStorage.getItem(name)
+  getItem: () => {
+    const slot = currentSlot()
+    if (!slot || !browserStorage) return null
+    const raw = browserStorage.getItem(slotStorageKey(slot))
     if (!raw) return null
     try {
       const parsed: unknown = JSON.parse(raw)
@@ -107,12 +122,16 @@ const storage: PersistStorage<SaveData> = {
       return null
     }
   },
-  setItem: (name, value: StorageValue<SaveData>) => {
+  setItem: (_name, value: StorageValue<SaveData>) => {
+    const slot = currentSlot()
+    if (!slot) return
     // Ticks rewrite state ~10 times a second. Flush writes on the autosave interval, on leave, and on Save.
-    pending = { name, raw: JSON.stringify(value) }
+    pending = { name: slotStorageKey(slot), raw: JSON.stringify(value) }
   },
-  removeItem: (name) => {
-    localStorage.removeItem(name)
+  removeItem: () => {
+    const slot = currentSlot()
+    if (!slot || !browserStorage) return
+    browserStorage.removeItem(slotStorageKey(slot))
   },
 }
 
@@ -135,7 +154,7 @@ export const useGameStore = create<GameStore>()(
         }),
       startHunt: (monsterId, biome, questId) =>
         set((state) => {
-          if (!state.activeClassId) return state
+          if (!state.classId) return state
           const monster = getMonster(monsterId)
           if (!monster) return state
           const fight = createFight({
@@ -143,16 +162,16 @@ export const useGameStore = create<GameStore>()(
             biome,
             skills: state.skills,
             equipment: state.equipment,
-            activeClassId: state.activeClassId,
-            classXp: state.classes[state.activeClassId].xp,
+            activeClassId: state.classId,
+            classXp: state.classXp,
             rng: liveRng,
             trace: true,
-            spellLoadout: state.spellLoadouts[state.activeClassId],
+            spellLoadout: state.spellLoadouts[state.classId],
           })
           if (!fight) return state
           if (questId) fight.questId = questId
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
-          const baseSec = usesSpellLoop(state.activeClassId)
+          const baseSec = usesSpellLoop(state.classId)
             ? SPELL_INTERVAL_SEC
             : weaponIntervalBase(weapon)
           return {
@@ -173,7 +192,7 @@ export const useGameStore = create<GameStore>()(
         }),
       startDungeon: (dungeonId, questId) =>
         set((state) => {
-          if (!state.activeClassId) return state
+          if (!state.classId) return state
           const dungeon = getDungeon(dungeonId)
           if (!dungeon) return state
           const entry = consumeEntryItem(state.inventory, dungeon)
@@ -182,16 +201,16 @@ export const useGameStore = create<GameStore>()(
             dungeonId,
             skills: state.skills,
             equipment: state.equipment,
-            activeClassId: state.activeClassId,
-            classXp: state.classes[state.activeClassId].xp,
+            activeClassId: state.classId,
+            classXp: state.classXp,
             rng: liveRng,
             trace: true,
-            spellLoadout: state.spellLoadouts[state.activeClassId],
+            spellLoadout: state.spellLoadouts[state.classId],
             questId: questId ?? null,
           })
           if (!fight) return state
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
-          const baseSec = usesSpellLoop(state.activeClassId)
+          const baseSec = usesSpellLoop(state.classId)
             ? SPELL_INTERVAL_SEC
             : weaponIntervalBase(weapon)
           const monster = getMonster(fight.monsterId)
@@ -227,15 +246,15 @@ export const useGameStore = create<GameStore>()(
               gold: state.gold,
               activeAction: state.activeAction,
               equipment: state.equipment,
-              classes: state.classes,
-              activeClassId: state.activeClassId,
+              classId: state.classId,
+              classXp: state.classXp,
               combat: state.combat,
               questProgress: state.questProgress,
               isInDungeonOrQuest: state.isInDungeonOrQuest,
             },
             elapsedMs,
             liveRng,
-            modifiersFor(state.activeClassId, state.clericFocus),
+            modifiersFor(state.classId, state.clericFocus),
             { trace: state.combatTrace },
           )
           const killsAfter = result.state.combat?.kills ?? result.state.endedHuntKills ?? killsBefore
@@ -246,7 +265,7 @@ export const useGameStore = create<GameStore>()(
             inventory: result.state.inventory,
             gold: result.state.gold,
             activeAction: result.state.activeAction,
-            classes: result.state.classes ?? state.classes,
+            classXp: result.state.classXp ?? state.classXp,
             combat: result.state.combat ?? null,
             questProgress: result.state.questProgress ?? state.questProgress,
             isInDungeonOrQuest:
@@ -299,13 +318,31 @@ export const useGameStore = create<GameStore>()(
         set((state) => ({
           equipmentSets: state.equipmentSets.filter((entry) => entry.name !== name),
         })),
-      setActiveClass: (classId) =>
-        set((state) => {
-          const next = nextActiveClassId(state.isInDungeonOrQuest, classId)
-          if (!next) return state
-          return { activeClassId: next }
-        }),
-      setClericFocus: (focus) => set({ clericFocus: focus === 'STR' ? 'STR' : 'INT' }),
+      beginCharacter: ({ slot, name, classId, clericFocus }) => {
+        const trimmed = name.trim().slice(0, 20)
+        if (!trimmed || !browserStorage) return
+        const kit = applyStartingKit(getClass(classId).startingKit)
+        bindSlot(slot)
+        writeSlotIndex(browserStorage, { active: slot })
+        enableSaveWrites()
+        set({
+          ...createInitialSave(),
+          characterName: trimmed,
+          classId,
+          classXp: 0,
+          clericFocus: classId === 'cleric' && clericFocus === 'STR' ? 'STR' : 'INT',
+          inventory: kit.inventory,
+          equipment: kit.equipment,
+          lastTick: Date.now(),
+          lastSaved: new Date().toISOString(),
+          log: [],
+          offlineReport: null,
+          questMessage: null,
+          offlineKills: 0,
+          lastDefeat: false,
+        })
+        flushSave()
+      },
       setSpellSlot: (classId, slotIndex, spellId) =>
         set((state) => {
           if (spellId != null && !isSpellId(spellId)) return state
@@ -357,7 +394,7 @@ export const useGameStore = create<GameStore>()(
         set((state) => {
           const quest = getQuest(questId)
           const step = quest ? currentStep(quest, state.questProgress) : null
-          if (!step || step.type !== 'combat' || !state.activeClassId) return state
+          if (!step || step.type !== 'combat' || !state.classId) return state
           const monster = getMonster(step.monsterId)
           if (!monster) return state
           const fight = createFight({
@@ -365,16 +402,16 @@ export const useGameStore = create<GameStore>()(
             biome: step.biome,
             skills: state.skills,
             equipment: state.equipment,
-            activeClassId: state.activeClassId,
-            classXp: state.classes[state.activeClassId].xp,
+            activeClassId: state.classId,
+            classXp: state.classXp,
             rng: liveRng,
             trace: true,
-            spellLoadout: state.spellLoadouts[state.activeClassId],
+            spellLoadout: state.spellLoadouts[state.classId],
           })
           if (!fight) return state
           fight.questId = questId
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
-          const baseSec = usesSpellLoop(state.activeClassId)
+          const baseSec = usesSpellLoop(state.classId)
             ? SPELL_INTERVAL_SEC
             : weaponIntervalBase(weapon)
           return {
@@ -401,23 +438,23 @@ export const useGameStore = create<GameStore>()(
           if (!step || step.type !== 'dungeon') return state
           // Reuse startDungeon path via a nested call pattern — inline the same body.
           const dungeon = getDungeon(step.dungeonId)
-          if (!dungeon || !state.activeClassId) return state
+          if (!dungeon || !state.classId) return state
           const entry = consumeEntryItem(state.inventory, dungeon)
           if (!entry.ok) return { ...state, questMessage: 'Missing dungeon entry item.' }
           const fight = beginDungeonFight({
             dungeonId: step.dungeonId,
             skills: state.skills,
             equipment: state.equipment,
-            activeClassId: state.activeClassId,
-            classXp: state.classes[state.activeClassId].xp,
+            activeClassId: state.classId,
+            classXp: state.classXp,
             rng: liveRng,
             trace: true,
-            spellLoadout: state.spellLoadouts[state.activeClassId],
+            spellLoadout: state.spellLoadouts[state.classId],
             questId,
           })
           if (!fight) return state
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
-          const baseSec = usesSpellLoop(state.activeClassId)
+          const baseSec = usesSpellLoop(state.classId)
             ? SPELL_INTERVAL_SEC
             : weaponIntervalBase(weapon)
           const monster = getMonster(fight.monsterId)
@@ -442,7 +479,7 @@ export const useGameStore = create<GameStore>()(
         }),
     }),
     {
-      name: SAVE_KEY,
+      name: 'idle_game_slot',
       version: SAVE_VERSION,
       storage,
       partialize: (state) => ({
@@ -453,8 +490,8 @@ export const useGameStore = create<GameStore>()(
         lastSaved: state.lastSaved,
         lastTick: state.lastTick,
         activeAction: state.activeAction,
-        activeClassId: state.activeClassId,
-        classes: state.classes,
+        classId: state.classId,
+        classXp: state.classXp,
         clericFocus: state.clericFocus,
         isInDungeonOrQuest: state.isInDungeonOrQuest,
         equipment: state.equipment ?? emptyEquipment(),

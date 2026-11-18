@@ -46,8 +46,8 @@ export interface AdvanceState {
   activeAction: ActiveAction | null
   /** Missing means empty; keeps older advance tests valid. */
   equipment?: Equipment
-  classes?: Record<ClassId, { xp: number }>
-  activeClassId?: ClassId | null
+  classId?: ClassId | null
+  classXp?: number
   combat?: CombatFight | null
   /** Set when a hunt ends in defeat during this advance call. */
   lastDefeat?: boolean
@@ -320,8 +320,9 @@ function advanceCombatAction(
   trace: boolean,
 ): { state: AdvanceState; log: GameEvent[] } {
   const fight = state.combat
-  const classId = state.activeClassId
-  if (!fight || !classId || !state.classes) {
+  const classId = state.classId
+  const classXp = state.classXp
+  if (!fight || !classId || classXp == null) {
     return { state: { ...state, activeAction: null, combat: null }, log: [] }
   }
 
@@ -333,17 +334,12 @@ function advanceCombatAction(
     gold: state.gold,
     equipment: state.equipment ?? emptyEquipment(),
     activeClassId: classId,
-    classXp: state.classes[classId].xp,
+    classXp,
     elapsedMs,
     rng,
     trace,
     modifiers,
   })
-
-  const classes = {
-    ...state.classes,
-    [classId]: { xp: result.classXp },
-  }
 
   const log: GameEvent[] = []
   if (trace) {
@@ -364,7 +360,7 @@ function advanceCombatAction(
         skills: result.skills,
         inventory: result.inventory,
         gold: result.gold,
-        classes,
+        classXp: result.classXp,
         activeAction: null,
         combat: null,
         lastDefeat: result.defeated,
@@ -390,7 +386,7 @@ function advanceCombatAction(
       skills: result.skills,
       inventory: result.inventory,
       gold: result.gold,
-      classes,
+      classXp: result.classXp,
       combat: result.fight,
       questProgress,
       activeAction: {

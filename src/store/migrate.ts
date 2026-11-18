@@ -1,5 +1,5 @@
 import {
-  initialClassProgress,
+  CLASSES,
   isClassId,
   type ClassId,
   type ClericFocus,
@@ -23,8 +23,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v9: dungeon run fields and quest progress. */
-export const SAVE_VERSION = 9
+/** v10: one locked class (`classId` + `classXp`) instead of per-class XP. */
+export const SAVE_VERSION = 10
 
 export interface SaveData {
   characterName: string
@@ -34,8 +34,9 @@ export interface SaveData {
   lastSaved: string
   lastTick: number
   activeAction: ActiveAction | null
-  activeClassId: ClassId | null
-  classes: Record<ClassId, { xp: number }>
+  /** Null until character creation. Locked after that. */
+  classId: ClassId | null
+  classXp: number
   clericFocus: ClericFocus
   isInDungeonOrQuest: boolean
   equipment: Equipment
@@ -54,8 +55,8 @@ export function createInitialSave(): SaveData {
     lastSaved: new Date().toISOString(),
     lastTick: Date.now(),
     activeAction: null,
-    activeClassId: null,
-    classes: initialClassProgress(),
+    classId: null,
+    classXp: 0,
     clericFocus: 'INT',
     isInDungeonOrQuest: false,
     equipment: emptyEquipment(),
@@ -69,8 +70,8 @@ export function createInitialSave(): SaveData {
 export function migrateSave(persisted: unknown, version: number): SaveData {
   const source = version < SAVE_VERSION ? fromLegacy(persisted) : persisted
   const save = normalizeSave(source)
-  // Old saves skip the picker and start as Fighter.
-  if (version < 5) return { ...save, activeClassId: 'fighter' }
+  // Old saves predate the class picker and start as Fighter.
+  if (version < 5) return { ...save, classId: 'fighter', classXp: 0 }
   return save
 }
 
@@ -102,8 +103,7 @@ export function normalizeSave(raw: unknown): SaveData {
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
     activeAction,
-    activeClassId: readActiveClassId(source.activeClassId),
-    classes: readClasses(source.classes),
+    ...readLockedClass(source),
     clericFocus: source.clericFocus === 'STR' ? 'STR' : 'INT',
     isInDungeonOrQuest: source.isInDungeonOrQuest === true,
     equipment: readEquipment(source.equipment),
@@ -139,29 +139,41 @@ function readSpellLoadouts(value: unknown): Record<ClassId, SpellLoadout> {
   return loadouts
 }
 
-/** Returns the next activeClassId, or null when the switch is blocked / invalid. */
-export function nextActiveClassId(
-  isInDungeonOrQuest: boolean,
-  classId: string,
-): ClassId | null {
-  if (isInDungeonOrQuest || !isClassId(classId)) return null
-  return classId
-}
-
-function readActiveClassId(value: unknown): ClassId | null {
+function readClassId(value: unknown): ClassId | null {
   if (typeof value !== 'string' || !isClassId(value)) return null
   return value
 }
 
-function readClasses(value: unknown): Record<ClassId, { xp: number }> {
-  const classes = initialClassProgress()
-  if (!isRecord(value)) return classes
-  for (const id of Object.keys(classes) as ClassId[]) {
-    const entry = value[id]
-    if (!isRecord(entry) || typeof entry.xp !== 'number' || !Number.isFinite(entry.xp) || entry.xp < 0) continue
-    classes[id] = { xp: entry.xp }
+/** Old saves stored XP per class. Keep the highest. The active class wins a tie. */
+function readLockedClass(source: Record<string, unknown>): { classId: ClassId | null; classXp: number } {
+  const locked = readClassId(source.classId)
+  if (locked) {
+    const xp = finite(source.classXp)
+    return { classId: locked, classXp: xp != null && xp >= 0 ? Math.floor(xp) : 0 }
   }
-  return classes
+
+  const active = readClassId(source.activeClassId)
+  if (!isRecord(source.classes) && !active) return { classId: null, classXp: 0 }
+
+  let bestId: ClassId | null = null
+  let bestXp = -1
+  for (const entry of CLASSES) {
+    const raw = isRecord(source.classes) ? source.classes[entry.id] : undefined
+    const xp = isRecord(raw) ? finite(raw.xp) : null
+    const safe = xp != null && xp >= 0 ? xp : 0
+    if (safe > bestXp) {
+      bestXp = safe
+      bestId = entry.id
+    }
+  }
+  if (active) {
+    const raw = isRecord(source.classes) ? source.classes[active] : undefined
+    const xp = isRecord(raw) ? finite(raw.xp) : null
+    const safe = xp != null && xp >= 0 ? xp : 0
+    if (safe === bestXp) bestId = active
+  }
+  if (bestXp <= 0 && !active) return { classId: null, classXp: 0 }
+  return { classId: bestId, classXp: Math.max(0, Math.floor(bestXp)) }
 }
 
 function fromLegacy(raw: unknown): unknown {

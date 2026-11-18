@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { cappedAway, summarizeGains } from '../engine/advance'
+import { currentSlot } from '../store/slots'
 import { enableSaveWrites, flushSave, useGameStore } from '../store/gameStore'
 
 const TICK_MS = 100
@@ -9,6 +10,10 @@ const REPORT_AFTER_MS = 5_000
 
 let gate: Promise<void> = Promise.resolve()
 let loadCatchup: Promise<void> | null = null
+
+export function resetLoadCatchup() {
+  loadCatchup = null
+}
 
 function exclusive(task: () => Promise<void>): Promise<void> {
   const run = gate.then(task, task)
@@ -46,13 +51,11 @@ async function catchUp(showReport: boolean) {
   const beforeSkills = state.skills
   const beforeItems = state.inventory
   const beforeGold = state.gold
-  const classId = state.activeClassId
-  const beforeClassXp = classId ? state.classes[classId].xp : 0
+  const beforeClassXp = state.classXp
   useGameStore.getState().clearOfflineCombatFlags()
   if (elapsedMs > 0) await play(elapsedMs, false)
   const after = useGameStore.getState()
-  const afterClassId = after.activeClassId
-  const afterClassXp = afterClassId ? after.classes[afterClassId].xp : beforeClassXp
+  const afterClassXp = after.classXp
   const gains = summarizeGains(
     beforeSkills,
     after.skills,
@@ -95,8 +98,9 @@ function ensureLoadCatchup(): Promise<void> {
   return loadCatchup
 }
 
-export function useGameLoop() {
+export function useGameLoop(enabled: boolean) {
   useEffect(() => {
+    if (!enabled) return
     let stopped = false
     let timer = 0
     let lastFrame = 0
@@ -109,7 +113,7 @@ export function useGameLoop() {
 
     const step = () => {
       timer = 0
-      if (stopped || document.hidden) return
+      if (stopped || document.hidden || !currentSlot()) return
       const now = performance.now()
       const delta = now - lastFrame
       lastFrame = now
@@ -140,11 +144,12 @@ export function useGameLoop() {
 
     return () => {
       stopped = true
+      flushSave()
       window.clearTimeout(timer)
       window.clearInterval(autosave)
       window.removeEventListener('beforeunload', onLeave)
       document.removeEventListener('visibilitychange', onVisibility)
       unsubscribe?.()
     }
-  }, [])
+  }, [enabled])
 }

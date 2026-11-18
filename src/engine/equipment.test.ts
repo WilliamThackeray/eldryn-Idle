@@ -1,7 +1,9 @@
 import { expect, test } from 'vitest'
 import { MATERIAL_FLAGS, MATERIAL_FLAT_BONUS } from './config'
+import { getClass } from '../data/classes'
 import {
   acTotal,
+  applyStartingKit,
   armorClass,
   armorStrain,
   attunementLimit,
@@ -114,6 +116,31 @@ test('stealth and acrobatics disadvantage from heavy or padded armor', () => {
   expect(gearRollMode('acrobatics', fullSet('plate'))).toBe('disadvantage')
   expect(gearRollMode('stealth', fullSet('leather'))).toBe('normal')
   expect(gearRollMode('athletics', fullSet('plate'))).toBe('normal')
+})
+
+test('a starting kit equips the weapon and armor and keeps 10 cooked food', () => {
+  const { equipment, inventory } = applyStartingKit(getClass('barbarian').startingKit)
+  expect(equipment.mainHand).toBe('greataxe')
+  expect(equipment.chest).toBe('leather-chest')
+  expect(equipment.helmet).toBe('leather-helmet')
+  expect(equipment.food).toBe('cooked-meat')
+  expect(inventory['cooked-meat']).toBe(10)
+  expect(inventory.greataxe).toBeUndefined()
+})
+
+test('full casters start in themed cloth and half-casters keep leather', () => {
+  const chest = (id: Parameters<typeof getClass>[0]) => applyStartingKit(getClass(id).startingKit).equipment.chest
+  expect(chest('wizard')).toBe('arcane-chest')
+  expect(chest('sorcererWarlock')).toBe('arcane-chest')
+  expect(chest('cleric')).toBe('vestment-chest')
+  expect(chest('druid')).toBe('wildweave-chest')
+  expect(chest('bard')).toBe('minstrel-chest')
+  expect(chest('paladin')).toBe('leather-chest')
+  expect(chest('ranger')).toBe('leather-chest')
+  expect(applyStartingKit(getClass('paladin').startingKit).equipment.mainHand).toBe('longsword')
+  expect(applyStartingKit(getClass('ranger').startingKit).equipment.mainHand).toBe('shortsword')
+  const robe = getItem('arcane-chest')?.gear?.armor
+  expect(robe).toMatchObject({ weightClass: 'light', armorValue: 1, stealthDisadvantage: false })
 })
 
 test('material flat bonuses default to 0 and flags match the brainstorm', () => {

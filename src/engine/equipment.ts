@@ -1,3 +1,4 @@
+import type { ItemStack } from '../data/activities/types'
 import { getItem, type GearBlock, type ItemId } from '../data/items'
 import type { SkillId } from '../data/skills'
 import {
@@ -188,6 +189,19 @@ function targetSlot(equipment: Equipment, itemId: string): EquipmentSlot | null 
 
 function isSelectionSlot(slot: EquipmentSlot): boolean {
   return slot === 'ammo' || slot === 'food' || slot === 'potion'
+}
+
+/** Puts a new character's kit on their body. Food stays stacked and is selected. */
+export function applyStartingKit(kit: readonly ItemStack[]): { inventory: Inventory; equipment: Equipment } {
+  let inventory = addItems({}, [...kit])
+  let equipment = emptyEquipment()
+  for (const stack of kit) {
+    const next = equip(equipment, inventory, stack.itemId)
+    if (!next) continue
+    equipment = next.equipment
+    inventory = next.inventory
+  }
+  return { inventory, equipment }
 }
 
 export function equip(

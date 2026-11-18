@@ -26,8 +26,8 @@ export function getProgress(progress: QuestProgress, questId: string): QuestProg
 export function isQuestUnlocked(
   quest: QuestDef,
   input: {
-    activeClassId: ClassId | null
-    classXp: Record<ClassId, { xp: number }>
+    classId: ClassId | null
+    classXp: number
     inventory: Inventory
   },
 ): boolean {
@@ -35,12 +35,9 @@ export function isQuestUnlocked(
   if (unlock.type === 'item') {
     return hasItems(input.inventory, [{ itemId: unlock.itemId, quantity: 1 }])
   }
-  if (unlock.classId) {
-    const xp = input.classXp[unlock.classId]?.xp ?? 0
-    return levelForXp(xp) >= unlock.level
-  }
-  if (!input.activeClassId) return false
-  return levelForXp(input.classXp[input.activeClassId]?.xp ?? 0) >= unlock.level
+  if (!input.classId) return false
+  if (unlock.classId && input.classId !== unlock.classId) return false
+  return levelForXp(input.classXp) >= unlock.level
 }
 
 export function currentStep(quest: QuestDef, progress: QuestProgress): QuestStep | null {

@@ -1,4 +1,4 @@
-import { Coins, Info, Package, Save, ScrollText, ShoppingCart, Swords, User } from 'lucide-react'
+import { Coins, Info, Menu, Package, Save, ScrollText, ShoppingCart, Swords, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getClass } from '../data/classes'
@@ -15,15 +15,16 @@ interface HeaderProps {
   title: string
   currentPage: string
   setCurrentPage: (page: string) => void
+  onMainMenu: () => void
 }
 
-export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
+export function Header({ title, currentPage, setCurrentPage, onMainMenu }: HeaderProps) {
   const [charTip, setCharTip] = useState<{ top: number; left: number } | null>(null)
   const [creditsOpen, setCreditsOpen] = useState(false)
   const charRef = useRef<HTMLButtonElement>(null)
   const characterName = useGameStore((state) => state.characterName)
-  const activeClassId = useGameStore((state) => state.activeClassId)
-  const classes = useGameStore((state) => state.classes)
+  const classId = useGameStore((state) => state.classId)
+  const classXp = useGameStore((state) => state.classXp)
   const skills = useGameStore((state) => state.skills)
   const equipment = useGameStore((state) => state.equipment)
   const gold = useGameStore((state) => state.gold)
@@ -53,8 +54,8 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
       : activeAction.label
     : 'Idle'
   const tipHost = typeof document !== 'undefined' ? document.getElementById('tooltip-root') : null
-  const classLevel = activeClassId ? levelForXp(classes[activeClassId].xp) : null
-  const classLabel = activeClassId ? `${getClass(activeClassId).name} ${classLevel}` : 'No class'
+  const classLevel = classId ? levelForXp(classXp) : null
+  const classLabel = classId ? `${getClass(classId).name} ${classLevel}` : 'No class'
   const summary = `${characterName} · ${classLabel}`
 
   const showCharTip = () => {
@@ -163,6 +164,15 @@ export function Header({ title, currentPage, setCurrentPage }: HeaderProps) {
           onClick={() => setCreditsOpen(true)}
           active={false}
         />
+
+        <button
+          type="button"
+          onClick={onMainMenu}
+          className="flex items-center gap-2 rounded-lg bg-brown px-3 py-2 text-parchment transition-colors hover:bg-crimson"
+        >
+          <Menu size={20} />
+          <span>Main Menu</span>
+        </button>
 
         <button
           type="button"

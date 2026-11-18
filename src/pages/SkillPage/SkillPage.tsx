@@ -23,7 +23,7 @@ export function SkillPage({ skillId }: SkillPageProps) {
   const inventory = useGameStore((state) => state.inventory)
   const equipment = useGameStore((state) => state.equipment)
   const activeAction = useGameStore((state) => state.activeAction)
-  const activeClassId = useGameStore((state) => state.activeClassId)
+  const classId = useGameStore((state) => state.classId)
   const clericFocus = useGameStore((state) => state.clericFocus)
   const log = useGameStore((state) => state.log)
   const startActivity = useGameStore((state) => state.startActivity)
@@ -33,8 +33,8 @@ export function SkillPage({ skillId }: SkillPageProps) {
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
   const modifier = deriveAbilities(skills).find((entry) => entry.abbr === ability)?.modifier ?? 0
   const bonus = modifier + proficiency(tier(level))
-  const classMods = modifiersFor(activeClassId, clericFocus)
-  const className = activeClassId ? getClass(activeClassId).name : null
+  const classMods = modifiersFor(classId, clericFocus)
+  const className = classId ? getClass(classId).name : null
   const xpMultiplierLabel =
     ability && className
       ? `XP ×${(1 + (classMods[ability] ?? 0)).toFixed(2)} (${className})`

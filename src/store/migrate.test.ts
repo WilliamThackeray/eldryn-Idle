@@ -1,7 +1,6 @@
 import { expect, test } from 'vitest'
-import { initialClassProgress } from '../data/classes'
 import { emptyEquipment } from '../engine/equipment'
-import { SAVE_VERSION, migrateSave, nextActiveClassId, normalizeSave } from './migrate'
+import { SAVE_VERSION, migrateSave, normalizeSave } from './migrate'
 
 test('an old save keeps real skill xp and drops weapon properties', () => {
   const next = migrateSave(
@@ -24,7 +23,8 @@ test('an old save keeps real skill xp and drops weapon properties', () => {
   expect(next.inventory).toEqual({})
   expect(next.gold).toBe(0)
   expect(next.lastSaved).toBe('2020-01-01T00:00:00.000Z')
-  expect(next.activeClassId).toBe('fighter')
+  expect(next.classId).toBe('fighter')
+  expect(next.classXp).toBe(0)
 })
 
 test('a broken save resets to a fresh character', () => {
@@ -32,12 +32,12 @@ test('a broken save resets to a fresh character', () => {
   expect(next.characterName).toBe('bob')
   expect(next.skills.perception.xp).toBe(0)
   expect(next.skills.vitality).toEqual({ xp: 0 })
-  expect(next.activeClassId).toBe('fighter')
-  expect(next.classes).toEqual(initialClassProgress())
+  expect(next.classId).toBe('fighter')
+  expect(next.classXp).toBe(0)
 })
 
 test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(9)
+  expect(SAVE_VERSION).toBe(10)
 
   const next = migrateSave(
     {
@@ -62,7 +62,8 @@ test('version 4 drops stored level and score and keeps vitality xp', () => {
   expect(next.gold).toBe(0)
   expect(next.activeAction).toBeNull()
   expect(next.lastTick).toBeGreaterThan(Date.now() - 5_000)
-  expect(next.activeClassId).toBe('fighter')
+  expect(next.classId).toBe('fighter')
+  expect(next.classXp).toBe(0)
   expect(next.clericFocus).toBe('INT')
   expect(next.isInDungeonOrQuest).toBe(false)
   expect(next.equipment).toEqual(emptyEquipment())
@@ -94,7 +95,8 @@ test('version 3 keeps the active action and last tick', () => {
   expect(next.lastTick).toBe(1000)
   expect(next.gold).toBe(0)
   expect(next.activeAction).toMatchObject({ kind: 'skill', skillId: 'athletics', progressMs: 1500 })
-  expect(next.activeClassId).toBe('fighter')
+  expect(next.classId).toBe('fighter')
+  expect(next.classXp).toBe(0)
 })
 
 test('a legacy item list becomes counts and drops unknown ids', () => {
@@ -132,15 +134,15 @@ test('version 4 keeps item counts and gold and becomes Fighter', () => {
 
   expect(next.inventory).toEqual({ 'iron-ore': 3 })
   expect(next.gold).toBe(40)
-  expect(next.activeClassId).toBe('fighter')
-  expect(next.classes.fighter).toEqual({ xp: 0 })
+  expect(next.classId).toBe('fighter')
+  expect(next.classXp).toBe(0)
   expect(next.clericFocus).toBe('INT')
   expect(next.isInDungeonOrQuest).toBe(false)
   expect(next.equipment).toEqual(emptyEquipment())
   expect(next.equipmentSets).toEqual([])
 })
 
-test('version 5 keeps class XP, gold, inventory, and gains empty equipment', () => {
+test('version 5 keeps the highest class XP, gold, inventory, and gains empty equipment', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
@@ -158,10 +160,8 @@ test('version 5 keeps class XP, gold, inventory, and gains empty equipment', () 
     5,
   )
 
-  expect(next.activeClassId).toBe('wizard')
-  expect(next.classes.barbarian).toEqual({ xp: 500 })
-  expect(next.classes.wizard).toEqual({ xp: 80 })
-  expect(next.classes.fighter).toEqual({ xp: 0 })
+  expect(next.classId).toBe('barbarian')
+  expect(next.classXp).toBe(500)
   expect(next.clericFocus).toBe('STR')
   expect(next.inventory).toEqual({ dagger: 1 })
   expect(next.gold).toBe(25)
@@ -169,22 +169,47 @@ test('version 5 keeps class XP, gold, inventory, and gains empty equipment', () 
   expect(next.equipmentSets).toEqual([])
 })
 
-test('a missing active class on a v5 save stays null for the picker', () => {
+test('a save with no class stays unset until character creation', () => {
   const next = normalizeSave({
     characterName: 'bob',
     skills: {},
     inventory: {},
     gold: 0,
   })
-  expect(next.activeClassId).toBeNull()
+  expect(next.classId).toBeNull()
+  expect(next.classXp).toBe(0)
 })
 
-test('switching classes keeps each class XP and the lock blocks the switch', () => {
-  const classes = { ...initialClassProgress(), barbarian: { xp: 500 }, wizard: { xp: 80 } }
-  expect(nextActiveClassId(false, 'wizard')).toBe('wizard')
-  expect(classes.barbarian).toEqual({ xp: 500 })
-  expect(classes.wizard).toEqual({ xp: 80 })
+test('migration picks the highest-XP class', () => {
+  const next = migrateSave(
+    {
+      characterName: 'ada',
+      skills: { athletics: { xp: 10 } },
+      inventory: {},
+      gold: 0,
+      activeClassId: 'wizard',
+      classes: { barbarian: { xp: 500 }, wizard: { xp: 80 }, fighter: { xp: 1200 } },
+      clericFocus: 'INT',
+    },
+    9,
+  )
 
-  expect(nextActiveClassId(true, 'wizard')).toBeNull()
-  expect(nextActiveClassId(false, 'not-a-class')).toBeNull()
+  expect(next.classId).toBe('fighter')
+  expect(next.classXp).toBe(1200)
+  expect('classes' in next).toBe(false)
+  expect('activeClassId' in next).toBe(false)
+})
+
+test('migration keeps the active class when class XP is tied', () => {
+  const next = migrateSave(
+    {
+      characterName: 'ada',
+      activeClassId: 'wizard',
+      classes: { wizard: { xp: 100 }, barbarian: { xp: 100 } },
+    },
+    9,
+  )
+
+  expect(next.classId).toBe('wizard')
+  expect(next.classXp).toBe(100)
 })

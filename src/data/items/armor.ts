@@ -7,8 +7,9 @@ import {
 } from './types'
 
 const PIECES = ['helmet', 'chest', 'chaps', 'gauntlets', 'boots'] as const satisfies readonly GearSlot[]
+type ArmorPiece = (typeof PIECES)[number]
 
-const PIECE_LABEL: Record<(typeof PIECES)[number], string> = {
+const PIECE_LABEL: Record<ArmorPiece, string> = {
   helmet: 'Helmet',
   chest: 'Chest',
   chaps: 'Chaps',
@@ -31,10 +32,13 @@ function armorSet(spec: {
   stealthDisadvantage: boolean
   strRequirement?: number
   material?: GearMaterial
+  /** Shown names for the five worn pieces. Defaults to Helmet, Chest, Chaps, Gauntlets, Boots. */
+  labels?: Record<ArmorPiece, string>
 }): ItemDef[] {
+  const labels = spec.labels ?? PIECE_LABEL
   return PIECES.map((slot) => ({
     id: `${spec.id}-${slot}`,
-    name: `${spec.name} ${PIECE_LABEL[slot]}`,
+    name: `${spec.name} ${labels[slot]}`,
     description: spec.description,
     category: 'gear' as const,
     rarity: 'common' as const,
@@ -64,6 +68,46 @@ export const ARMOR = [
     weightClass: 'light',
     armorValue: 1,
     stealthDisadvantage: true,
+  }),
+  ...armorSet({
+    id: 'arcane',
+    name: 'Arcane',
+    description: 'A robe stitched with faint sigils.',
+    pieceBuy: 1,
+    weightClass: 'light',
+    armorValue: 1,
+    stealthDisadvantage: false,
+    labels: { helmet: 'Hood', chest: 'Robe', chaps: 'Trousers', gauntlets: 'Gloves', boots: 'Slippers' },
+  }),
+  ...armorSet({
+    id: 'vestment',
+    name: 'Vestment',
+    description: 'Temple cloth, blessed and plainly cut.',
+    pieceBuy: 1,
+    weightClass: 'light',
+    armorValue: 1,
+    stealthDisadvantage: false,
+    labels: { helmet: 'Cowl', chest: 'Robe', chaps: 'Leggings', gauntlets: 'Gloves', boots: 'Sandals' },
+  }),
+  ...armorSet({
+    id: 'wildweave',
+    name: 'Wildweave',
+    description: 'Bark-cloth and woven leaves.',
+    pieceBuy: 1,
+    weightClass: 'light',
+    armorValue: 1,
+    stealthDisadvantage: false,
+    labels: { helmet: 'Hood', chest: 'Wrap', chaps: 'Leggings', gauntlets: 'Gloves', boots: 'Boots' },
+  }),
+  ...armorSet({
+    id: 'minstrel',
+    name: 'Minstrel',
+    description: 'A traveling coat, bright at the cuffs.',
+    pieceBuy: 1,
+    weightClass: 'light',
+    armorValue: 1,
+    stealthDisadvantage: false,
+    labels: { helmet: 'Cap', chest: 'Coat', chaps: 'Leggings', gauntlets: 'Gloves', boots: 'Boots' },
   }),
   ...armorSet({
     id: 'leather',

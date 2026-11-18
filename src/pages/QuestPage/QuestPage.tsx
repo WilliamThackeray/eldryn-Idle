@@ -10,8 +10,8 @@ import {
 import { useGameStore } from '../../store/gameStore'
 
 export function QuestPage() {
-  const activeClassId = useGameStore((s) => s.activeClassId)
-  const classes = useGameStore((s) => s.classes)
+  const classId = useGameStore((s) => s.classId)
+  const classXp = useGameStore((s) => s.classXp)
   const inventory = useGameStore((s) => s.inventory)
   const questProgress = useGameStore((s) => s.questProgress)
   const questMessage = useGameStore((s) => s.questMessage)
@@ -33,8 +33,8 @@ export function QuestPage() {
       )}
       {QUESTS.map((quest) => {
         const unlocked = isQuestUnlocked(quest, {
-          activeClassId,
-          classXp: classes,
+          classId,
+          classXp,
           inventory,
         })
         const progress = getProgress(questProgress, quest.id)

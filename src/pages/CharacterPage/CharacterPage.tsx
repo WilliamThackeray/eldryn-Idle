@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CLASSES, getClass, type ClassId } from '../../data/classes'
+import { getClass } from '../../data/classes'
 import { getItem } from '../../data/items'
 import { getSkill } from '../../data/skills'
 import { spellsForClass, type SpellId } from '../../data/spells'
@@ -49,15 +49,13 @@ type Tab = 'gear' | 'spellbook'
 export function CharacterPage() {
   const characterName = useGameStore((state) => state.characterName)
   const skills = useGameStore((state) => state.skills)
-  const activeClassId = useGameStore((state) => state.activeClassId)
-  const classes = useGameStore((state) => state.classes)
+  const classId = useGameStore((state) => state.classId)
+  const classXp = useGameStore((state) => state.classXp)
   const clericFocus = useGameStore((state) => state.clericFocus)
   const isInDungeonOrQuest = useGameStore((state) => state.isInDungeonOrQuest)
   const equipment = useGameStore((state) => state.equipment)
   const equipmentSets = useGameStore((state) => state.equipmentSets)
   const spellLoadouts = useGameStore((state) => state.spellLoadouts)
-  const setActiveClass = useGameStore((state) => state.setActiveClass)
-  const setClericFocus = useGameStore((state) => state.setClericFocus)
   const setSpellSlot = useGameStore((state) => state.setSpellSlot)
   const unequipSlot = useGameStore((state) => state.unequipSlot)
   const saveEquipmentSet = useGameStore((state) => state.saveEquipmentSet)
@@ -72,21 +70,20 @@ export function CharacterPage() {
   const mainHand = equipment.mainHand ? getItem(equipment.mainHand) : undefined
   const damage = weaponDamageLabel(equipment)
   const intervalSec = weaponIntervalBase(mainHand?.gear?.weapon)
-  const active = activeClassId ? getClass(activeClassId) : null
-  const activeXp = activeClassId ? classes[activeClassId].xp : 0
-  const activeLevel = levelForXp(activeXp)
-  const activeProgress = progressToNext(activeXp)
+  const active = classId ? getClass(classId) : null
+  const activeLevel = levelForXp(classXp)
+  const activeProgress = progressToNext(classXp)
   const classTier = tier(activeLevel)
 
-  const unlockSkillId = activeClassId ? unlockSkillFor(activeClassId) : null
+  const unlockSkillId = classId ? unlockSkillFor(classId) : null
   const unlockLevel = unlockSkillId ? levelForXp(skills[unlockSkillId]?.xp ?? 0) : 0
-  const casterType = activeClassId ? effectiveCasterType(activeClassId) : null
+  const casterType = classId ? effectiveCasterType(classId) : null
   const slotStructure = useMemo(
     () => (casterType ? slotsFor(casterType, classTier) : []),
     [casterType, classTier],
   )
-  const classSpells = activeClassId ? spellsForClass(activeClassId) : []
-  const loadout = activeClassId ? spellLoadouts[activeClassId] : undefined
+  const classSpells = classId ? spellsForClass(classId) : []
+  const loadout = classId ? spellLoadouts[classId] : undefined
 
   return (
     <div className="space-y-6 text-parchment">
@@ -120,7 +117,7 @@ export function CharacterPage() {
 
       {active && (
         <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-          <h3 className="mb-3 font-bold text-gold">Active class</h3>
+          <h3 className="mb-3 font-bold text-gold">Class</h3>
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <Stat label="Hit Die" value={`1d${active.hitDie}`} />
             <Stat label="Saves" value={active.saveProficiencies.join(', ')} />
@@ -128,20 +125,7 @@ export function CharacterPage() {
           <p className="mt-3 text-sm font-semibold">{active.signatureAbility.name}</p>
           <p className="mt-1 text-sm text-parchment/80">{active.signatureAbility.description}</p>
           {active.id === 'cleric' && (
-            <div className="mt-3 flex gap-2">
-              {(['INT', 'STR'] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setClericFocus(option)}
-                  className={`rounded px-3 py-1 text-sm ${
-                    clericFocus === option ? 'bg-crimson text-parchment' : 'bg-brown/60 text-parchment/80'
-                  }`}
-                >
-                  Focus {option}
-                </button>
-              ))}
-            </div>
+            <p className="mt-3 text-sm text-sage">Focus {clericFocus}</p>
           )}
         </section>
       )}
@@ -246,7 +230,7 @@ export function CharacterPage() {
       {tab === 'spellbook' && (
         <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
           <h3 className="mb-3 font-bold text-gold">Spellbook</h3>
-          {!activeClassId || !casterType ? (
+          {!classId || !casterType ? (
             <p className="text-sm text-parchment/70">This class has no spells.</p>
           ) : (
             <>
@@ -274,7 +258,7 @@ export function CharacterPage() {
                         value={selected ?? ''}
                         onChange={(event) => {
                           const value = event.target.value
-                          setSpellSlot(activeClassId, index, value ? (value as SpellId) : null)
+                          setSpellSlot(classId, index, value ? (value as SpellId) : null)
                         }}
                         className="min-w-[12rem] rounded-lg border border-brown/40 bg-ink/50 px-2 py-1 text-parchment"
                       >
@@ -315,41 +299,6 @@ export function CharacterPage() {
         </section>
       )}
 
-      <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-        <h3 className="mb-3 font-bold text-gold">Classes</h3>
-        {isInDungeonOrQuest && (
-          <p className="mb-3 text-sm text-parchment/70">Switching is locked in a dungeon or quest.</p>
-        )}
-        <ul className="space-y-2">
-          {CLASSES.map((entry) => {
-            const xp = classes[entry.id as ClassId].xp
-            const level = levelForXp(xp)
-            const isActive = entry.id === activeClassId
-            return (
-              <li
-                key={entry.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink/40 px-3 py-2"
-              >
-                <div>
-                  <span className="font-semibold text-parchment">{entry.name}</span>
-                  <span className="ml-2 text-sm text-sage">
-                    Level {level} · Tier {tier(level)}
-                  </span>
-                  {isActive && <span className="ml-2 text-xs text-gold">Active</span>}
-                </div>
-                <button
-                  type="button"
-                  disabled={isActive || isInDungeonOrQuest}
-                  onClick={() => setActiveClass(entry.id)}
-                  className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Switch
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
     </div>
   )
 }

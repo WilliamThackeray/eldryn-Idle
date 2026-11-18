@@ -1,6 +1,5 @@
 import { expect, test } from 'vitest'
 import { getDungeon } from '../data/dungeons'
-import { initialClassProgress } from '../data/classes'
 import { initialSkillProgress } from '../data/skills'
 import { advance, type AdvanceState } from './advance'
 import { beginDungeonFight, createFight } from './combat'
@@ -103,8 +102,8 @@ test('dungeon defeat keeps loot and clears the run', () => {
       dungeonId: 'shifting-thicket',
     },
     equipment: { ...emptyEquipment(), mainHand: 'greatsword', food: 'cooked-forest-fish' },
-    classes: { ...initialClassProgress(), barbarian: { xp: xpForLevel(50) } },
-    activeClassId: 'barbarian' as const,
+    classId: 'barbarian' as const,
+    classXp: xpForLevel(50),
     combat: fight,
     isInDungeonOrQuest: true,
   }

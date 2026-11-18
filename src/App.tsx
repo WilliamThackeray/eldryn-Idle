@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { ClassPickerModal } from './components/ClassPickerModal'
 import { Header } from './components/Header'
 import { OfflineModal } from './components/OfflineModal'
 import { Sidebar } from './components/Sidebar'
@@ -8,9 +7,12 @@ import { isSkillId, SKILLS } from './data/skills'
 import { CharacterPage } from './pages/CharacterPage/CharacterPage'
 import { CombatPage } from './pages/CombatPage/CombatPage'
 import { InventoryPage } from './pages/InventoryPage/InventoryPage'
+import { MainMenuPage } from './pages/MainMenuPage/MainMenuPage'
 import { QuestPage } from './pages/QuestPage/QuestPage'
 import { ShopPage } from './pages/ShopPage/ShopPage'
 import { SkillPage } from './pages/SkillPage/SkillPage'
+import { flushSave } from './store/gameStore'
+import { bindSlot, currentSlot } from './store/slots'
 
 function pageTitle(page: string): string {
   if (page === 'shop') return 'Shop'
@@ -22,19 +24,30 @@ function pageTitle(page: string): string {
 }
 
 function App() {
-  useGameLoop()
+  const [playing, setPlaying] = useState(() => currentSlot() != null)
+  useGameLoop(playing)
   const [currentPage, setCurrentPage] = useState('shop')
   const skillId = isSkillId(currentPage) ? currentPage : null
+
+  if (!playing) return <MainMenuPage onStart={() => setPlaying(true)} />
 
   return (
     <>
       <div className="flex h-screen overflow-hidden bg-ink text-parchment">
         <OfflineModal />
-        <ClassPickerModal />
         <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
         <main className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
-          <Header title={pageTitle(currentPage)} currentPage={currentPage} setCurrentPage={setCurrentPage} />
+          <Header
+            title={pageTitle(currentPage)}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            onMainMenu={() => {
+              flushSave()
+              bindSlot(null)
+              setPlaying(false)
+            }}
+          />
 
           <div className="min-h-0 flex-1 overflow-auto p-6">
             {skillId && <SkillPage skillId={skillId} />}
