@@ -81,6 +81,21 @@ export interface ArmorGear {
   stealthDisadvantage: boolean
 }
 
+export interface ItemStats {
+  toHit?: number
+  damage?: number
+  ac?: number
+  saveBonus?: number
+  maxHp?: number
+  /** Extra crit faces below 20. 1 means crit on 19–20. */
+  critRange?: number
+  /** Percent faster attacks. 10 means 10% faster. */
+  attackSpeedPct?: number
+  resistances?: readonly DamageType[]
+  skillXpPct?: Partial<Record<string, number>>
+  skillSpeedPct?: Partial<Record<string, number>>
+}
+
 export interface GearBlock {
   slot: GearSlot
   material?: GearMaterial
@@ -89,6 +104,7 @@ export interface GearBlock {
   armor?: ArmorGear
   /** Off-hand shield: +2 AC. */
   shield?: boolean
+  stats?: ItemStats
 }
 
 export interface ItemDef {
@@ -101,6 +117,8 @@ export interface ItemDef {
   sellValue: number
   tags?: string[]
   gear?: GearBlock
+  /** Public URL for a 500×500 item sprite, e.g. `/Assets/Shortsword.svg`. */
+  icon?: string
   /** HP restored when eaten from the food slot in combat. */
   heal?: number
 }

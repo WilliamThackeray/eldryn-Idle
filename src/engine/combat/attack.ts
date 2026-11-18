@@ -8,7 +8,7 @@ import { activePerks, effectTotal } from '../abilities'
 import { MATERIAL_FLAGS, AMMO_RECOVERY } from '../config'
 import { applyDamageModifiers } from '../damage'
 import { resolveRollMode, roll, rollD20, rollDamageParts } from '../dice'
-import type { Equipment } from '../equipment'
+import { totalItemStats, type Equipment } from '../equipment'
 import { addItems, removeItems, type Inventory } from '../inventory'
 import type { Rng } from '../rng'
 import { getSignatureHooks, tryBardicInspiration } from '../signatures'
@@ -24,10 +24,19 @@ import {
   damageDice,
   damageTypeOf,
   masteryOf,
-  playerMagicBonus,
   playerWeapon,
   pushLog,
 } from './state'
+
+/** Nat 1 never crits. critRange 1 → 19–20. */
+export function critThreshold(critRange: number): number {
+  return Math.max(2, 20 - critRange)
+}
+
+/** Includes nat 1 miss and nat 20 hit. */
+export function hitChance(bonus: number, ac: number): number {
+  return Math.min(0.95, Math.max(0.05, (21 - (ac - bonus)) / 20))
+}
 
 export function recoverAmmo(inventory: Inventory, equipment: Equipment, spent: number): Inventory {
   if (spent <= 0) return inventory
@@ -95,9 +104,12 @@ export function resolvePlayerAttack(input: {
   const classTier = tier(classLevel)
   const prof = proficiency(classTier)
   const weapon = input.unarmedOverride ? undefined : playerWeapon(equipment)
-  const magic = input.unarmedOverride ? 0 : playerMagicBonus(equipment)
+  const itemStats = input.unarmedOverride ? null : totalItemStats(equipment)
+  const itemToHit = itemStats?.toHit ?? 0
+  const itemDamage = itemStats?.damage ?? 0
   const { mod: abilityBonus } = attackAbilityMod(weapon, mods)
   const mastery = input.unarmedOverride ? null : masteryOf(equipment)
+  const critFloor = critThreshold(itemStats?.critRange ?? 0)
 
   if (!input.unarmedOverride) {
     const ammo = spendAmmo(fight, inventory, equipment, trace)
@@ -130,7 +142,7 @@ export function resolvePlayerAttack(input: {
   hooks.onBeforeAttack?.({ ...sigCtx, hasAdvantage, intervalIndex: fight.playerIntervalCount })
 
   const natural = rollD20(rng, mode)
-  let total = natural + abilityBonus + prof + magic
+  let total = natural + abilityBonus + prof + itemToHit
   let bardicNote = ''
   if (fight.signature.id === 'bardicInspiration') {
     const result = tryBardicInspiration(
@@ -149,7 +161,7 @@ export function resolvePlayerAttack(input: {
   }
 
   const autoMiss = natural === 1
-  const crit = natural === 20
+  const crit = !autoMiss && natural >= critFloor
   const hit = !autoMiss && (crit || total >= monster.ac)
   const intervalSec = (fight.playerIntervalMs / 1000).toFixed(2)
   let line = `${input.labelPrefix}${intervalSec}s. to hit: ${total}${bardicNote} - ${hit ? 'hits' : 'misses'}.`
@@ -203,7 +215,7 @@ export function resolvePlayerAttack(input: {
     if (trace) line += ` Hunter's Mark [1d6] ${mark}.`
   }
 
-  const raw = Math.max(0, parts.dice + parts.flat + magic + abilityBonus + hitCtx.bonusDice + hitCtx.bonusFlat)
+  const raw = Math.max(0, parts.dice + parts.flat + itemDamage + abilityBonus + hitCtx.bonusDice + hitCtx.bonusFlat)
   const dealt = applyDamageModifiers(
     raw,
     dtype,
@@ -213,7 +225,7 @@ export function resolvePlayerAttack(input: {
   )
   const before = fight.monsterHp
   fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
-  line += ` [${diceNotation}] + ${abilityBonus + magic + hitCtx.bonusFlat} damage${crit ? ' (crit)' : ''}.`
+  line += ` [${diceNotation}] + ${abilityBonus + itemDamage + hitCtx.bonusFlat} damage${crit ? ' (crit)' : ''}.`
   if (hitCtx.bonusDice > 0) line += ` bonus dice ${hitCtx.bonusDice}.`
   line += applyHitMasteries({
     fight,
@@ -286,10 +298,10 @@ export function difficultyHint(input: {
   playerHp: number
   monsterAvgDamagePerInterval: number
 }): 'Easy' | 'Even' | 'Hard' {
-  const hitChance = Math.min(0.95, Math.max(0.05, (21 - (input.monsterAc - input.playerToHitBonus)) / 20))
+  const chance = hitChance(input.playerToHitBonus, input.monsterAc)
   const avg = Math.max(0, input.monsterAvgDamagePerInterval)
-  if (hitChance >= 0.65 && input.playerHp >= 4 * avg) return 'Easy'
-  if (hitChance < 0.4 || 3 * avg >= input.playerHp) return 'Hard'
+  if (chance >= 0.65 && input.playerHp >= 4 * avg) return 'Easy'
+  if (chance < 0.4 || 3 * avg >= input.playerHp) return 'Hard'
   return 'Even'
 }
 
@@ -318,7 +330,7 @@ export function playerToHitBonus(
   const mods = abilityModMap(skills)
   const weapon = playerWeapon(equipment)
   const { mod } = attackAbilityMod(weapon, mods)
-  return mod + proficiency(tier(levelForXp(classXp))) + playerMagicBonus(equipment)
+  return mod + proficiency(tier(levelForXp(classXp))) + totalItemStats(equipment).toHit
 }
 
 /** Exported for tests: nick check uses 1d10, proc on 1–ceiling (default 2). */

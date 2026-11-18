@@ -21,6 +21,8 @@ import {
   unlockSkillFor,
 } from '../spells'
 import { levelForXp, proficiency, tier } from '../xp'
+import { totalItemStats, type Equipment } from '../equipment'
+import { critThreshold } from './attack'
 import { abilityModMap, type CombatFight, pushLog, savingThrow, skillLevel } from './state'
 
 export function resolveSpellCast(input: {
@@ -28,6 +30,7 @@ export function resolveSpellCast(input: {
   monster: MonsterDef
   skills: Record<SkillId, SkillProgress>
   inventory: Inventory
+  equipment: Equipment
   activeClassId: ClassId
   classXp: number
   rng: Rng
@@ -146,7 +149,8 @@ export function resolveSpellCast(input: {
     const natural = rollD20(rng)
     const total = natural + castMod + prof
     const autoMiss = natural === 1
-    const crit = natural === 20
+    const critFloor = critThreshold(totalItemStats(input.equipment).critRange)
+    const crit = !autoMiss && natural >= critFloor
     const hit = !autoMiss && (crit || total >= monster.ac)
     line += ` to hit ${total} - ${hit ? 'hits' : 'misses'}.`
     if (!hit) {

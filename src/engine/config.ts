@@ -96,16 +96,22 @@ export const HEAVY_ARMOR_INTERVAL_FACTOR = 1.1
  */
 export const ATTUNEMENT_LIMIT = 3
 
-/**
- * Flat to-hit / damage / AC from material tiers. Defaults to 0.
- * TODO(design): material tiers as flat bonuses.
- */
+/** Flat to-hit / damage / AC from material tiers. */
 export const MATERIAL_FLAT_BONUS = {
   iron: 0,
-  steel: 0,
-  silvered: 0,
-  mithral: 0,
-  adamantine: 0,
+  steel: 1,
+  silvered: 1,
+  mithral: 2,
+  adamantine: 3,
+} as const
+
+/** Class Level required to equip gear of this material. */
+export const MATERIAL_LEVEL = {
+  iron: 1,
+  steel: 15,
+  silvered: 30,
+  mithral: 60,
+  adamantine: 80,
 } as const
 
 export const MATERIAL_FLAGS = {

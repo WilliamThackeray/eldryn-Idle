@@ -10,8 +10,10 @@ import {
   canEquip,
   emptyEquipment,
   equip,
+  flatWeaponBonus,
   gearRollMode,
   heavyArmorIntervalMultiplier,
+  totalItemStats,
   weaponDamageLabel,
   weaponIntervalBase,
   type Equipment,
@@ -59,22 +61,45 @@ test('acTotal applies medium DEX cap, shield, and magic', () => {
 })
 
 test('equip rules: two-handed vs offhand, light offhand, soft STR', () => {
-  expect(canEquip(withPieces({ offHand: 'shield' }), 'greatsword')).toBe(false)
-  expect(canEquip(emptyEquipment(), 'shield')).toBe(true)
-  expect(canEquip(withPieces({ mainHand: 'longsword' }), 'dagger')).toBe(true)
-  expect(canEquip(withPieces({ mainHand: 'longsword' }), 'mace')).toBe(true)
+  expect(canEquip(withPieces({ offHand: 'shield' }), 'greatsword', 1)).toBe('Off hand must be empty')
+  expect(canEquip(emptyEquipment(), 'shield', 1)).toBeNull()
+  expect(canEquip(withPieces({ mainHand: 'longsword' }), 'dagger', 1)).toBeNull()
+  expect(canEquip(withPieces({ mainHand: 'longsword' }), 'mace', 1)).toBeNull()
 
-  const sword = equip(emptyEquipment(), { longsword: 1 }, 'longsword')
+  const sword = equip(emptyEquipment(), { longsword: 1 }, 'longsword', 1)
   expect(sword).not.toBeNull()
-  const dagger = equip(sword!.equipment, { ...sword!.inventory, dagger: 1 }, 'dagger')
+  const dagger = equip(sword!.equipment, { ...sword!.inventory, dagger: 1 }, 'dagger', 1)
   expect(dagger?.equipment.offHand).toBe('dagger')
   expect(dagger?.equipment.mainHand).toBe('longsword')
 
-  const mace = equip(sword!.equipment, { ...sword!.inventory, mace: 1 }, 'mace')
+  const mace = equip(sword!.equipment, { ...sword!.inventory, mace: 1 }, 'mace', 1)
   expect(mace?.equipment.mainHand).toBe('mace')
   expect(mace?.equipment.offHand).toBeNull()
 
-  expect(canEquip(emptyEquipment(), 'plate-chest')).toBe(true)
+  expect(canEquip(emptyEquipment(), 'plate-chest', 1)).toBeNull()
+})
+
+test('material flat bonus on weapons stacks with magic', () => {
+  expect(flatWeaponBonus('steel', 1)).toEqual({ toHit: 2, damage: 2 })
+  const iron = totalItemStats(withPieces({ mainHand: 'longsword' }))
+  const steel = totalItemStats(withPieces({ mainHand: 'steel-longsword' }))
+  expect(steel.toHit - iron.toHit).toBe(1)
+  expect(steel.damage - iron.damage).toBe(1)
+})
+
+test('armor material bonus floors the combined share sum', () => {
+  // Breastplate armor 4 + steel 1 = 5; chest 0.4 + chaps 0.25 → floor(3.25) = 3
+  expect(
+    armorClass(
+      withPieces({ chest: 'breastplate-chest', chaps: 'breastplate-chaps' }),
+      0,
+    ),
+  ).toBe(13)
+})
+
+test('equip requirement by material class level', () => {
+  expect(canEquip(emptyEquipment(), 'steel-longsword', 14)).toBe('Requires Class Level 15')
+  expect(canEquip(emptyEquipment(), 'steel-longsword', 15)).toBeNull()
 })
 
 test('weaponIntervalBase by property', () => {
@@ -143,8 +168,14 @@ test('full casters start in themed cloth and half-casters keep leather', () => {
   expect(robe).toMatchObject({ weightClass: 'light', armorValue: 1, stealthDisadvantage: false })
 })
 
-test('material flat bonuses default to 0 and flags match the brainstorm', () => {
-  for (const value of Object.values(MATERIAL_FLAT_BONUS)) expect(value).toBe(0)
+test('material flat bonuses and flags match Round 2', () => {
+  expect(MATERIAL_FLAT_BONUS).toEqual({
+    iron: 0,
+    steel: 1,
+    silvered: 1,
+    mithral: 2,
+    adamantine: 3,
+  })
   expect(MATERIAL_FLAGS.silvered.bypassesResistance).toBe(true)
   expect(MATERIAL_FLAGS.mithral.ignoresStrAndStealth).toBe(true)
   expect(MATERIAL_FLAGS.adamantine.negatesCriticalHits).toBe(true)

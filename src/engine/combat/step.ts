@@ -231,6 +231,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               monster,
               skills,
               inventory,
+              equipment,
               activeClassId: input.activeClassId,
               classXp,
               rng: input.rng,

@@ -13,6 +13,7 @@ import {
 } from './equipment'
 import { deriveAbilities } from './abilities'
 import type { Inventory } from './inventory'
+import { levelForXp } from './xp'
 
 export interface EquipPreviewDiffs {
   ac: number
@@ -37,7 +38,7 @@ export function equipPreview(
 ): EquipPreview | null {
   const slot = targetSlot(equipment, itemId)
   if (!slot) return null
-  const next = equip(equipment, inventory, itemId)
+  const next = equip(equipment, inventory, itemId, levelForXp(classXp))
   if (!next) return null
 
   const dexMod = deriveAbilities(skills).find((a) => a.abbr === 'DEX')?.modifier ?? 0

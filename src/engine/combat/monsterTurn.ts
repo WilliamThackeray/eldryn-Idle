@@ -3,8 +3,9 @@ import type { DamageType } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
+import { applyDamageModifiers } from '../damage'
 import { resolveRollMode, rollD20, rollDamageParts } from '../dice'
-import type { Equipment } from '../equipment'
+import { emptyEquipment, totalItemStats, type Equipment } from '../equipment'
 import type { Rng } from '../rng'
 import { getSignatureHooks, tryWildShape } from '../signatures'
 import { concentrationDc } from '../spells'
@@ -21,6 +22,7 @@ export function applyPlayerDamage(input: {
   rng: Rng
   trace: boolean
   modifiers: Partial<Record<AbilityAbbr, number>>
+  equipment?: Equipment
 }): { skills: Record<SkillId, SkillProgress>; defeated: boolean } {
   const { fight, rng, trace } = input
   let skills = input.skills
@@ -29,6 +31,7 @@ export function applyPlayerDamage(input: {
   const mods = abilityModMap(skills)
   const classTier = tier(levelForXp(input.classXp))
   const hooks = getSignatureHooks(fight.signature.id)
+  const itemStats = totalItemStats(input.equipment ?? emptyEquipment())
 
   if (fight.concentration === 'protectionFromEnergyFire' && input.damageType === 'fire') {
     amount = Math.floor(amount / 2)
@@ -49,7 +52,13 @@ export function applyPlayerDamage(input: {
   })
 
   // Adamantine: crits become normal — handled at attack time if needed later.
-  const taken = Math.max(0, amount)
+  const taken = applyDamageModifiers(
+    Math.max(0, amount),
+    input.damageType,
+    itemStats.resistances,
+    [],
+    [],
+  )
   if (taken > 0) {
     if (fight.shieldBonus > 0) fight.shieldBonus = 0
     fight.playerHp = Math.max(0, fight.playerHp - taken)
@@ -65,7 +74,7 @@ export function applyPlayerDamage(input: {
         rng,
         ability: 'CON',
         dc,
-        abilityMod: mods.CON,
+        abilityMod: mods.CON + itemStats.saveBonus,
         proficient: cls.saveProficiencies.some((save) => save === 'CON'),
         proficiencyBonus: proficiency(classTier),
       })
@@ -165,6 +174,7 @@ export function resolveMonsterAttacks(input: {
             rng: input.rng,
             trace,
             modifiers: input.modifiers,
+            equipment: input.equipment,
           })
           skills = result.skills
           if (result.defeated) return { skills, defeated: true }

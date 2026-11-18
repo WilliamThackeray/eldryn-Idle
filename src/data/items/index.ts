@@ -17,6 +17,7 @@ export type {
   ItemCategory,
   ItemDef,
   ItemRarity,
+  ItemStats,
   WeaponGear,
   WeaponMastery,
   WeaponProperty,

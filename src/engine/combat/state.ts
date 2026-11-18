@@ -8,7 +8,13 @@ import type { SkillId } from '../../data/skills'
 import { activePerks, deriveAbilities, effectTotal, hasPerkEffect } from '../abilities'
 import { COMBAT_LOG_LIMIT, MONSTER_INTERVAL_SEC, SLOW_INTERVAL_FACTOR, SPELL_INTERVAL_SEC } from '../config'
 import { rollD20, type RollMode } from '../dice'
-import { armorClass, heavyArmorIntervalMultiplier, weaponIntervalBase, type Equipment } from '../equipment'
+import {
+  armorClass,
+  heavyArmorIntervalMultiplier,
+  totalItemStats,
+  weaponIntervalBase,
+  type Equipment,
+} from '../equipment'
 import { intervalMs } from '../interval'
 import type { Inventory } from '../inventory'
 import type { Rng } from '../rng'
@@ -88,6 +94,19 @@ export function maxHp(hitDie: number, classTier: number, conMod: number): number
   const avg = Math.floor(hitDie / 2) + 1
   const perTier = Math.max(1, avg + conMod)
   return hitDie + perTier * Math.max(0, classTier - 1)
+}
+
+/** Class HP with CON percent, then flat item max HP. */
+export function playerMaxHp(
+  hitDie: number,
+  classTier: number,
+  conMod: number,
+  skills: Record<SkillId, SkillProgress>,
+  equipment: Equipment,
+): number {
+  const maxHpPct = effectTotal(activePerks({ skills }), 'maxHpPct')
+  const base = Math.floor(maxHp(hitDie, classTier, conMod) * (1 + maxHpPct))
+  return base + totalItemStats(equipment).maxHp
 }
 
 /** CON Rank 20: if a hit would drop HP to 0 and Relentless is unused, stay at 1 HP once. */
@@ -185,7 +204,8 @@ export function computePlayerIntervalMs(
   const mods = abilityModMap(skills)
   const scores = abilityScoreMap(skills)
   const baseSec = spellcasting ? SPELL_INTERVAL_SEC : weaponIntervalBase(playerWeapon(equipment))
-  const base = intervalMs(baseSec * 1000, mods.DEX, 0, true)
+  const speedPct = spellcasting ? 0 : totalItemStats(equipment).attackSpeedPct
+  const base = intervalMs(baseSec * 1000, mods.DEX, speedPct / 100, true)
   return base * heavyArmorIntervalMultiplier(equipment, scores.STR)
 }
 
@@ -223,8 +243,7 @@ export function createFight(input: {
   const mods = abilityModMap(input.skills)
   const classLevel = levelForXp(input.classXp)
   const classTier = tier(classLevel)
-  const maxHpPct = effectTotal(activePerks({ skills: input.skills }), 'maxHpPct')
-  const playerMax = Math.floor(maxHp(cls.hitDie, classTier, mods.CON) * (1 + maxHpPct))
+  const playerMax = playerMaxHp(cls.hitDie, classTier, mods.CON, input.skills, input.equipment)
   const casting = usesSpellLoop(input.activeClassId)
   const playerInterval = computePlayerIntervalMs(input.skills, input.equipment, casting)
   const signature = emptySignatureRuntime(cls.signatureAbility.id)

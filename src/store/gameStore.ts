@@ -18,6 +18,7 @@ import {
   tryQuestSkillCheck,
 } from '../engine/quest'
 import { effectiveCasterType, usesSpellLoop } from '../engine/spells'
+import { levelForXp } from '../engine/xp'
 import {
   applyLoadout,
   applyStartingKit,
@@ -312,8 +313,11 @@ export const useGameStore = create<GameStore>()(
         }),
       equipItem: (itemId) =>
         set((state) => {
-          if (state.isInDungeonOrQuest || !canEquip(state.equipment, itemId)) return state
-          const next = equip(state.equipment, state.inventory, itemId)
+          const classLevel = levelForXp(state.classXp)
+          if (state.isInDungeonOrQuest || canEquip(state.equipment, itemId, classLevel) != null) {
+            return state
+          }
+          const next = equip(state.equipment, state.inventory, itemId, classLevel)
           if (!next) return state
           return { equipment: next.equipment, ...withPlacedInventory(state, next.inventory) }
         }),

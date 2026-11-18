@@ -11,13 +11,14 @@ import {
   type MonsterDef,
 } from '../../data/monsters'
 import type { SkillId } from '../../data/skills'
-import { activePerks, deriveAbilities, effectTotal } from '../../engine/abilities'
+import { deriveAbilities } from '../../engine/abilities'
 import {
   averageDamage,
   difficultyHint,
-  maxHp,
+  playerMaxHp,
   playerToHitBonus,
 } from '../../engine/combat'
+import { CombatStatsPanel } from '../../components/CombatStatsPanel'
 import { ProgressBar } from '../../components/ProgressBar'
 import { RESPAWN_MS } from '../../engine/config'
 import { buildRunOrder } from '../../engine/dungeon'
@@ -43,7 +44,9 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   }, [combat?.dungeonId])
   const [biome, setBiome] = useState<BiomeId>('forest')
   const [highlightMonsterId, setHighlightMonsterId] = useState<string | null>(null)
+  const [selectedMonsterId, setSelectedMonsterId] = useState<string | null>(null)
   const [highlightDungeonId, setHighlightDungeonId] = useState<string | null>(null)
+  const spellLoadouts = useGameStore((state) => state.spellLoadouts)
 
   useEffect(() => {
     if (!focus) return
@@ -74,6 +77,12 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const inCombat = activeAction?.kind === 'combat'
   const inDungeon = Boolean(combat?.dungeonId)
   const toHit = playerToHitBonus(skills, equipment, classXp)
+  const matchupMonster =
+    (combat?.monsterId ? getMonster(combat.monsterId) : null) ??
+    (selectedMonsterId ? getMonster(selectedMonsterId) : null) ??
+    (highlightMonsterId ? getMonster(highlightMonsterId) : null) ??
+    monsters[0] ??
+    null
 
   const combatLines = log.flatMap((entry) => (entry.kind === 'combat' ? entry.lines : []))
   const displayLog = combat?.log?.length ? combat.log : combatLines
@@ -232,32 +241,47 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
           </div>
         </div>
       ) : tab === 'hunting' ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {BIOMES.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setBiome(id)}
-                className={`rounded-lg px-3 py-2 text-sm transition-colors ${
-                  biome === id ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
-                }`}
-              >
-                {BIOME_LABELS[id]}
-              </button>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {BIOMES.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setBiome(id)}
+                  className={`rounded-lg px-3 py-2 text-sm transition-colors ${
+                    biome === id ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
+                  }`}
+                >
+                  {BIOME_LABELS[id]}
+                </button>
+              ))}
+            </div>
+            {monsters.map((monster) => (
+              <MonsterRow
+                key={monster.id}
+                monster={monster}
+                toHit={toHit}
+                playerHpEstimate={estimatePlayerHp(classId, classXp, skills, equipment)}
+                disabled={!classId || inCombat}
+                highlighted={
+                  selectedMonsterId === monster.id || highlightMonsterId === monster.id
+                }
+                onSelect={() => setSelectedMonsterId(monster.id)}
+                onFight={() => startHunt(monster.id, biome)}
+              />
             ))}
           </div>
-          {monsters.map((monster) => (
-            <MonsterRow
-              key={monster.id}
-              monster={monster}
-              toHit={toHit}
-              playerHpEstimate={estimatePlayerHp(classId, classXp, skills)}
-              disabled={!classId || inCombat}
-              highlighted={highlightMonsterId === monster.id}
-              onFight={() => startHunt(monster.id, biome)}
-            />
-          ))}
+          <CombatStatsPanel
+            compact
+            skills={skills}
+            equipment={equipment}
+            classId={classId}
+            classXp={classXp}
+            inventory={inventory}
+            spellLoadout={classId ? spellLoadouts[classId] : undefined}
+            monster={matchupMonster}
+          />
         </div>
       ) : (
         <div className="space-y-3">
@@ -310,12 +334,12 @@ function estimatePlayerHp(
   classId: ClassId | null,
   classXp: number,
   skills: Record<SkillId, SkillProgress>,
+  equipment: Parameters<typeof playerMaxHp>[4],
 ): number {
   if (!classId) return 10
   const cls = getClass(classId)
   const con = deriveAbilities(skills).find((ability) => ability.abbr === 'CON')?.modifier ?? 0
-  const maxHpPct = effectTotal(activePerks({ skills }), 'maxHpPct')
-  return Math.floor(maxHp(cls.hitDie, tier(levelForXp(classXp)), con) * (1 + maxHpPct))
+  return playerMaxHp(cls.hitDie, tier(levelForXp(classXp)), con, skills, equipment)
 }
 
 function MonsterRow({
@@ -324,6 +348,7 @@ function MonsterRow({
   playerHpEstimate,
   disabled,
   highlighted = false,
+  onSelect,
   onFight,
 }: {
   monster: MonsterDef
@@ -331,6 +356,7 @@ function MonsterRow({
   playerHpEstimate: number
   disabled: boolean
   highlighted?: boolean
+  onSelect: () => void
   onFight: () => void
 }) {
   const avgDamage = monster.attacks.reduce((sum, attack) => sum + averageDamage(attack.damage), 0)
@@ -346,6 +372,12 @@ function MonsterRow({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') onSelect()
+      }}
       className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-panel p-4 ${
         highlighted ? 'border-gold' : 'border-brown/40'
       }`}
@@ -369,7 +401,10 @@ function MonsterRow({
       <button
         type="button"
         disabled={disabled}
-        onClick={onFight}
+        onClick={(event) => {
+          event.stopPropagation()
+          onFight()
+        }}
         className="rounded-lg bg-crimson px-4 py-2 text-sm font-bold text-parchment transition-colors hover:bg-brown disabled:cursor-not-allowed disabled:opacity-40"
       >
         Fight

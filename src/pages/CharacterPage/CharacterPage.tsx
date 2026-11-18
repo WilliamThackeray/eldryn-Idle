@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getClass } from '../../data/classes'
-import { getItem } from '../../data/items'
+import type { ItemId } from '../../data/items'
 import { getSkill } from '../../data/skills'
 import { spellsForClass, type SpellId } from '../../data/spells'
-import { RARITY_TEXT } from '../../components/rarity'
 import { ladderPerksFor, perRankPerkFor } from '../../data/abilityPerks'
 import { ProgressBar } from '../../components/ProgressBar'
+import { CombatStatsPanel } from '../../components/CombatStatsPanel'
+import { ItemDetail } from '../../components/ItemDetail'
+import { PaperDoll } from '../../components/PaperDoll'
 import { deriveAbilities } from '../../engine/abilities'
-import {
-  armorClass,
-  weaponDamageLabel,
-  weaponIntervalBase,
-  type EquipmentSlot,
-} from '../../engine/equipment'
+import { type EquipmentSlot } from '../../engine/equipment'
 import {
   effectiveCasterType,
   slotsFor,
@@ -22,29 +19,6 @@ import {
 } from '../../engine/spells'
 import { levelForXp, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
-
-const SLOT_GRID: { slot: EquipmentSlot; label: string }[] = [
-  { slot: 'helmet', label: 'Helmet' },
-  { slot: 'necklace', label: 'Necklace' },
-  { slot: 'cloak', label: 'Cloak' },
-  { slot: 'chest', label: 'Chest' },
-  { slot: 'mainHand', label: 'Main Hand' },
-  { slot: 'offHand', label: 'Off Hand' },
-  { slot: 'gauntlets', label: 'Gauntlets' },
-  { slot: 'belt', label: 'Belt' },
-  { slot: 'chaps', label: 'Chaps' },
-  { slot: 'boots', label: 'Boots' },
-  { slot: 'ring1', label: 'Ring 1' },
-  { slot: 'ring2', label: 'Ring 2' },
-  { slot: 'ammo', label: 'Ammo' },
-  { slot: 'food', label: 'Food' },
-  { slot: 'potion', label: 'Potion' },
-  { slot: 'attuned1', label: 'Attuned 1' },
-  { slot: 'attuned2', label: 'Attuned 2' },
-  { slot: 'attuned3', label: 'Attuned 3' },
-  { slot: 'summon1', label: 'Summon 1' },
-  { slot: 'summon2', label: 'Summon 2' },
-]
 
 type Tab = 'gear' | 'spellbook'
 
@@ -61,16 +35,19 @@ export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPagePr
   const clericFocus = useGameStore((state) => state.clericFocus)
   const isInDungeonOrQuest = useGameStore((state) => state.isInDungeonOrQuest)
   const equipment = useGameStore((state) => state.equipment)
+  const inventory = useGameStore((state) => state.inventory)
   const equipmentSets = useGameStore((state) => state.equipmentSets)
   const spellLoadouts = useGameStore((state) => state.spellLoadouts)
   const setSpellSlot = useGameStore((state) => state.setSpellSlot)
   const unequipSlot = useGameStore((state) => state.unequipSlot)
+  const equipItem = useGameStore((state) => state.equipItem)
   const saveEquipmentSet = useGameStore((state) => state.saveEquipmentSet)
   const loadEquipmentSet = useGameStore((state) => state.loadEquipmentSet)
   const deleteEquipmentSet = useGameStore((state) => state.deleteEquipmentSet)
   const [setName, setSetName] = useState('')
   const [tab, setTab] = useState<Tab>('gear')
   const [highlightSpellId, setHighlightSpellId] = useState<string | null>(null)
+  const [detailSlot, setDetailSlot] = useState<EquipmentSlot | null>(null)
 
   useEffect(() => {
     if (!focus) return
@@ -85,15 +62,11 @@ export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPagePr
   }, [highlightSpellId, tab])
 
   const abilities = deriveAbilities(skills)
-  const dexMod = abilities.find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
-  const ac = armorClass(equipment, dexMod)
-  const mainHand = equipment.mainHand ? getItem(equipment.mainHand) : undefined
-  const damage = weaponDamageLabel(equipment)
-  const intervalSec = weaponIntervalBase(mainHand?.gear?.weapon)
   const active = classId ? getClass(classId) : null
   const activeLevel = levelForXp(classXp)
   const activeProgress = progressToNext(classXp)
   const classTier = tier(activeLevel)
+  const detailItemId = (detailSlot ? equipment[detailSlot] : null) as ItemId | null
 
   const unlockSkillId = classId ? unlockSkillFor(classId) : null
   const unlockLevel = unlockSkillId ? levelForXp(skills[unlockSkillId]?.xp ?? 0) : 0
@@ -214,78 +187,93 @@ export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPagePr
           {isInDungeonOrQuest && (
             <p className="mb-3 text-sm text-parchment/70">Swapping is locked in a dungeon or quest.</p>
           )}
-          <div className="mb-4 flex flex-wrap gap-4 text-sm">
-            <Stat label="AC" value={String(ac)} />
-            <Stat label="Weapon" value={mainHand ? `${mainHand.name} · ${damage}` : 'Unarmed'} />
-            <Stat label="Interval" value={`${intervalSec.toFixed(1)}s`} />
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-            {SLOT_GRID.map(({ slot, label }) => {
-              const id = equipment[slot]
-              const def = id ? getItem(id) : undefined
-              return (
-                <button
-                  key={slot}
-                  type="button"
-                  disabled={!def || isInDungeonOrQuest}
-                  onClick={() => unequipSlot(slot)}
-                  className="rounded-md border border-brown/40 bg-ink/40 px-2 py-3 text-left text-sm disabled:cursor-default"
-                >
-                  <div className="text-xs uppercase tracking-wide text-sage/80">{label}</div>
-                  <div className={def ? RARITY_TEXT[def.rarity] : 'text-parchment/50'}>
-                    {def?.name ?? 'Empty'}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-          <div className="mt-4 space-y-3">
-            <h4 className="font-semibold text-sage">Loadouts</h4>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={setName}
-                onChange={(event) => setSetName(event.target.value)}
-                placeholder="Loadout name"
-                className="rounded-lg border border-brown/40 bg-ink/50 px-3 py-1 text-sm text-parchment"
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]">
+            <div className="space-y-4">
+              <PaperDoll
+                equipment={equipment}
+                inventory={inventory}
+                classXp={classXp}
+                locked={isInDungeonOrQuest}
+                onSelectWorn={(slot) => setDetailSlot(slot)}
+                onEquip={(itemId) => equipItem(itemId)}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  saveEquipmentSet(setName)
-                  setSetName('')
-                }}
-                className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold"
-              >
-                Save
-              </button>
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sage">Loadouts</h4>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={setName}
+                    onChange={(event) => setSetName(event.target.value)}
+                    placeholder="Loadout name"
+                    className="rounded-lg border border-brown/40 bg-ink/50 px-3 py-1 text-sm text-parchment"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveEquipmentSet(setName)
+                      setSetName('')
+                    }}
+                    className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold"
+                  >
+                    Save
+                  </button>
+                </div>
+                <ul className="space-y-2">
+                  {equipmentSets.map((entry) => (
+                    <li
+                      key={entry.name}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink/40 px-3 py-2"
+                    >
+                      <span>{entry.name}</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={isInDungeonOrQuest}
+                          onClick={() => loadEquipmentSet(entry.name)}
+                          className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteEquipmentSet(entry.name)}
+                          className="rounded-lg bg-brown/60 px-3 py-1 text-sm text-parchment transition-colors hover:bg-crimson"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-            <ul className="space-y-2">
-              {equipmentSets.map((entry) => (
-                <li
-                  key={entry.name}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink/40 px-3 py-2"
-                >
-                  <span>{entry.name}</span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={isInDungeonOrQuest}
-                      onClick={() => loadEquipmentSet(entry.name)}
-                      className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Load
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteEquipmentSet(entry.name)}
-                      className="rounded-lg bg-brown/60 px-3 py-1 text-sm text-parchment transition-colors hover:bg-crimson"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-4">
+              <CombatStatsPanel
+                skills={skills}
+                equipment={equipment}
+                classId={classId}
+                classXp={classXp}
+                inventory={inventory}
+                spellLoadout={classId ? spellLoadouts[classId] : undefined}
+              />
+              <div className="rounded-lg border border-brown/40 bg-ink/40 p-3">
+                <ItemDetail
+                  itemId={detailItemId}
+                  owned={detailItemId ? 1 : 0}
+                  equipment={equipment}
+                  inventory={inventory}
+                  skills={skills}
+                  classXp={classXp}
+                  isInDungeonOrQuest={isInDungeonOrQuest}
+                  mode="worn"
+                  emptyLabel="Click a worn item"
+                  onUnequip={() => {
+                    if (!detailSlot) return
+                    unequipSlot(detailSlot)
+                    setDetailSlot(null)
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </section>
       )}

@@ -1,11 +1,20 @@
 import type { ItemStack } from '../data/activities/types'
-import { getItem, type GearBlock, type ItemId } from '../data/items'
+import {
+  getItem,
+  type DamageType,
+  type GearBlock,
+  type GearMaterial,
+  type ItemId,
+  type ItemStats,
+} from '../data/items'
 import type { SkillId } from '../data/skills'
 import {
   ARMOR_SLOT_SHARE,
   ATTUNEMENT_LIMIT,
   HEAVY_ARMOR_INTERVAL_FACTOR,
   MATERIAL_FLAGS,
+  MATERIAL_FLAT_BONUS,
+  MATERIAL_LEVEL,
   WEAPON_INTERVAL_SEC,
 } from './config'
 import { resolveRollMode, type RollMode } from './dice'
@@ -96,56 +105,146 @@ export function armorStrain(piece: GearBlock | undefined, strScore: number): boo
   return strScore < req
 }
 
-export function canEquip(equipment: Equipment, itemId: string): boolean {
+/** null means ok; otherwise a reason the player can see. */
+export function canEquip(equipment: Equipment, itemId: string, classLevel: number): string | null {
   const item = getItem(itemId)
-  if (!item) return false
+  if (!item) return 'Unknown item'
 
-  if (item.category === 'ammo' || item.gear?.slot === 'ammo') return true
-  if (item.category === 'food' || item.gear?.slot === 'food') return true
-  if (item.category === 'potion' || item.gear?.slot === 'potion') return true
+  if (item.category === 'ammo' || item.gear?.slot === 'ammo') return null
+  if (item.category === 'food' || item.gear?.slot === 'food') return null
+  if (item.category === 'potion' || item.gear?.slot === 'potion') return null
 
   const gear = item.gear
-  if (!gear) return false
+  if (!gear) return 'Not equippable'
 
   if (gear.slot === 'mainHand' && gear.weapon) {
-    if (gear.weapon.properties.includes('two-handed')) return equipment.offHand == null
-    if (gear.weapon.properties.includes('light')) {
-      if (equipment.mainHand == null) return true
-      return equipment.offHand == null && !isTwoHanded(equipment.mainHand)
+    if (gear.weapon.properties.includes('two-handed') && equipment.offHand != null) {
+      return 'Off hand must be empty'
     }
-    return true
-  }
-
-  if (gear.slot === 'offHand' || gear.shield) {
-    if (isTwoHanded(equipment.mainHand)) return false
-    if (gear.shield) return true
-    if (!gear.weapon) return true
-    return gear.weapon.properties.includes('light')
-  }
-
-  if (gear.slot === 'ring') return equipment.ring1 == null || equipment.ring2 == null
-  if (gear.slot === 'attuned') {
-    const limit = attunementLimit()
-    const slots = (['attuned1', 'attuned2', 'attuned3'] as const).slice(0, limit)
-    return slots.some((slot) => equipment[slot] == null)
-  }
-  if (gear.slot === 'summon') return equipment.summon1 == null || equipment.summon2 == null
-
-  if (
-    gear.slot === 'helmet' ||
-    gear.slot === 'chest' ||
-    gear.slot === 'chaps' ||
-    gear.slot === 'boots' ||
-    gear.slot === 'gauntlets' ||
-    gear.slot === 'cloak' ||
-    gear.slot === 'belt' ||
-    gear.slot === 'necklace' ||
-    gear.slot === 'mainHand'
+    if (gear.weapon.properties.includes('light')) {
+      if (equipment.mainHand != null) {
+        if (equipment.offHand != null) return 'Both hands are full'
+        if (isTwoHanded(equipment.mainHand)) return 'Off hand must be empty'
+      }
+    }
+  } else if (gear.slot === 'offHand' || gear.shield) {
+    if (isTwoHanded(equipment.mainHand)) return 'Main hand is two-handed'
+    if (gear.weapon && !gear.weapon.properties.includes('light') && !gear.shield) {
+      return 'Off hand weapons must be light'
+    }
+  } else if (gear.slot === 'ring') {
+    // Rings can always replace ring1 when both are full.
+  } else if (gear.slot === 'attuned') {
+    // Attuned items can always replace attuned1 when full.
+  } else if (gear.slot === 'summon') {
+    // Summons can always replace summon1 when full.
+  } else if (
+    gear.slot !== 'helmet' &&
+    gear.slot !== 'chest' &&
+    gear.slot !== 'chaps' &&
+    gear.slot !== 'boots' &&
+    gear.slot !== 'gauntlets' &&
+    gear.slot !== 'cloak' &&
+    gear.slot !== 'belt' &&
+    gear.slot !== 'necklace' &&
+    gear.slot !== 'mainHand'
   ) {
-    return true
+    return 'Not equippable'
   }
 
-  return false
+  if (gear.material) {
+    const required = MATERIAL_LEVEL[gear.material]
+    if (classLevel < required) return `Requires Class Level ${required}`
+  }
+  return null
+}
+
+export function flatWeaponBonus(material: GearMaterial, magicBonus: number): { toHit: number; damage: number } {
+  const flat = MATERIAL_FLAT_BONUS[material] + magicBonus
+  return { toHit: flat, damage: flat }
+}
+
+export interface TotalItemStats {
+  toHit: number
+  damage: number
+  ac: number
+  saveBonus: number
+  maxHp: number
+  critRange: number
+  attackSpeedPct: number
+  resistances: DamageType[]
+  skillXpPct: Partial<Record<SkillId, number>>
+  skillSpeedPct: Partial<Record<SkillId, number>>
+}
+
+function emptyTotalStats(): TotalItemStats {
+  return {
+    toHit: 0,
+    damage: 0,
+    ac: 0,
+    saveBonus: 0,
+    maxHp: 0,
+    critRange: 0,
+    attackSpeedPct: 0,
+    resistances: [],
+    skillXpPct: {},
+    skillSpeedPct: {},
+  }
+}
+
+function addSkillMap(
+  into: Partial<Record<SkillId, number>>,
+  from: ItemStats['skillXpPct'] | ItemStats['skillSpeedPct'],
+) {
+  if (!from) return
+  for (const [key, value] of Object.entries(from)) {
+    if (value == null) continue
+    const skill = key as SkillId
+    into[skill] = (into[skill] ?? 0) + value
+  }
+}
+
+function materialBonus(material: GearMaterial | undefined): number {
+  if (!material) return 0
+  return MATERIAL_FLAT_BONUS[material]
+}
+
+export function totalItemStats(equipment: Equipment): TotalItemStats {
+  const total = emptyTotalStats()
+  const resistSet = new Set<DamageType>()
+
+  for (const slot of Object.keys(equipment) as EquipmentSlot[]) {
+    const gear = gearOf(equipment[slot])
+    if (!gear) continue
+    const stats = gear.stats
+    if (stats) {
+      total.toHit += stats.toHit ?? 0
+      total.damage += stats.damage ?? 0
+      total.ac += stats.ac ?? 0
+      total.saveBonus += stats.saveBonus ?? 0
+      total.maxHp += stats.maxHp ?? 0
+      total.critRange += stats.critRange ?? 0
+      total.attackSpeedPct += stats.attackSpeedPct ?? 0
+      for (const type of stats.resistances ?? []) resistSet.add(type)
+      addSkillMap(total.skillXpPct, stats.skillXpPct)
+      addSkillMap(total.skillSpeedPct, stats.skillSpeedPct)
+    }
+
+    if (ARMOR_SHARE_SLOTS.includes(slot as ArmorShareSlot) || gear.shield) {
+      total.ac += gear.magicBonus ?? 0
+    }
+  }
+
+  const main = gearOf(equipment.mainHand)
+  if (main?.weapon) {
+    const material = main.material ? MATERIAL_FLAT_BONUS[main.material] : 0
+    const magic = main.magicBonus ?? 0
+    total.toHit += material + magic
+    total.damage += material + magic
+  }
+
+  total.resistances = [...resistSet]
+  return total
 }
 
 export function targetSlot(equipment: Equipment, itemId: string): EquipmentSlot | null {
@@ -196,7 +295,7 @@ export function applyStartingKit(kit: readonly ItemStack[]): { inventory: Invent
   let inventory = addItems({}, [...kit])
   let equipment = emptyEquipment()
   for (const stack of kit) {
-    const next = equip(equipment, inventory, stack.itemId)
+    const next = equip(equipment, inventory, stack.itemId, 1)
     if (!next) continue
     equipment = next.equipment
     inventory = next.inventory
@@ -208,8 +307,9 @@ export function equip(
   equipment: Equipment,
   inventory: Inventory,
   itemId: ItemId,
+  classLevel: number,
 ): { equipment: Equipment; inventory: Inventory } | null {
-  if (!canEquip(equipment, itemId)) return null
+  if (canEquip(equipment, itemId, classLevel) != null) return null
   const slot = targetSlot(equipment, itemId)
   if (!slot) return null
 
@@ -258,33 +358,29 @@ export function acTotal(input: {
 
 export function armorClass(equipment: Equipment, dexMod: number): number {
   let armorSum = 0
-  let magicBonus = 0
   let heaviest: 'none' | 'light' | 'medium' | 'heavy' = 'none'
 
   for (const slot of ARMOR_SHARE_SLOTS) {
     const gear = gearOf(equipment[slot])
     const armor = gear?.armor
     if (!armor) continue
-    armorSum += armor.armorValue * ARMOR_SLOT_SHARE[slot as ArmorShareSlot]
-    magicBonus += gear?.magicBonus ?? 0
+    const piece = armor.armorValue + materialBonus(gear?.material)
+    armorSum += piece * ARMOR_SLOT_SHARE[slot as ArmorShareSlot]
     if (heaviest === 'none' || WEIGHT_RANK[armor.weightClass] > WEIGHT_RANK[heaviest]) {
       heaviest = armor.weightClass
     }
   }
 
   const off = gearOf(equipment.offHand)
-  let shieldBonus = 0
-  if (off?.shield) {
-    shieldBonus = 2
-    magicBonus += off.magicBonus ?? 0
-  }
+  const shieldBonus = off?.shield ? 2 : 0
+  const itemAc = totalItemStats(equipment).ac
 
   return acTotal({
     armor: Math.floor(armorSum),
     dexMod,
     weightClass: heaviest,
     shieldBonus,
-    magicBonus,
+    magicBonus: itemAc,
   })
 }
 
