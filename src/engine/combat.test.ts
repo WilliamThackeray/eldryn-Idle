@@ -6,8 +6,10 @@ import {
   createFight,
   maxHp,
   nickProc,
+  tryRelentless,
   type CombatFight,
 } from './combat'
+import { tryAutoEat } from './combat/food'
 import type { Inventory } from './inventory'
 import { applyDamageModifiers } from './damage'
 import { rollDamageParts } from './dice'
@@ -70,6 +72,62 @@ test('Nick proc rate is 20% for seed 1 and deterministic', () => {
   expect(rate).toBeGreaterThan(0.18)
   expect(rate).toBeLessThan(0.22)
   expect(run(1)).toBe(rate)
+})
+
+test('Nick ceiling 3 raises the proc rate to about 30%', () => {
+  const rng = mulberry32(1)
+  let hits = 0
+  const trials = 10_000
+  for (let i = 0; i < trials; i++) if (nickProc(rng, 3)) hits += 1
+  expect(hits / trials).toBeGreaterThan(0.28)
+  expect(hits / trials).toBeLessThan(0.32)
+})
+
+test('food heal perk rounds 6 to 7', () => {
+  const skills = initialSkillProgress()
+  // CON Rank 5 = Vitality level 21+
+  skills.vitality = { xp: xpForLevel(21) }
+  const fight = createFight({
+    monsterId: 'deer',
+    biome: 'forest',
+    skills,
+    equipment: gear('shortsword', 'cooked-meat'),
+    activeClassId: 'fighter',
+    classXp: 0,
+    rng: mulberry32(1),
+  })!
+  fight.playerHp = 1
+  const result = tryAutoEat({
+    fight,
+    inventory: { 'cooked-meat': 1 },
+    equipment: gear('shortsword', 'cooked-meat'),
+    skills,
+    modifiers: {},
+    trace: false,
+  })
+  expect(result.ate).toBe(true)
+  expect(fight.playerHp).toBe(1 + 7)
+})
+
+test('Relentless keeps the player at 1 HP once', () => {
+  const skills = initialSkillProgress()
+  skills.vitality = { xp: xpForLevel(99) }
+  const fight = createFight({
+    monsterId: 'deer',
+    biome: 'forest',
+    skills,
+    equipment: gear('shortsword', 'cooked-forest-fish'),
+    activeClassId: 'fighter',
+    classXp: 0,
+    rng: mulberry32(1),
+  })
+  expect(fight).not.toBeNull()
+  fight!.playerHp = 0
+  expect(tryRelentless(fight!, skills)).toBe(true)
+  expect(fight!.playerHp).toBe(1)
+  expect(fight!.relentlessUsed).toBe(true)
+  fight!.playerHp = 0
+  expect(tryRelentless(fight!, skills)).toBe(false)
 })
 
 test('auto-eat triggers below 50% HP and spends the player interval', () => {

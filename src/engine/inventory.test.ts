@@ -50,3 +50,10 @@ test('selling a stack adds gold from sellValue and removes the items', () => {
   expect(sold.gold).toBe(10 + 4 * 2)
   expect(sold.inventory).toEqual({ coal: 1 })
 })
+
+test('sell price multiplier floors the bonus', () => {
+  // iron-ore sellValue 2 × 1 × 1.05 = 2.1 → floor 2
+  expect(sellItems({ 'iron-ore': 1 }, 0, 'iron-ore', 1, 1.05).gold).toBe(2)
+  // 2 × 3 × 1.05 = 6.3 → 6
+  expect(sellItems({ 'iron-ore': 3 }, 0, 'iron-ore', 3, 1.05).gold).toBe(6)
+})

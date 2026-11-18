@@ -5,7 +5,7 @@ import { getMonster, type BiomeId, type CreatureSize, type MonsterDef } from '..
 import type { BuffEffectId } from '../../data/spells'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
-import { deriveAbilities } from '../abilities'
+import { activePerks, deriveAbilities, effectTotal, hasPerkEffect } from '../abilities'
 import { COMBAT_LOG_LIMIT, MONSTER_INTERVAL_SEC, SLOW_INTERVAL_FACTOR, SPELL_INTERVAL_SEC } from '../config'
 import { rollD20, type RollMode } from '../dice'
 import { armorClass, heavyArmorIntervalMultiplier, weaponIntervalBase, type Equipment } from '../equipment'
@@ -68,6 +68,8 @@ export interface CombatFight {
   questId: string | null
   /** Pending cleave applied when the next monster node starts. */
   pendingCleave: number
+  /** CON Rank 20: survive at 1 HP once per fight. */
+  relentlessUsed: boolean
 }
 
 export interface CombatAction {
@@ -86,6 +88,18 @@ export function maxHp(hitDie: number, classTier: number, conMod: number): number
   const avg = Math.floor(hitDie / 2) + 1
   const perTier = Math.max(1, avg + conMod)
   return hitDie + perTier * Math.max(0, classTier - 1)
+}
+
+/** CON Rank 20: if a hit would drop HP to 0 and Relentless is unused, stay at 1 HP once. */
+export function tryRelentless(
+  fight: CombatFight,
+  skills: Record<SkillId, SkillProgress>,
+): boolean {
+  if (fight.playerHp > 0 || fight.relentlessUsed) return false
+  if (!hasPerkEffect(activePerks({ skills }), 'surviveAt1')) return false
+  fight.playerHp = 1
+  fight.relentlessUsed = true
+  return true
 }
 
 export function monsterIntervalBaseMs(size: CreatureSize): number {
@@ -209,7 +223,8 @@ export function createFight(input: {
   const mods = abilityModMap(input.skills)
   const classLevel = levelForXp(input.classXp)
   const classTier = tier(classLevel)
-  const playerMax = maxHp(cls.hitDie, classTier, mods.CON)
+  const maxHpPct = effectTotal(activePerks({ skills: input.skills }), 'maxHpPct')
+  const playerMax = Math.floor(maxHp(cls.hitDie, classTier, mods.CON) * (1 + maxHpPct))
   const casting = usesSpellLoop(input.activeClassId)
   const playerInterval = computePlayerIntervalMs(input.skills, input.equipment, casting)
   const signature = emptySignatureRuntime(cls.signatureAbility.id)
@@ -261,6 +276,7 @@ export function createFight(input: {
     roomLog: [],
     questId: null,
     pendingCleave: 0,
+    relentlessUsed: false,
   }
 
   const hooks = getSignatureHooks(signature.id)

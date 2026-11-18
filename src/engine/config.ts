@@ -15,18 +15,21 @@ export const PROFICIENCY_BASE = 2
 export const PROFICIENCY_TIER_SPAN = 4
 
 /**
- * Ability Scores: use the average of that ability's skill levels.
- * Score = 10 + floor((average skill level + 1) / 10).
- * Modifier = floor((score - 10) / 2), using the same base of 10.
+ * Ability Scores: Modifier = floor((score - 10) / 2), using the same base of 10.
+ * rank: Score = 10 + floor(Rank / 2), Rank = tier(levelForXp(sum XP of the ability's skills)).
+ * average: Score = 10 + floor((average skill level + 1) / 10). Kept for comparison.
  */
 export const ABILITY_SCORE_BASE = 10
 export const ABILITY_LEVEL_OFFSET = 1
 export const ABILITY_LEVEL_DIVISOR = 10
 export const MODIFIER_DIVISOR = 2
 
+export type AbilityScoreSource = 'rank' | 'average'
+export const ABILITY_SCORE_SOURCE: AbilityScoreSource = 'rank'
+
 export type AbilityAggregation = 'average' | 'highest'
 
-/** Ability Scores: average of the ability's skills. 'highest' remains available if this changes. */
+/** Ability Scores (average path): average of the ability's skills. 'highest' remains available. */
 export const ABILITY_AGGREGATION: AbilityAggregation = 'average'
 
 /** Skill Checks: accepted starting point. DC = 10 + floor(required level / 10). */

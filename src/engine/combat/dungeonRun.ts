@@ -23,6 +23,7 @@ import {
   type CombatFight,
   computeMonsterIntervalMs,
   computePlayerIntervalMs,
+  tryRelentless,
   pushLog,
 } from './state'
 
@@ -180,6 +181,9 @@ export function advanceDungeonNodes(input: {
       pushLog(fight, result.line, trace)
       if (result.damage > 0) {
         fight.playerHp = Math.max(0, fight.playerHp - result.damage)
+        if (fight.playerHp <= 0 && tryRelentless(fight, skills)) {
+          pushLog(fight, 'Relentless: you hang on at 1 HP.', trace)
+        }
         if (fight.playerHp <= 0) {
           fight.defeated = true
           pushLog(fight, 'You fall. Returning to town.', trace)

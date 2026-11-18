@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { getClass } from '../data/classes'
 import { SKILLS } from '../data/skills'
 import { actionIntervalMs } from '../engine/advance'
+import { deriveAbilities } from '../engine/abilities'
 import { RESPAWN_MS } from '../engine/config'
 import { levelForXp } from '../engine/xp'
 import { useGameStore } from '../store/gameStore'
@@ -57,6 +58,9 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
   const classLevel = classId ? levelForXp(classXp) : null
   const classLabel = classId ? `${getClass(classId).name} ${classLevel}` : 'No class'
   const summary = `${characterName} · ${classLabel}`
+  const abilityTip = deriveAbilities(skills)
+    .map((ability) => `${ability.abbr} ${ability.score} (R${ability.rank})`)
+    .join(' · ')
 
   const showCharTip = () => {
     const rect = charRef.current?.getBoundingClientRect()
@@ -151,7 +155,7 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
                 className="absolute -translate-x-1/2 whitespace-nowrap rounded-md bg-panel px-2 py-1 text-xs text-parchment shadow-lg ring-1 ring-brown/60"
                 style={{ top: charTip.top, left: charTip.left }}
               >
-                Character
+                {abilityTip}
               </span>,
               tipHost,
             )}

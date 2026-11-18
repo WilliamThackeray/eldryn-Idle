@@ -4,6 +4,8 @@ import { getItem } from '../../data/items'
 import { getSkill } from '../../data/skills'
 import { spellsForClass, type SpellId } from '../../data/spells'
 import { RARITY_TEXT } from '../../components/rarity'
+import { ladderPerksFor, perRankPerkFor } from '../../data/abilityPerks'
+import { ProgressBar } from '../../components/ProgressBar'
 import { deriveAbilities } from '../../engine/abilities'
 import {
   armorClass,
@@ -103,15 +105,58 @@ export function CharacterPage() {
 
       <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
         <h3 className="mb-3 font-bold text-gold">Abilities</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {abilities.map((ability) => (
-            <div key={ability.id} className="rounded-md bg-ink/50 px-3 py-2 text-sm">
-              <div className="text-xs uppercase tracking-wide text-sage/80">{ability.abbr}</div>
-              <div className="font-semibold">
-                {ability.score} ({ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier})
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {abilities.map((ability) => {
+            const ladder = ladderPerksFor(ability.abbr)
+            const nextMilestone = ladder.find((perk) => perk.rank > ability.rank)
+            const perRank = perRankPerkFor(ability.abbr)
+            return (
+              <div key={ability.id} className="rounded-md bg-ink/50 px-3 py-3 text-sm">
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="text-xs uppercase tracking-wide text-sage/80">{ability.abbr}</div>
+                  <div className="text-xs text-sage">Rank {ability.rank}/20</div>
+                </div>
+                <div className="font-semibold">
+                  {ability.score} ({ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier})
+                </div>
+                <div className="mt-2">
+                  <ProgressBar
+                    progress={ability.rankProgress}
+                    className="h-1.5"
+                    label={`${ability.abbr} rank progress`}
+                  />
+                </div>
+                {perRank && (
+                  <p className="mt-2 text-xs text-parchment/70">
+                    +1% per Rank, now +{ability.rank}%
+                  </p>
+                )}
+                <ul className="mt-2 space-y-1">
+                  {ladder.map((perk) => {
+                    const earned = ability.rank >= perk.rank
+                    const next = nextMilestone?.id === perk.id
+                    return (
+                      <li
+                        key={perk.id}
+                        className={`rounded px-2 py-1.5 ${
+                          earned
+                            ? 'bg-sage/20 text-parchment'
+                            : next
+                              ? 'ring-1 ring-gold/70 text-gold'
+                              : 'text-parchment/40'
+                        }`}
+                      >
+                        <div className="text-xs font-semibold">
+                          R{perk.rank} {perk.name}
+                        </div>
+                        <div className="text-[11px] leading-snug opacity-80">{perk.description}</div>
+                      </li>
+                    )
+                  })}
+                </ul>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 

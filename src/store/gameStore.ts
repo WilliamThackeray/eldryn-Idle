@@ -29,6 +29,7 @@ import {
   type EquipmentSlot,
 } from '../engine/equipment'
 import { getItem } from '../data/items'
+import { activePerks, effectTotal } from '../engine/abilities'
 import { sellItems } from '../engine/inventory'
 import type { Rng } from '../engine/rng'
 import {
@@ -283,7 +284,16 @@ export const useGameStore = create<GameStore>()(
         set({ lastSaved: new Date().toISOString() })
         flushSave()
       },
-      sellItem: (itemId) => set((state) => sellItems(state.inventory, state.gold, itemId)),
+      sellItem: (itemId) =>
+        set((state) =>
+          sellItems(
+            state.inventory,
+            state.gold,
+            itemId,
+            undefined,
+            1 + effectTotal(activePerks(state), 'sellPricePct'),
+          ),
+        ),
       buyItem: (itemId) => set((state) => buyShopItem(state.inventory, state.gold, itemId)),
       equipItem: (itemId) =>
         set((state) => {

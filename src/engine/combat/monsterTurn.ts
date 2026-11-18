@@ -9,7 +9,7 @@ import type { Rng } from '../rng'
 import { getSignatureHooks, tryWildShape } from '../signatures'
 import { concentrationDc } from '../spells'
 import { addXp, applyXpModifiers, levelForXp, proficiency, tier } from '../xp'
-import { abilityModMap, type CombatFight, playerArmorClass, pushLog, savingThrow } from './state'
+import { abilityModMap, type CombatFight, playerArmorClass, pushLog, savingThrow, tryRelentless } from './state'
 
 export function applyPlayerDamage(input: {
   fight: CombatFight
@@ -76,6 +76,10 @@ export function applyPlayerDamage(input: {
         fight.concentration = null
       }
     }
+  }
+
+  if (fight.playerHp <= 0 && tryRelentless(fight, skills)) {
+    pushLog(fight, 'Relentless: you hang on at 1 HP.', trace)
   }
 
   if (fight.playerHp > 0) {

@@ -377,6 +377,7 @@ function readCombat(value: unknown): CombatFight | null {
       : [],
     questId: typeof value.questId === 'string' && isQuestId(value.questId) ? value.questId : null,
     pendingCleave: Math.max(0, finite(value.pendingCleave) ?? 0),
+    relentlessUsed: value.relentlessUsed === true,
   }
 }
 

@@ -11,7 +11,7 @@ import {
   type MonsterDef,
 } from '../../data/monsters'
 import type { SkillId } from '../../data/skills'
-import { deriveAbilities } from '../../engine/abilities'
+import { activePerks, deriveAbilities, effectTotal } from '../../engine/abilities'
 import {
   averageDamage,
   difficultyHint,
@@ -286,7 +286,8 @@ function estimatePlayerHp(
   if (!classId) return 10
   const cls = getClass(classId)
   const con = deriveAbilities(skills).find((ability) => ability.abbr === 'CON')?.modifier ?? 0
-  return maxHp(cls.hitDie, tier(levelForXp(classXp)), con)
+  const maxHpPct = effectTotal(activePerks({ skills }), 'maxHpPct')
+  return Math.floor(maxHp(cls.hitDie, tier(levelForXp(classXp)), con) * (1 + maxHpPct))
 }
 
 function MonsterRow({

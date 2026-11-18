@@ -160,7 +160,8 @@ test('the action stops once inputs run out', () => {
   expect(result.log.map((event) => event.kind)).toEqual(['skill', 'materials'])
   expect(result.state.inventory).toEqual({ 'steel-bar': 1 })
   expect(result.state.activeAction).toBeNull()
-  expect(calls).toBe(1)
+  // Skill check + Rank-1 STR yield fractional roll.
+  expect(calls).toBe(2)
 })
 
 test('pickpocketing adds gold', () => {

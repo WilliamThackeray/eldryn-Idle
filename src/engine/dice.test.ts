@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import type { Rng } from './rng'
 import { mulberry32 } from './rng'
-import { resolveRollMode, roll, rollD20 } from './dice'
+import { resolveRollMode, roll, rollD20, rollDamageParts } from './dice'
 
 function scripted(...values: number[]): Rng {
   let index = 0
@@ -30,4 +30,13 @@ test('roll parses NdM plus a modifier', () => {
   expect(roll('1d8-1', scripted(0.99))).toBe(7)
   expect(roll('2d6+1d4', mulberry32(9))).toBe(roll('2d6+1d4', mulberry32(9)))
   expect(() => roll('nope', scripted(0))).toThrow()
+})
+
+test('Brutal adds an extra die on crits only', () => {
+  const plain = rollDamageParts('1d8', mulberry32(11), true, 0)
+  const brutal = rollDamageParts('1d8', mulberry32(11), true, 1)
+  expect(brutal.dice).toBeGreaterThan(plain.dice)
+  expect(rollDamageParts('1d8', mulberry32(11), false, 1).dice).toBe(
+    rollDamageParts('1d8', mulberry32(11), false, 0).dice,
+  )
 })

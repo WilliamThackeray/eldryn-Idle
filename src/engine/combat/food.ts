@@ -1,6 +1,7 @@
 import { getItem } from '../../data/items'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
+import { activePerks, effectTotal } from '../abilities'
 import { AUTO_EAT_THRESHOLD } from '../config'
 import type { Equipment } from '../equipment'
 import { removeItems, type Inventory } from '../inventory'
@@ -30,13 +31,15 @@ export function tryAutoEat(input: {
     return { inventory, skills, ate: false, defeated: true }
   }
   inventory = removeItems(inventory, [{ itemId: foodId, quantity: 1 }])
+  const foodHealPct = effectTotal(activePerks({ skills: input.skills }), 'foodHealPct')
+  const healAmt = Math.round(heal * (1 + foodHealPct))
   const before = fight.playerHp
-  fight.playerHp = Math.min(fight.playerMaxHp, fight.playerHp + heal)
+  fight.playerHp = Math.min(fight.playerMaxHp, fight.playerHp + healAmt)
   const healed = fight.playerHp - before
   if (healed > 0) {
     const vitalityXp = applyXpModifiers(healed, 'CON', input.modifiers)
     skills = { ...skills, vitality: { xp: addXp(skills.vitality.xp, vitalityXp) } }
   }
-  pushLog(fight, `Eat ${item?.name ?? foodId}: +${heal} HP.`, trace)
+  pushLog(fight, `Eat ${item?.name ?? foodId}: +${healAmt} HP.`, trace)
   return { inventory, skills, ate: true, defeated: false }
 }

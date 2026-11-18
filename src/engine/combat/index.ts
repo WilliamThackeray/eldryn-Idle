@@ -5,6 +5,7 @@ export {
   maxHp,
   monsterIntervalBaseMs,
   savingThrow,
+  tryRelentless,
 } from './state'
 export type { CombatAdvanceInput, CombatAdvanceResult } from './state'
 export { advanceCombat } from './step'

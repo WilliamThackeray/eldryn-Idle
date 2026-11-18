@@ -41,6 +41,7 @@ export function sellItems(
   gold: number,
   itemId: ItemId,
   quantity?: number,
+  priceMultiplier = 1,
 ): { inventory: Inventory; gold: number } {
   const have = inventory[itemId] ?? 0
   const def = getItem(itemId)
@@ -50,5 +51,5 @@ export function sellItems(
   const left = have - qty
   if (left > 0) next[itemId] = left
   else delete next[itemId]
-  return { inventory: next, gold: gold + def.sellValue * qty }
+  return { inventory: next, gold: gold + Math.floor(def.sellValue * qty * priceMultiplier) }
 }

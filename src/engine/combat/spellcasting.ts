@@ -4,6 +4,7 @@ import type { MonsterDef } from '../../data/monsters'
 import { getSpell, type SpellId } from '../../data/spells'
 import type { SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
+import { activePerks, effectTotal } from '../abilities'
 import { SPELL_SLOT_MODEL } from '../config'
 import { applyDamageModifiers } from '../damage'
 import { roll, rollD20, rollDamageParts } from '../dice'
@@ -48,7 +49,7 @@ export function resolveSpellCast(input: {
   const castMod = mods[castAbility]
   const unlock = unlockSkillFor(input.activeClassId)
   const skillLvl = skillLevel(skills, unlock)
-  const saveDc = 8 + prof + castMod
+  const saveDc = 8 + prof + castMod + effectTotal(activePerks({ skills }), 'spellSaveDc')
 
   const picked = pickSlotForCast({
     slots: fight.spellSlots,

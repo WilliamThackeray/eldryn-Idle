@@ -4,6 +4,7 @@ import type { MonsterDef } from '../../data/monsters'
 import type { ClassId } from '../../data/classes'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
+import { activePerks, effectTotal } from '../abilities'
 import { MATERIAL_FLAGS, AMMO_RECOVERY } from '../config'
 import { applyDamageModifiers } from '../damage'
 import { resolveRollMode, roll, rollD20, rollDamageParts } from '../dice'
@@ -179,7 +180,8 @@ export function resolvePlayerAttack(input: {
 
   const diceNotation = input.unarmedOverride?.dice ?? damageDice(equipment)
   const dtype = input.unarmedOverride?.damageType ?? damageTypeOf(equipment)
-  const parts = rollDamageParts(diceNotation, rng, crit)
+  const brutal = effectTotal(activePerks({ skills }), 'brutalCritDice')
+  const parts = rollDamageParts(diceNotation, rng, crit, crit ? brutal : 0)
   const hitCtx = {
     ...sigCtx,
     hasAdvantage,
@@ -224,6 +226,7 @@ export function resolvePlayerAttack(input: {
     weapon,
     before,
     dealt,
+    skills,
   })
 
 
@@ -318,7 +321,7 @@ export function playerToHitBonus(
   return mod + proficiency(tier(levelForXp(classXp))) + playerMagicBonus(equipment)
 }
 
-/** Exported for tests: nick check uses 1d10, proc on 1–2. */
-export function nickProc(rng: Rng): boolean {
-  return 1 + Math.floor(rng() * 10) <= 2
+/** Exported for tests: nick check uses 1d10, proc on 1–ceiling (default 2). */
+export function nickProc(rng: Rng, ceiling = 2): boolean {
+  return 1 + Math.floor(rng() * 10) <= ceiling
 }

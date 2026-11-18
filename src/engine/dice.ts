@@ -39,11 +39,12 @@ export function roll(notation: string, rng: Rng): number {
   return total
 }
 
-/** Roll dice (optionally doubled for a crit) and flat bonuses separately. */
+/** Roll dice (optionally doubled for a crit) and flat bonuses separately. `extraCritDice` adds that many of the first die on crits (Brutal). */
 export function rollDamageParts(
   notation: string,
   rng: Rng,
   crit = false,
+  extraCritDice = 0,
 ): { dice: number; flat: number; total: number } {
   const compact = notation.replace(/\s+/g, '')
   if (FLAT_ONLY.test(compact)) {
@@ -54,15 +55,20 @@ export function rollDamageParts(
 
   let dice = 0
   let flat = 0
+  let firstDieSides: number | null = null
   for (const match of compact.matchAll(/([+-]?)(\d+)d(\d+)|([+-])(\d+)/g)) {
     if (match[2]) {
       const sign = match[1] === '-' ? -1 : 1
       const count = Number(match[2]) * (crit ? 2 : 1)
       const sides = Number(match[3])
+      if (firstDieSides == null) firstDieSides = sides
       for (let i = 0; i < count; i++) dice += sign * die(sides, rng)
     } else {
       flat += (match[4] === '-' ? -1 : 1) * Number(match[5])
     }
+  }
+  if (crit && extraCritDice > 0 && firstDieSides != null) {
+    for (let i = 0; i < extraCritDice; i++) dice += die(firstDieSides, rng)
   }
   return { dice, flat, total: dice + flat }
 }

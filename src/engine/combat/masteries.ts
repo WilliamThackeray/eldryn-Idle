@@ -1,5 +1,8 @@
 import { getItem, type WeaponMastery } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
+import type { SkillProgress } from '../../types/game'
+import type { SkillId } from '../../data/skills'
+import { activePerks, nickCeiling } from '../abilities'
 import { PUSH_DELAY_FRACTION } from '../config'
 import { applyDamageModifiers } from '../damage'
 import { rollDamageParts } from '../dice'
@@ -23,6 +26,7 @@ export function applyHitMasteries(input: {
   weapon: ReturnType<typeof playerWeapon>
   before: number
   dealt: number
+  skills: Record<SkillId, SkillProgress>
 }): string {
   const { fight, mastery, monster, abilityBonus, prof, rng, equipment, weapon, before, dealt } = input
   let line = ''
@@ -59,8 +63,9 @@ export function applyHitMasteries(input: {
     if (mastery === 'nick' && weapon?.properties.includes('light') && equipment.offHand) {
       const off = getItem(equipment.offHand)?.gear?.weapon
       if (off) {
+        const ceiling = nickCeiling(activePerks({ skills: input.skills }))
         const nickRoll = 1 + Math.floor(rng() * 10)
-        if (nickRoll <= 2) {
+        if (nickRoll <= ceiling) {
           const nickParts = rollDamageParts(off.dice, rng, false)
           const nickDmg = applyDamageModifiers(
             nickParts.total,
@@ -70,9 +75,9 @@ export function applyHitMasteries(input: {
             monster.immunities,
           )
           fight.monsterHp = Math.max(0, fight.monsterHp - nickDmg)
-          line += ` Nick ([2/1d10]): ${nickRoll} - nick - [${off.dice}] offhand damage.`
+          line += ` Nick ([${ceiling}/1d10]): ${nickRoll} - nick - [${off.dice}] offhand damage.`
         } else {
-          line += ` Nick ([2/1d10]): ${nickRoll} - no nick`
+          line += ` Nick ([${ceiling}/1d10]): ${nickRoll} - no nick`
         }
       }
     }

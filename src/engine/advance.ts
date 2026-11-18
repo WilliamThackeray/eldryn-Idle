@@ -2,9 +2,9 @@ import { getActivity } from '../data/activities'
 import type { ClassId } from '../data/classes'
 import { getItem } from '../data/items'
 import { getMonster } from '../data/monsters'
-import { SKILLS, type SkillId } from '../data/skills'
+import { getSkill, SKILLS, type SkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
-import { deriveAbilities } from './abilities'
+import { activePerks, deriveAbilities, effectTotal } from './abilities'
 import {
   advanceCombat,
   type CombatAction,
@@ -169,12 +169,31 @@ export function onActivityComplete(
   // TODO(design): confirm inputs are spent on failures and fumbles.
   let inventory = activity.inputs?.length ? removeItems(state.inventory, activity.inputs) : state.inventory
   const multiplier = check.itemMultiplier
-  inventory = addItems(inventory, [
+  let stacks = [
     ...rollLoot(activity.outputs, rng, multiplier),
     ...(check.rareRoll ? rollLoot(activity.rareTable, rng, multiplier) : []),
     ...(check.byproduct ? rollLoot(activity.byproducts, rng, 1) : []),
-  ])
-  return { ...state, inventory, gold: state.gold + rollGold(activity.gold, rng, multiplier) }
+  ]
+  let goldGain = rollGold(activity.gold, rng, multiplier)
+  const ability = getSkill(action.skillId).ability
+  const perks = activePerks(state)
+  const yieldPct = effectTotal(perks, 'skillYieldPct', ability)
+  if (yieldPct > 0) {
+    // One extra draw after loot/gold so scripted skill-check RNG stays aligned.
+    const roll = rng()
+    stacks = stacks.map((stack) => {
+      const scaled = stack.quantity * (1 + yieldPct)
+      const whole = Math.floor(scaled)
+      const frac = scaled - whole
+      return { ...stack, quantity: whole + (roll < frac ? 1 : 0) }
+    })
+  }
+  const goldPct = effectTotal(perks, 'skillGoldPct', ability)
+  if (goldPct > 0 && goldGain > 0) {
+    goldGain = Math.floor(goldGain * (1 + goldPct))
+  }
+  inventory = addItems(inventory, stacks)
+  return { ...state, inventory, gold: state.gold + goldGain }
 }
 
 // shortcut: other speed bonuses stay 0 until potions and buffs exist.
