@@ -263,6 +263,7 @@ export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPagePr
                   inventory={inventory}
                   skills={skills}
                   classXp={classXp}
+                  classId={classId}
                   isInDungeonOrQuest={isInDungeonOrQuest}
                   mode="worn"
                   emptyLabel="Click a worn item"

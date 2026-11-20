@@ -30,7 +30,7 @@ test('computeCombatStats to-hit and AC match combat helpers', () => {
     classXp,
     inventory: {},
   })
-  expect(stats.toHit.value).toBe(playerToHitBonus(skills, equipment, classXp))
+  expect(stats.toHit.value).toBe(playerToHitBonus(skills, equipment, classXp, 'fighter'))
 
   const fight = createFight({
     monsterId: 'goat',

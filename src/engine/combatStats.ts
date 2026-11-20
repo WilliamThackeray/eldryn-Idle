@@ -1,4 +1,4 @@
-import { getClass, type ClassId } from '../data/classes'
+import { getClass, isWeaponProficient, type ClassId } from '../data/classes'
 import { getItem, type DamageType, type GearMaterial } from '../data/items'
 import type { MonsterDef } from '../data/monsters'
 import type { SkillId } from '../data/skills'
@@ -11,6 +11,7 @@ import {
   hitChance,
   playerToHitBonus,
 } from './combat/attack'
+import { attackStyleOf, triangleMultiplier } from './damage'
 import {
   abilityModMap,
   abilityScoreMap,
@@ -95,6 +96,7 @@ export interface CombatMatchup {
   yourDps: StatBreakdown
   itsDps: StatBreakdown
   timeToKillSec: StatBreakdown
+  triangleMultiplier: number
 }
 
 export interface CombatStats {
@@ -209,13 +211,14 @@ function expectedWeaponSwing(input: {
   skills: Record<SkillId, SkillProgress>
   equipment: Equipment
   classXp: number
+  classId: ClassId
   monster: MonsterDef
 }): number {
   const mods = abilityModMap(input.skills)
   const weapon = playerWeapon(input.equipment)
   const { mod: abilityBonus } = attackAbilityMod(weapon, mods)
   const item = totalItemStats(input.equipment)
-  const toHit = playerToHitBonus(input.skills, input.equipment, input.classXp)
+  const toHit = playerToHitBonus(input.skills, input.equipment, input.classXp, input.classId)
   const pHit = hitChance(toHit, input.monster.ac)
   const critFloor = critThreshold(item.critRange)
   const pCrit = (21 - critFloor) / 20
@@ -225,8 +228,11 @@ function expectedWeaponSwing(input: {
   const avgDice = averageDamage(dice)
   const flat = abilityBonus + item.damage
   const dtype = damageTypeOf(input.equipment)
+  const style = attackStyleOf(weapon)
+  const mult = triangleMultiplier(style, input.monster.archetype)
   const resist = (raw: number) =>
-    expectResist(raw, dtype, input.monster.resistances, input.monster.vulnerabilities, input.monster.immunities)
+    expectResist(raw, dtype, input.monster.resistances, input.monster.vulnerabilities, input.monster.immunities) *
+    mult
 
   let expected = pHitNonCrit * resist(avgDice + flat) + pCrit * resist(2 * avgDice + flat)
 
@@ -251,7 +257,8 @@ function expectedWeaponSwing(input: {
         input.monster.resistances,
         input.monster.vulnerabilities,
         input.monster.immunities,
-      )
+      ) *
+      mult
   }
 
   return expected
@@ -278,8 +285,10 @@ function expectedSpellDamage(input: {
   if (!notation) return 0
   const avg = averageDamage(notation)
   const dtype = spell.damageType ?? 'force'
+  const mult = triangleMultiplier('magic', input.monster.archetype)
   const resist = (raw: number) =>
-    expectResist(raw, dtype, input.monster.resistances, input.monster.vulnerabilities, input.monster.immunities)
+    expectResist(raw, dtype, input.monster.resistances, input.monster.vulnerabilities, input.monster.immunities) *
+    mult
 
   if (spell.kind === 'attack') {
     if (spell.autoHit) return resist(avg)
@@ -316,6 +325,7 @@ function expectedPlayerDps(input: CombatStatsInput, monster: MonsterDef): { dps:
       skills: input.skills,
       equipment: input.equipment,
       classXp: input.classXp,
+      classId: input.classId,
       monster,
     })
     const dps = intervalSec > 0 ? perSwing / intervalSec : 0
@@ -410,8 +420,9 @@ export function computeCombatStats(input: CombatStatsInput, monster?: MonsterDef
   const item = totalItemStats(input.equipment)
   const casting = usesSpellLoop(input.classId)
 
+  const weaponProficient = isWeaponProficient(input.classId, input.equipment.mainHand)
   const toHitParts: StatPart[] = [
-    { label: 'Prof', value: prof },
+    ...(weaponProficient ? [{ label: 'Prof', value: prof }] : []),
     { label: abbr, value: abilityBonus },
     ...materialParts(input.equipment),
   ]
@@ -487,7 +498,7 @@ export function computeCombatStats(input: CombatStatsInput, monster?: MonsterDef
   }
 
   // Lock to-hit to the combat helper.
-  toHit.value = playerToHitBonus(input.skills, input.equipment, input.classXp)
+  toHit.value = playerToHitBonus(input.skills, input.equipment, input.classXp, input.classId)
 
   const stats: CombatStats = {
     toHit,
@@ -507,6 +518,8 @@ export function computeCombatStats(input: CombatStatsInput, monster?: MonsterDef
     const itsHit = first ? hitChance(first.toHit, ac.value) : 0
     const { dps, ttk } = expectedPlayerDps(input, monster)
     const its = monsterDps(monster)
+    const style = casting ? 'magic' : attackStyleOf(weapon)
+    const tri = triangleMultiplier(style, monster.archetype)
     stats.matchup = {
       yourHitChance: {
         value: yourHit,
@@ -530,6 +543,7 @@ export function computeCombatStats(input: CombatStatsInput, monster?: MonsterDef
         value: Number.isFinite(ttk) ? ttk : 0,
         parts: [{ label: 'Monster HP / DPS', value: Number.isFinite(ttk) ? ttk : 0 }],
       },
+      triangleMultiplier: tri,
     }
   }
 

@@ -61,6 +61,8 @@ export interface AdvanceState {
   isInDungeonOrQuest?: boolean
   /** Quest id completed this tick (combat or dungeon step). */
   questStepComplete?: string | null
+  /** Missing means on. */
+  stopWhenOutOfFood?: boolean
 }
 
 export interface SkillEvent {
@@ -363,6 +365,7 @@ function advanceCombatAction(
     rng,
     trace,
     modifiers,
+    stopWhenOutOfFood: state.stopWhenOutOfFood,
   })
 
   const log: GameEvent[] = []

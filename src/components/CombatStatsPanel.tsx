@@ -203,6 +203,7 @@ export function CombatStatsPanel({
                 display={`${stats.matchup.timeToKillSec.value.toFixed(1)}s`}
               />
             </span>
+            <span>Damage ×{stats.matchup.triangleMultiplier}</span>
           </div>
         </div>
       )}

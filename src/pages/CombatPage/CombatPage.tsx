@@ -21,6 +21,8 @@ import {
 import { CombatStatsPanel } from '../../components/CombatStatsPanel'
 import { ProgressBar } from '../../components/ProgressBar'
 import { RESPAWN_MS } from '../../engine/config'
+import { equippedFoodCount, foodHealAmount, foodOutlook } from '../../engine/combat/food'
+import { computeCombatStats } from '../../engine/combatStats'
 import { buildRunOrder } from '../../engine/dungeon'
 import { levelForXp, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
@@ -72,11 +74,13 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const startHunt = useGameStore((state) => state.startHunt)
   const startDungeon = useGameStore((state) => state.startDungeon)
   const stopActivity = useGameStore((state) => state.stopActivity)
+  const stopWhenOutOfFood = useGameStore((state) => state.stopWhenOutOfFood)
+  const setStopWhenOutOfFood = useGameStore((state) => state.setStopWhenOutOfFood)
 
   const monsters = useMemo(() => monstersForBiome(biome), [biome])
   const inCombat = activeAction?.kind === 'combat'
   const inDungeon = Boolean(combat?.dungeonId)
-  const toHit = playerToHitBonus(skills, equipment, classXp)
+  const toHit = playerToHitBonus(skills, equipment, classXp, classId)
   const matchupMonster =
     (combat?.monsterId ? getMonster(combat.monsterId) : null) ??
     (selectedMonsterId ? getMonster(selectedMonsterId) : null) ??
@@ -91,6 +95,33 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
     combat && combat.sessionMs > 0 ? (combat.kills / combat.sessionMs) * 3_600_000 : 0
   const runsPerHour =
     combat && combat.sessionMs > 0 ? (combat.runsCompleted / combat.sessionMs) * 3_600_000 : 0
+
+  const foodSummary = useMemo(() => {
+    const count = equippedFoodCount(equipment, inventory)
+    const heal = foodHealAmount(equipment, skills)
+    if (count <= 0 || heal == null || heal <= 0 || !classId || !matchupMonster) {
+      return null
+    }
+    const stats = computeCombatStats(
+      {
+        skills,
+        equipment,
+        classId,
+        classXp,
+        inventory,
+        spellLoadout: spellLoadouts[classId],
+      },
+      matchupMonster,
+    )
+    const ttk = stats.matchup?.timeToKillSec.value ?? 0
+    const itsDps = stats.matchup?.itsDps.value ?? 0
+    const maxHp = combat?.playerMaxHp ?? estimatePlayerHp(classId, classXp, skills, equipment)
+    const hpLost = Math.min(maxHp, itsDps * ttk)
+    const cycleSec = ttk + RESPAWN_MS / 1000
+    const outlook = foodOutlook({ foodCount: count, healPerBite: heal, hpLostPerKill: hpLost, cycleSec })
+    if (!outlook) return null
+    return { count, heal, ...outlook }
+  }, [equipment, inventory, skills, classId, classXp, matchupMonster, combat?.playerMaxHp, spellLoadouts])
 
   const playerIntervalProgress =
     combat == null
@@ -114,7 +145,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => setTab('hunting')}
@@ -133,6 +164,14 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
         >
           Dungeons
         </button>
+        <label className="flex items-center gap-2 text-sm text-parchment/80">
+          <input
+            type="checkbox"
+            checked={stopWhenOutOfFood !== false}
+            onChange={(event) => setStopWhenOutOfFood(event.target.checked)}
+          />
+          Stop when out of food
+        </label>
       </div>
 
       {inCombat && combat && (tab === 'dungeons') === inDungeon ? (
@@ -209,6 +248,17 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
                 <div className="text-parchment/70">{inDungeon ? 'Runs completed' : 'Kills this hunt'}</div>
                 <div className="font-bold text-gold">{inDungeon ? combat.runsCompleted : combat.kills}</div>
               </div>
+              <div className="col-span-2 rounded border border-brown/40 p-2">
+                <div className="text-parchment/70">Food</div>
+                {foodSummary ? (
+                  <div className="font-bold text-gold">
+                    {foodSummary.foodPerHour.toFixed(1)} / hour · empty in{' '}
+                    {formatHours(foodSummary.hoursUntilEmpty)} ({foodSummary.count} left)
+                  </div>
+                ) : (
+                  <div className="font-bold text-parchment/70">No food equipped</div>
+                )}
+              </div>
             </div>
 
             <div>
@@ -272,16 +322,29 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               />
             ))}
           </div>
-          <CombatStatsPanel
-            compact
-            skills={skills}
-            equipment={equipment}
-            classId={classId}
-            classXp={classXp}
-            inventory={inventory}
-            spellLoadout={classId ? spellLoadouts[classId] : undefined}
-            monster={matchupMonster}
-          />
+          <div className="space-y-3">
+            <CombatStatsPanel
+              compact
+              skills={skills}
+              equipment={equipment}
+              classId={classId}
+              classXp={classXp}
+              inventory={inventory}
+              spellLoadout={classId ? spellLoadouts[classId] : undefined}
+              monster={matchupMonster}
+            />
+            <div className="rounded-lg border border-brown/40 bg-panel p-3 text-sm">
+              <div className="text-parchment/70">Food</div>
+              {foodSummary ? (
+                <div className="font-bold text-gold">
+                  {foodSummary.foodPerHour.toFixed(1)} / hour · empty in{' '}
+                  {formatHours(foodSummary.hoursUntilEmpty)}
+                </div>
+              ) : (
+                <div className="text-parchment/70">No food equipped</div>
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -397,6 +460,9 @@ function MonsterRow({
           </span>
         </div>
         <p className="mt-1 text-sm text-parchment/80">Drops: {drops || '—'}</p>
+        {archetypeLine(monster.archetype) && (
+          <p className="mt-1 text-xs text-sage">{archetypeLine(monster.archetype)}</p>
+        )}
       </div>
       <button
         type="button"
@@ -443,4 +509,18 @@ function formatCr(cr: number): string {
   if (cr === 0.25) return '1/4'
   if (cr === 0.5) return '1/2'
   return String(cr)
+}
+
+function formatHours(hours: number): string {
+  if (!(hours > 0) || !Number.isFinite(hours)) return '—'
+  if (hours < 1 / 60) return `${Math.round(hours * 3600)}s`
+  if (hours < 1) return `${Math.round(hours * 60)}m`
+  return `${hours.toFixed(1)}h`
+}
+
+function archetypeLine(archetype: MonsterDef['archetype']): string | null {
+  if (archetype === 'armored') return 'Armored: weak to Magic, resists Ranged'
+  if (archetype === 'skirmisher') return 'Skirmisher: weak to Ranged, resists Melee'
+  if (archetype === 'warded') return 'Warded: weak to Melee, resists Magic'
+  return null
 }

@@ -89,6 +89,7 @@ interface GameStore extends SaveData {
   reorderInventoryItem: (tabId: string, itemId: ItemId, beforeItemId: ItemId) => void
   beginCharacter: (input: { slot: SlotId; name: string; classId: ClassId; clericFocus: ClericFocus }) => void
   setCombatTrace: (trace: boolean) => void
+  setStopWhenOutOfFood: (value: boolean) => void
   clearOfflineCombatFlags: () => void
   setSpellSlot: (classId: ClassId, slotIndex: number, spellId: SpellId | null) => void
   chooseQuestChoice: (questId: string, choiceId: string) => string
@@ -248,6 +249,7 @@ export const useGameStore = create<GameStore>()(
         }),
       stopActivity: () => set({ activeAction: null, combat: null, isInDungeonOrQuest: false }),
       setCombatTrace: (trace) => set({ combatTrace: trace }),
+      setStopWhenOutOfFood: (value) => set({ stopWhenOutOfFood: value }),
       clearOfflineCombatFlags: () => set({ offlineKills: 0, lastDefeat: false }),
       applyElapsed: (elapsedMs, lastTick) =>
         set((state) => {
@@ -266,6 +268,7 @@ export const useGameStore = create<GameStore>()(
               combat: state.combat,
               questProgress: state.questProgress,
               isInDungeonOrQuest: state.isInDungeonOrQuest,
+              stopWhenOutOfFood: state.stopWhenOutOfFood,
             },
             elapsedMs,
             liveRng,
@@ -570,6 +573,7 @@ export const useGameStore = create<GameStore>()(
         spellLoadouts: state.spellLoadouts,
         questProgress: state.questProgress,
         upgrades: state.upgrades ?? {},
+        stopWhenOutOfFood: state.stopWhenOutOfFood !== false,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

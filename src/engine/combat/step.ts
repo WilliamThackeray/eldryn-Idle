@@ -119,6 +119,8 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         rng: input.rng,
         trace,
         casting,
+        modifiers,
+        stopWhenOutOfFood: input.stopWhenOutOfFood,
       })
       remaining = rested.remaining
       monster = rested.monster
@@ -151,6 +153,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         chaMod: mods().CHA,
         classTier: classTier(),
         casting,
+        stopWhenOutOfFood: input.stopWhenOutOfFood,
       })
       inventory = opened.inventory
       classXp = opened.classXp
@@ -273,7 +276,8 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             chaMod: mods().CHA,
             classTier: classTier(),
             activeClassId: input.activeClassId,
-          casting,
+            casting,
+            stopWhenOutOfFood: input.stopWhenOutOfFood,
           })
           inventory = killed.inventory
           classXp = killed.classXp
@@ -322,7 +326,8 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               chaMod: mods().CHA,
               classTier: classTier(),
               activeClassId: input.activeClassId,
-            casting,
+              casting,
+              stopWhenOutOfFood: input.stopWhenOutOfFood,
             })
             inventory = killed.inventory
             classXp = killed.classXp

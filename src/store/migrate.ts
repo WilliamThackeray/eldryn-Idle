@@ -28,8 +28,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v12: shop upgrades. */
-export const SAVE_VERSION = 12
+/** v13: stop when out of food. */
+export const SAVE_VERSION = 13
 
 export interface SaveData {
   characterName: string
@@ -52,6 +52,8 @@ export interface SaveData {
   questProgress: QuestProgress
   /** Owned shop upgrade tier index per upgrade id. */
   upgrades: Record<string, number>
+  /** End hunt/dungeon after a rest when food runs out and HP is still below max. Default on. */
+  stopWhenOutOfFood: boolean
 }
 
 export function createInitialSave(): SaveData {
@@ -74,6 +76,7 @@ export function createInitialSave(): SaveData {
     spellLoadouts: initialSpellLoadouts(),
     questProgress: emptyQuestProgress(),
     upgrades: {},
+    stopWhenOutOfFood: true,
   }
 }
 
@@ -127,6 +130,7 @@ export function normalizeSave(raw: unknown): SaveData {
     spellLoadouts: readSpellLoadouts(source.spellLoadouts),
     questProgress: readQuestProgress(source.questProgress),
     upgrades,
+    stopWhenOutOfFood: source.stopWhenOutOfFood !== false,
   }
 }
 

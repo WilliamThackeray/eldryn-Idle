@@ -91,6 +91,8 @@ export function advanceDungeonNodes(input: {
   rng: Rng
   trace: boolean
   casting: boolean
+  modifiers?: Partial<Record<AbilityAbbr, number>>
+  stopWhenOutOfFood?: boolean
 }): {
   inventory: Inventory
   classXp: number
@@ -102,7 +104,7 @@ export function advanceDungeonNodes(input: {
   const { fight, equipment, rng, trace, casting } = input
   let inventory = input.inventory
   let classXp = input.classXp
-  const skills = input.skills
+  let skills = input.skills
   const dungeon = getDungeon(fight.dungeonId ?? '')
   if (!dungeon) {
     return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
@@ -112,6 +114,13 @@ export function advanceDungeonNodes(input: {
     classId: input.activeClassId,
     classTier: input.classTier,
     chaMod: input.chaMod,
+    inventory,
+    equipment,
+    skills,
+    modifiers: input.modifiers ?? {},
+    rng,
+    trace,
+    stopWhenOutOfFood: input.stopWhenOutOfFood,
   }
 
   const applyKillRewards = (monster: MonsterDef) => {
@@ -134,14 +143,23 @@ export function advanceDungeonNodes(input: {
     const node: DungeonNode = order[fight.nodeIndex]
 
     if (node.kind === 'shortRest') {
-      shortRest(fight, restCtx)
+      const rested = shortRest(fight, { ...restCtx, inventory, skills })
+      inventory = rested.inventory
+      skills = rested.skills
       fight.phase = 'rest'
       fight.restKind = 'short'
       fight.restProgressMs = 0
       fight.playerProgressMs = 0
       fight.monsterProgressMs = 0
       pushLog(fight, 'Short rest.', trace)
-      return { inventory, classXp, skills, stop: false, questStepComplete: null, monster: getMonster(fight.monsterId) ?? null }
+      return {
+        inventory,
+        classXp,
+        skills,
+        stop: rested.stopped,
+        questStepComplete: null,
+        monster: getMonster(fight.monsterId) ?? null,
+      }
     }
 
     if (node.kind === 'longRest') {
@@ -163,7 +181,9 @@ export function advanceDungeonNodes(input: {
         pushLog(fight, 'No entry item for another loop. Returning to town.', trace)
         return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
       }
-      longRest(fight, restCtx)
+      const rested = longRest(fight, { ...restCtx, inventory, skills })
+      inventory = rested.inventory
+      skills = rested.skills
       fight.phase = 'rest'
       fight.restKind = 'long'
       fight.restProgressMs = 0
@@ -172,7 +192,14 @@ export function advanceDungeonNodes(input: {
       fight.cleaveOverflow = 0
       fight.pendingCleave = 0
       pushLog(fight, 'Long rest between loops.', trace)
-      return { inventory, classXp, skills, stop: false, questStepComplete: null, monster: getMonster(fight.monsterId) ?? null }
+      return {
+        inventory,
+        classXp,
+        skills,
+        stop: rested.stopped,
+        questStepComplete: null,
+        monster: getMonster(fight.monsterId) ?? null,
+      }
     }
 
     if (node.kind === 'trap') {
@@ -252,6 +279,7 @@ export function onKill(input: {
   classTier: number
   activeClassId: ClassId
   casting: boolean
+  stopWhenOutOfFood?: boolean
 }): {
   inventory: Inventory
   classXp: number
@@ -263,6 +291,7 @@ export function onKill(input: {
   const { fight, monster, equipment, rng, trace } = input
   let inventory = recoverAmmo(input.inventory, equipment, fight.ammoSpent)
   fight.ammoSpent = 0
+  let skills = input.skills
 
   const loot = rollLoot(monster.lootTable, rng, 1)
   inventory = addItems(inventory, loot)
@@ -287,7 +316,7 @@ export function onKill(input: {
       return {
         inventory,
         classXp,
-        skills: input.skills,
+        skills,
         stop: true,
         questStepComplete: fight.questId,
         monster,
@@ -298,17 +327,26 @@ export function onKill(input: {
     fight.playerProgressMs = 0
     fight.monsterProgressMs = 0
     fight.pushDelayMs = 0
-    longRest(fight, {
+    const rested = longRest(fight, {
       classId: input.activeClassId,
       classTier: input.classTier,
       chaMod: input.chaMod,
+      inventory,
+      equipment,
+      skills,
+      modifiers: input.modifiers,
+      rng,
+      trace,
+      stopWhenOutOfFood: input.stopWhenOutOfFood,
     })
+    inventory = rested.inventory
+    skills = rested.skills
     fight.restKind = 'long'
     return {
       inventory,
       classXp,
-      skills: input.skills,
-      stop: false,
+      skills,
+      stop: rested.stopped,
       questStepComplete: null,
       monster,
     }
@@ -321,7 +359,7 @@ export function onKill(input: {
   return advanceDungeonNodes({
     fight,
     inventory,
-    skills: input.skills,
+    skills,
     equipment,
     activeClassId: input.activeClassId,
     classXp,
@@ -330,6 +368,8 @@ export function onKill(input: {
     rng,
     trace,
     casting: input.casting,
+    modifiers: input.modifiers,
+    stopWhenOutOfFood: input.stopWhenOutOfFood,
   })
 }
 

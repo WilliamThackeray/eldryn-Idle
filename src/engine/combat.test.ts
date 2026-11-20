@@ -83,7 +83,7 @@ test('Nick ceiling 3 raises the proc rate to about 30%', () => {
   expect(hits / trials).toBeLessThan(0.32)
 })
 
-test('food heal perk rounds 6 to 7', () => {
+test('food heal perk rounds cooked meat 12 to 13', () => {
   const skills = initialSkillProgress()
   // CON Rank 5 = Vitality level 21+
   skills.vitality = { xp: xpForLevel(21) }
@@ -96,6 +96,7 @@ test('food heal perk rounds 6 to 7', () => {
     classXp: 0,
     rng: mulberry32(1),
   })!
+  fight.playerMaxHp = 100
   fight.playerHp = 1
   const result = tryAutoEat({
     fight,
@@ -106,7 +107,7 @@ test('food heal perk rounds 6 to 7', () => {
     trace: false,
   })
   expect(result.ate).toBe(true)
-  expect(fight.playerHp).toBe(1 + 7)
+  expect(fight.playerHp).toBe(1 + 13)
 })
 
 test('Relentless keeps the player at 1 HP once', () => {

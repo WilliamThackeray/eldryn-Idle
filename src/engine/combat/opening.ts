@@ -23,6 +23,7 @@ export function runOpening(input: {
   chaMod: number
   classTier: number
   casting: boolean
+  stopWhenOutOfFood?: boolean
 }): {
   inventory: Inventory
   classXp: number
@@ -65,6 +66,7 @@ export function runOpening(input: {
       classTier: input.classTier,
       activeClassId: input.activeClassId,
       casting: input.casting,
+      stopWhenOutOfFood: input.stopWhenOutOfFood,
     })
     inventory = killed.inventory
     classXp = killed.classXp
@@ -113,6 +115,7 @@ export function runOpening(input: {
         classTier: input.classTier,
         activeClassId: input.activeClassId,
         casting: input.casting,
+        stopWhenOutOfFood: input.stopWhenOutOfFood,
       })
       inventory = killed.inventory
       classXp = killed.classXp

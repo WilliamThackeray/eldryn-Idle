@@ -1,5 +1,5 @@
 import type { AbilityAbbr } from '../types/game'
-import type { ItemId } from './items'
+import { GEAR_MATERIALS, getItem, type ItemId } from './items'
 import type { SkillId } from './skills'
 
 export type ClassId =
@@ -29,6 +29,8 @@ export interface SignatureAbility {
   description: string
 }
 
+export type WeaponProficiency = 'simple' | 'martial' | ItemId
+
 export interface ClassDefinition {
   id: ClassId
   name: string
@@ -42,12 +44,42 @@ export interface ClassDefinition {
   focusBonus?: number
   hitDie: number
   saveProficiencies: readonly AbilityAbbr[]
+  /** 5e weapon list: category tags and/or specific weapon ids. */
+  weaponProficiencies: readonly WeaponProficiency[]
   spellcasting: Spellcasting
   /** Null for classes that do not cast. */
   tradition: string | null
   signatureAbility: SignatureAbility
   startingKit: readonly { itemId: ItemId; quantity: number }[]
 }
+
+const SIMPLE_MARTIAL = ['simple', 'martial'] as const satisfies readonly WeaponProficiency[]
+const ROGUE_BARD = [
+  'simple',
+  'hand-crossbow',
+  'longsword',
+  'rapier',
+  'shortsword',
+] as const satisfies readonly WeaponProficiency[]
+const WIZARD_WEAPONS = [
+  'dagger',
+  'dart',
+  'sling',
+  'quarterstaff',
+  'light-crossbow',
+] as const satisfies readonly WeaponProficiency[]
+const DRUID_WEAPONS = [
+  'club',
+  'dagger',
+  'dart',
+  'javelin',
+  'mace',
+  'quarterstaff',
+  'scimitar',
+  'sickle',
+  'spear',
+  'sling',
+] as const satisfies readonly WeaponProficiency[]
 
 const FOOD = { itemId: 'cooked-meat' as ItemId, quantity: 10 }
 const ARMOR_PIECES = ['helmet', 'chest', 'chaps', 'gauntlets', 'boots'] as const
@@ -77,6 +109,7 @@ export const CLASSES = [
     xpModifiers: { STR: 0.3, CON: 0.1, INT: -0.15, CHA: -0.15 },
     hitDie: 12,
     saveProficiencies: ['STR', 'CON'],
+    weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
     tradition: null,
     startingKit: martialKit('greataxe', 'leather'),
@@ -96,6 +129,7 @@ export const CLASSES = [
     xpModifiers: { STR: 0.2, DEX: 0.1, CON: 0.1, INT: -0.15, WIS: -0.15 },
     hitDie: 10,
     saveProficiencies: ['STR', 'CON'],
+    weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
     tradition: null,
     startingKit: martialKit('longsword', 'leather'),
@@ -115,6 +149,7 @@ export const CLASSES = [
     xpModifiers: { DEX: 0.3, CHA: 0.1, STR: -0.15, CON: -0.15 },
     hitDie: 8,
     saveProficiencies: ['DEX', 'INT'],
+    weaponProficiencies: ROGUE_BARD,
     spellcasting: { casterType: 'none' },
     tradition: null,
     startingKit: martialKit('rapier', 'leather'),
@@ -133,6 +168,7 @@ export const CLASSES = [
     xpModifiers: { DEX: 0.2, WIS: 0.2, STR: -0.15, CHA: -0.15 },
     hitDie: 8,
     saveProficiencies: ['STR', 'DEX'],
+    weaponProficiencies: ['simple', 'shortsword'],
     spellcasting: { casterType: 'none' },
     tradition: null,
     startingKit: martialKit('quarterstaff', 'padded'),
@@ -152,6 +188,7 @@ export const CLASSES = [
     xpModifiers: { INT: 0.3, WIS: 0.1, STR: -0.15, CON: -0.15 },
     hitDie: 6,
     saveProficiencies: ['INT', 'WIS'],
+    weaponProficiencies: WIZARD_WEAPONS,
     spellcasting: { casterType: 'full', unlockSkill: 'arcana', castingAbility: 'INT' },
     tradition: 'Arcane',
     startingKit: casterKit('quarterstaff', 'arcane'),
@@ -172,6 +209,7 @@ export const CLASSES = [
     focusBonus: 0.1,
     hitDie: 8,
     saveProficiencies: ['WIS', 'CHA'],
+    weaponProficiencies: ['simple'],
     spellcasting: { casterType: 'full', unlockSkill: 'religion', castingAbility: 'WIS' },
     tradition: 'Divine',
     startingKit: casterKit('quarterstaff', 'vestment'),
@@ -191,6 +229,7 @@ export const CLASSES = [
     xpModifiers: { INT: 0.3, CHA: 0.1, STR: -0.15, CON: -0.15 },
     hitDie: 6,
     saveProficiencies: ['CON', 'CHA'],
+    weaponProficiencies: ['simple'],
     // TODO(design): casting ability may become INT after the INT/CHA XP swap.
     spellcasting: { casterType: 'full', unlockSkill: 'arcana', castingAbility: 'CHA' },
     tradition: 'Arcane / Pact',
@@ -211,6 +250,7 @@ export const CLASSES = [
     xpModifiers: { STR: 0.15, INT: 0.15, CON: 0.1, DEX: -0.15, CHA: -0.15 },
     hitDie: 10,
     saveProficiencies: ['WIS', 'CHA'],
+    weaponProficiencies: SIMPLE_MARTIAL,
     // TODO(design): casting ability may become INT after the INT/CHA XP swap.
     spellcasting: { casterType: 'half', unlockSkill: 'religion', castingAbility: 'CHA' },
     tradition: 'Divine',
@@ -230,6 +270,7 @@ export const CLASSES = [
     xpModifiers: { DEX: 0.15, WIS: 0.15, CON: 0.1, INT: -0.15, CHA: -0.15 },
     hitDie: 10,
     saveProficiencies: ['STR', 'DEX'],
+    weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'half', unlockSkill: 'nature', castingAbility: 'WIS' },
     tradition: 'Primal',
     startingKit: casterKit('shortsword', 'leather'),
@@ -248,6 +289,7 @@ export const CLASSES = [
     xpModifiers: { WIS: 0.2, INT: 0.15, STR: -0.15, CHA: -0.1 },
     hitDie: 8,
     saveProficiencies: ['INT', 'WIS'],
+    weaponProficiencies: DRUID_WEAPONS,
     spellcasting: { casterType: 'full', unlockSkill: 'nature', castingAbility: 'WIS' },
     tradition: 'Primal',
     startingKit: casterKit('quarterstaff', 'wildweave'),
@@ -267,6 +309,7 @@ export const CLASSES = [
     xpModifiers: { CHA: 0.25, DEX: 0.15, STR: -0.15, CON: -0.15 },
     hitDie: 8,
     saveProficiencies: ['DEX', 'CHA'],
+    weaponProficiencies: ROGUE_BARD,
     // TODO(design): unlockSkill Performance vs Arcana.
     spellcasting: { casterType: 'full', unlockSkill: 'performance', castingAbility: 'CHA' },
     tradition: 'Bardic',
@@ -293,6 +336,30 @@ export function isClassId(id: string): id is ClassId {
 
 export function getClass(id: ClassId): (typeof CLASSES)[number] {
   return CLASS_BY_ID[id]
+}
+
+/** Strip material prefix so steel-longsword matches longsword proficiency. */
+export function weaponBaseId(itemId: string): string {
+  for (const material of GEAR_MATERIALS) {
+    const prefix = `${material}-`
+    if (itemId.startsWith(prefix)) return itemId.slice(prefix.length)
+  }
+  return itemId
+}
+
+/** Unarmed / missing weapon counts as proficient. Null class keeps proficiency (legacy callers). */
+export function isWeaponProficient(classId: ClassId | null, itemId: ItemId | null | undefined): boolean {
+  if (classId == null || itemId == null) return true
+  const item = getItem(itemId)
+  const weapon = item?.gear?.weapon
+  if (!weapon) return true
+  const base = weaponBaseId(itemId)
+  const list = getClass(classId).weaponProficiencies as readonly WeaponProficiency[]
+  return (
+    list.includes(weapon.category) ||
+    list.includes(base as ItemId) ||
+    list.includes(itemId)
+  )
 }
 
 export function initialClassProgress(): Record<ClassId, { xp: number }> {

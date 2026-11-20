@@ -6,7 +6,7 @@ import type { SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
 import { activePerks, effectTotal } from '../abilities'
 import { SPELL_SLOT_MODEL } from '../config'
-import { applyDamageModifiers } from '../damage'
+import { applyDamageModifiers, applyTriangle, triangleNote } from '../damage'
 import { roll, rollD20, rollDamageParts } from '../dice'
 import { removeItems, type Inventory } from '../inventory'
 import type { Rng } from '../rng'
@@ -129,19 +129,27 @@ export function resolveSpellCast(input: {
   }
 
   const dtype = spell.damageType ?? 'force'
-
-  if (spell.kind === 'attack') {
-    if (spell.autoHit) {
-      const parts = rollDamageParts(notation ?? '0', rng, false)
-      const dealt = applyDamageModifiers(
-        parts.total,
+  const style = 'magic' as const
+  const finishDamage = (amount: number) =>
+    applyTriangle(
+      applyDamageModifiers(
+        amount,
         dtype,
         monster.resistances,
         monster.vulnerabilities,
         monster.immunities,
-      )
+      ),
+      style,
+      monster.archetype,
+    )
+  const note = triangleNote(style, monster.archetype)
+
+  if (spell.kind === 'attack') {
+    if (spell.autoHit) {
+      const parts = rollDamageParts(notation ?? '0', rng, false)
+      const dealt = finishDamage(parts.total)
       fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
-      line += ` Auto-hit [${notation}] ${dealt} ${dtype}.`
+      line += ` Auto-hit [${notation}] ${dealt} ${dtype}${note}.`
       pushLog(fight, line, trace)
       return { inventory, classXp, skills, killed: fight.monsterHp <= 0, stopped: false }
     }
@@ -158,15 +166,9 @@ export function resolveSpellCast(input: {
       return { inventory, classXp, skills, killed: false, stopped: false }
     }
     const parts = rollDamageParts(notation ?? '0', rng, crit)
-    const dealt = applyDamageModifiers(
-      parts.total,
-      dtype,
-      monster.resistances,
-      monster.vulnerabilities,
-      monster.immunities,
-    )
+    const dealt = finishDamage(parts.total)
     fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
-    line += ` [${notation}] ${dealt} ${dtype}${crit ? ' (crit)' : ''}.`
+    line += ` [${notation}] ${dealt} ${dtype}${crit ? ' (crit)' : ''}${note}.`
     pushLog(fight, line, trace)
     return { inventory, classXp, skills, killed: fight.monsterHp <= 0, stopped: false }
   }
@@ -188,16 +190,10 @@ export function resolveSpellCast(input: {
     if (!spell.halfOnSave) raw = 0
     else raw = Math.floor(raw / 2)
   }
-  const dealt = applyDamageModifiers(
-    raw,
-    dtype,
-    monster.resistances,
-    monster.vulnerabilities,
-    monster.immunities,
-  )
+  const dealt = finishDamage(raw)
   if (dealt > 0) {
     fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
-    line += ` [${notation}] ${dealt} ${dtype}.`
+    line += ` [${notation}] ${dealt} ${dtype}${note}.`
   } else {
     line += ' No damage.'
   }

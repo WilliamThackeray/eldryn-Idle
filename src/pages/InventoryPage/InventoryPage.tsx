@@ -41,6 +41,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const equipment = useGameStore((state) => state.equipment)
   const skills = useGameStore((state) => state.skills)
   const classXp = useGameStore((state) => state.classXp)
+  const classId = useGameStore((state) => state.classId)
   const isInDungeonOrQuest = useGameStore((state) => state.isInDungeonOrQuest)
   const sellItem = useGameStore((state) => state.sellItem)
   const equipItem = useGameStore((state) => state.equipItem)
@@ -238,6 +239,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
           inventory={inventory}
           skills={skills}
           classXp={classXp}
+          classId={classId}
           isInDungeonOrQuest={isInDungeonOrQuest}
           mode="inventory"
           categoryIcon={selected ? CATEGORY_ICON[selected.category] : Package}

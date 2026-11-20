@@ -363,6 +363,8 @@ export interface CombatAdvanceInput {
   rng: Rng
   trace: boolean
   modifiers?: Partial<Record<AbilityAbbr, number>>
+  /** Missing means on. */
+  stopWhenOutOfFood?: boolean
 }
 
 export interface CombatAdvanceResult {

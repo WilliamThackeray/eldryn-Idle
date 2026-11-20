@@ -1,4 +1,5 @@
-import type { ItemId } from '../data/items'
+import { isWeaponProficient, type ClassId } from '../data/classes'
+import { getItem, type ItemId } from '../data/items'
 import type { SkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
 import { playerToHitBonus } from './combat/attack'
@@ -21,6 +22,7 @@ export interface EquipPreviewDiffs {
   damageBefore: string
   damageAfter: string
   intervalMs: number
+  notProficient: boolean
 }
 
 export interface EquipPreview {
@@ -35,6 +37,7 @@ export function equipPreview(
   itemId: ItemId,
   skills: Record<SkillId, SkillProgress>,
   classXp: number,
+  classId: ClassId | null = null,
 ): EquipPreview | null {
   const slot = targetSlot(equipment, itemId)
   if (!slot) return null
@@ -44,10 +47,12 @@ export function equipPreview(
   const dexMod = deriveAbilities(skills).find((a) => a.abbr === 'DEX')?.modifier ?? 0
   const acBefore = armorClass(equipment, dexMod)
   const acAfter = armorClass(next.equipment, dexMod)
-  const toHitBefore = playerToHitBonus(skills, equipment, classXp)
-  const toHitAfter = playerToHitBonus(skills, next.equipment, classXp)
+  const toHitBefore = playerToHitBonus(skills, equipment, classXp, classId)
+  const toHitAfter = playerToHitBonus(skills, next.equipment, classXp, classId)
   const intervalBefore = computePlayerIntervalMs(skills, equipment)
   const intervalAfter = computePlayerIntervalMs(skills, next.equipment)
+  const notProficient =
+    Boolean(getItem(itemId)?.gear?.weapon) && !isWeaponProficient(classId, itemId)
 
   return {
     slot,
@@ -58,6 +63,7 @@ export function equipPreview(
       damageBefore: weaponDamageLabel(equipment),
       damageAfter: weaponDamageLabel(next.equipment),
       intervalMs: intervalAfter - intervalBefore,
+      notProficient,
     },
   }
 }

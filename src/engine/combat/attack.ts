@@ -1,12 +1,12 @@
 import { type DamageType } from '../../data/items'
 import { getItem } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
-import type { ClassId } from '../../data/classes'
+import { isWeaponProficient, type ClassId } from '../../data/classes'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
 import { activePerks, effectTotal } from '../abilities'
 import { MATERIAL_FLAGS, AMMO_RECOVERY } from '../config'
-import { applyDamageModifiers } from '../damage'
+import { applyDamageModifiers, applyTriangle, attackStyleOf, triangleNote } from '../damage'
 import { resolveRollMode, roll, rollD20, rollDamageParts } from '../dice'
 import { totalItemStats, type Equipment } from '../equipment'
 import { addItems, removeItems, type Inventory } from '../inventory'
@@ -102,8 +102,10 @@ export function resolvePlayerAttack(input: {
   const scores = abilityScoreMap(skills)
   const classLevel = levelForXp(classXp)
   const classTier = tier(classLevel)
-  const prof = proficiency(classTier)
   const weapon = input.unarmedOverride ? undefined : playerWeapon(equipment)
+  const proficient =
+    input.unarmedOverride != null || isWeaponProficient(input.activeClassId, equipment.mainHand)
+  const prof = proficient ? proficiency(classTier) : 0
   const itemStats = input.unarmedOverride ? null : totalItemStats(equipment)
   const itemToHit = itemStats?.toHit ?? 0
   const itemDamage = itemStats?.damage ?? 0
@@ -166,17 +168,20 @@ export function resolvePlayerAttack(input: {
   const intervalSec = (fight.playerIntervalMs / 1000).toFixed(2)
   let line = `${input.labelPrefix}${intervalSec}s. to hit: ${total}${bardicNote} - ${hit ? 'hits' : 'misses'}.`
 
+  const style = attackStyleOf(weapon)
+
   if (!hit) {
     if (mastery === 'graze' && abilityBonus > 0) {
-      const graze = applyDamageModifiers(
+      const grazeBase = applyDamageModifiers(
         abilityBonus,
         damageTypeOf(equipment),
         monster.resistances,
         monster.vulnerabilities,
         monster.immunities,
       )
+      const graze = applyTriangle(grazeBase, style, monster.archetype)
       fight.monsterHp = Math.max(0, fight.monsterHp - graze)
-      line += ` Graze: ${graze} damage.`
+      line += ` Graze: ${graze} damage${triangleNote(style, monster.archetype)}.`
       pushLog(fight, line, trace)
       return {
         inventory,
@@ -216,16 +221,17 @@ export function resolvePlayerAttack(input: {
   }
 
   const raw = Math.max(0, parts.dice + parts.flat + itemDamage + abilityBonus + hitCtx.bonusDice + hitCtx.bonusFlat)
-  const dealt = applyDamageModifiers(
+  const resisted = applyDamageModifiers(
     raw,
     dtype,
     monster.resistances,
     monster.vulnerabilities,
     monster.immunities,
   )
+  const dealt = applyTriangle(resisted, style, monster.archetype)
   const before = fight.monsterHp
   fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
-  line += ` [${diceNotation}] + ${abilityBonus + itemDamage + hitCtx.bonusFlat} damage${crit ? ' (crit)' : ''}.`
+  line += ` [${diceNotation}] + ${abilityBonus + itemDamage + hitCtx.bonusFlat} damage${crit ? ' (crit)' : ''}${triangleNote(style, monster.archetype)}.`
   if (hitCtx.bonusDice > 0) line += ` bonus dice ${hitCtx.bonusDice}.`
   line += applyHitMasteries({
     fight,
@@ -326,11 +332,14 @@ export function playerToHitBonus(
   skills: Record<SkillId, SkillProgress>,
   equipment: Equipment,
   classXp: number,
+  classId: ClassId | null = null,
 ): number {
   const mods = abilityModMap(skills)
   const weapon = playerWeapon(equipment)
   const { mod } = attackAbilityMod(weapon, mods)
-  return mod + proficiency(tier(levelForXp(classXp))) + totalItemStats(equipment).toHit
+  const proficient = isWeaponProficient(classId, equipment.mainHand)
+  const prof = proficient ? proficiency(tier(levelForXp(classXp))) : 0
+  return mod + prof + totalItemStats(equipment).toHit
 }
 
 /** Exported for tests: nick check uses 1d10, proc on 1–ceiling (default 2). */

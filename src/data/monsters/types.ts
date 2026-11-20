@@ -34,6 +34,8 @@ export interface MonsterAttack {
   damageType: DamageType
 }
 
+export type MonsterArchetype = 'armored' | 'skirmisher' | 'warded' | 'standard'
+
 export interface MonsterDef {
   id: string
   name: string
@@ -45,6 +47,8 @@ export interface MonsterDef {
   hp: number
   /** True when the creature has Reach on its attacks. */
   reach: boolean
+  /** Combat triangle role. Standard takes no style multiplier. */
+  archetype: MonsterArchetype
   attacks: MonsterAttack[]
   resistances: readonly DamageType[]
   vulnerabilities: readonly DamageType[]

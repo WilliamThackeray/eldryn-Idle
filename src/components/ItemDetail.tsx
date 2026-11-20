@@ -1,5 +1,7 @@
 import { Package, type LucideIcon } from 'lucide-react'
 import { RARITY_TEXT } from './rarity'
+import type { ClassId } from '../data/classes'
+import { isWeaponProficient } from '../data/classes'
 import { getItem, type ItemCategory, type ItemId } from '../data/items'
 import { canEquip, targetSlot, type Equipment, type EquipmentSlot } from '../engine/equipment'
 import { equipPreview } from '../engine/equipPreview'
@@ -50,6 +52,7 @@ interface ItemDetailProps {
   inventory: Inventory
   skills: Record<SkillId, SkillProgress>
   classXp: number
+  classId?: ClassId | null
   isInDungeonOrQuest: boolean
   categoryIcon?: LucideIcon
   /** Inventory: sell + equip. Worn: unequip only. */
@@ -71,6 +74,7 @@ export function ItemDetail({
   inventory,
   skills,
   classXp,
+  classId = null,
   isInDungeonOrQuest,
   categoryIcon: Icon = Package,
   mode,
@@ -92,13 +96,15 @@ export function ItemDetail({
   const equipReason = canEquip(equipment, itemId, classLevel)
   const preview =
     mode === 'inventory' && equipReason == null
-      ? equipPreview(equipment, inventory, itemId, skills, classXp)
+      ? equipPreview(equipment, inventory, itemId, skills, classXp, classId)
       : null
   const equippable =
     Boolean(selected.gear) ||
     selected.category === 'ammo' ||
     selected.category === 'food' ||
     selected.category === 'potion'
+  const notProficient =
+    Boolean(selected.gear?.weapon) && !isWeaponProficient(classId, itemId)
 
   return (
     <div className="space-y-4">
@@ -113,6 +119,7 @@ export function ItemDetail({
           <p className="text-xs capitalize text-sage">
             {selected.rarity} · {CATEGORY_LABEL[selected.category]}
           </p>
+          {notProficient && <p className="text-xs text-crimson">Not proficient</p>}
         </div>
       </div>
 
@@ -283,6 +290,7 @@ function EquipBlock({
       const sec = diffs.intervalMs / 1000
       diffLines.push(`${sec > 0 ? '+' : ''}${sec.toFixed(1)}s interval`)
     }
+    if (diffs.notProficient) diffLines.push('Not proficient')
   }
 
   return (

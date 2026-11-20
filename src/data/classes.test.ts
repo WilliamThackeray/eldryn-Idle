@@ -1,6 +1,9 @@
 import { expect, test } from 'vitest'
+import { playerToHitBonus } from '../engine/combat/attack'
+import { emptyEquipment } from '../engine/equipment'
 import { applyXpModifiers } from '../engine/xp'
-import { CLASSES, getClass, modifiersFor, netModifierPercent } from './classes'
+import { initialSkillProgress } from './skills'
+import { CLASSES, getClass, isWeaponProficient, modifiersFor, netModifierPercent } from './classes'
 
 test('every class nets exactly +10%', () => {
   for (const entry of CLASSES) {
@@ -41,4 +44,15 @@ test('Barbarian boosts Athletics XP and Wizard boosts Arcana XP', () => {
 
 test('modifiersFor with no class returns an empty map', () => {
   expect(modifiersFor(null)).toEqual({})
+})
+
+test('weapon proficiency gates the proficiency bonus to hit', () => {
+  const skills = initialSkillProgress()
+  const longsword = { ...emptyEquipment(), mainHand: 'longsword' as const }
+  const fighter = playerToHitBonus(skills, longsword, 0, 'fighter')
+  const wizard = playerToHitBonus(skills, longsword, 0, 'wizard')
+  // Tier 1 proficiency is +2; ability and item bonuses match.
+  expect(fighter - wizard).toBe(2)
+  expect(isWeaponProficient('bard', 'steel-longsword')).toBe(true)
+  expect(isWeaponProficient('wizard', 'steel-longsword')).toBe(false)
 })

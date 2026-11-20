@@ -1,6 +1,6 @@
 import type { ClassId } from '../../data/classes'
 import type { MonsterDef } from '../../data/monsters'
-import type { SkillProgress } from '../../types/game'
+import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
 import { RESPAWN_MS } from '../config'
 import type { Equipment } from '../equipment'
@@ -23,6 +23,8 @@ export function tickRest(input: {
   rng: Rng
   trace: boolean
   casting: boolean
+  modifiers?: Partial<Record<AbilityAbbr, number>>
+  stopWhenOutOfFood?: boolean
 }): {
   remaining: number
   monster: MonsterDef | undefined
@@ -66,6 +68,8 @@ export function tickRest(input: {
       rng: input.rng,
       trace,
       casting,
+      modifiers: input.modifiers,
+      stopWhenOutOfFood: input.stopWhenOutOfFood,
     })
     inventory = next.inventory
     classXp = next.classXp
