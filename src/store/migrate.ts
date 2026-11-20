@@ -12,9 +12,11 @@ import { isQuestId } from '../data/quests'
 import { isSpellId } from '../data/spells'
 import { initialSkillProgress, isSkillId, SKILLS, type SkillId } from '../data/skills'
 import type { ActiveAction, CombatFight } from '../engine/advance'
+import { LEGACY_QUEST_GOLD } from '../engine/config'
 import type { ActiveBuff, BuffEffect } from '../engine/history'
+import { emptyNoticeBoard, type NoticeBoard } from '../engine/noticeBoard'
 import type { Bounty } from '../engine/social'
-import { emptyQuestProgress, type QuestProgress } from '../engine/quest'
+import { emptyQuestProgress, emptyQuestRun, type QuestProgress, type QuestRun } from '../engine/quest'
 import { emptySignatureRuntime } from '../engine/signatures'
 import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
 import type { Inventory } from '../engine/inventory'
@@ -31,8 +33,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v16: Guild Favor, renown, bounty, CHA buffs, forged-writ rename. */
-export const SAVE_VERSION = 16
+/** v17: Mile-Camp quests, notice board, drop legacy quest progress. */
+export const SAVE_VERSION = 17
 
 /** Old sell values for bags removed in the specific-components rework. */
 const LEGACY_BAG_SELL: Record<string, number> = {
@@ -62,6 +64,8 @@ export interface SaveData {
   combat: CombatFight | null
   spellLoadouts: Record<ClassId, SpellLoadout>
   questProgress: QuestProgress
+  pinnedQuestId: string | null
+  noticeBoard: NoticeBoard
   /** Owned shop upgrade tier index per upgrade id. */
   upgrades: Record<string, number>
   /** End hunt/dungeon after a rest when food runs out and HP is still below max. Default on. */
@@ -99,6 +103,8 @@ export function createInitialSave(): SaveData {
     combat: null,
     spellLoadouts: initialSpellLoadouts(),
     questProgress: emptyQuestProgress(),
+    pinnedQuestId: null,
+    noticeBoard: emptyNoticeBoard(),
     upgrades: {},
     stopWhenOutOfFood: true,
     tomes: emptyTomes(),
@@ -124,10 +130,29 @@ function emptyBestiaries(): Record<CreatureType, number> {
 
 export function migrateSave(persisted: unknown, version: number): SaveData {
   const source = version < SAVE_VERSION ? fromLegacy(persisted) : persisted
+  let legacyGold = 0
+  if (version < 17 && isRecord(source)) {
+    const qp = source.questProgress
+    if (isRecord(qp)) {
+      const old = qp['shattered-mile']
+      if (isRecord(old) && old.done === true) legacyGold = LEGACY_QUEST_GOLD
+    }
+  }
   const save = normalizeSave(source)
+  let next = save
+  if (version < 17) {
+    next = {
+      ...next,
+      gold: next.gold + legacyGold,
+      questProgress: emptyQuestProgress(),
+      pinnedQuestId: null,
+      noticeBoard: emptyNoticeBoard(next.lastTick),
+      combat: next.combat ? { ...next.combat, questId: null } : null,
+    }
+  }
   // Old saves predate the class picker and start as Fighter.
-  if (version < 5) return { ...save, classId: 'fighter', classXp: 0 }
-  return save
+  if (version < 5) return { ...next, classId: 'fighter', classXp: 0 }
+  return next
 }
 
 export function normalizeSave(raw: unknown): SaveData {
@@ -172,6 +197,8 @@ export function normalizeSave(raw: unknown): SaveData {
     combat,
     spellLoadouts: readSpellLoadouts(source.spellLoadouts),
     questProgress: readQuestProgress(source.questProgress),
+    pinnedQuestId: readPinnedQuestId(source.pinnedQuestId),
+    noticeBoard: readNoticeBoard(source.noticeBoard, typeof source.lastTick === 'number' ? source.lastTick : Date.now()),
     upgrades,
     stopWhenOutOfFood: source.stopWhenOutOfFood !== false,
     tomes: readTomes(source.tomes),
@@ -293,14 +320,93 @@ function readUpgrades(value: unknown): Record<string, number> {
   return next
 }
 
+function readPinnedQuestId(value: unknown): string | null {
+  if (typeof value !== 'string' || !isQuestId(value)) return null
+  return value
+}
+
+function readNoticeBoard(value: unknown, fallbackNow: number): NoticeBoard {
+  if (!isRecord(value)) return emptyNoticeBoard(fallbackNow)
+  const refreshedAt = finite(value.refreshedAt) ?? fallbackNow
+  const offers: NoticeBoard['offers'] = []
+  if (Array.isArray(value.offers)) {
+    for (const raw of value.offers) {
+      if (!isRecord(raw) || typeof raw.id !== 'string') continue
+      const gold = finite(raw.gold)
+      const favor = finite(raw.favor)
+      const count = finite(raw.count)
+      if (gold == null || favor == null || count == null || count < 0) continue
+      const objective = readObjective(raw.objective)
+      if (!objective) continue
+      offers.push({
+        id: raw.id,
+        objective,
+        gold: Math.floor(gold),
+        favor: Math.floor(favor),
+        count: Math.floor(count),
+      })
+    }
+  }
+  return { refreshedAt: Math.floor(refreshedAt), offers }
+}
+
+function readObjective(value: unknown): NoticeBoard['offers'][number]['objective'] | null {
+  if (!isRecord(value) || typeof value.type !== 'string') return null
+  if (value.type === 'deliver' || value.type === 'have') {
+    if (typeof value.itemId !== 'string' || !isItemId(value.itemId)) return null
+    const qty = finite(value.qty)
+    if (qty == null || qty <= 0) return null
+    return { type: value.type, itemId: value.itemId, qty: Math.floor(qty) }
+  }
+  if (value.type === 'kill') {
+    const qty = finite(value.qty)
+    if (qty == null || qty <= 0) return null
+    if (typeof value.monsterId === 'string' && getMonster(value.monsterId)) {
+      return { type: 'kill', monsterId: value.monsterId, qty: Math.floor(qty) }
+    }
+    if (typeof value.creatureType === 'string' && (CREATURE_TYPES as readonly string[]).includes(value.creatureType)) {
+      return { type: 'kill', creatureType: value.creatureType as CreatureType, qty: Math.floor(qty) }
+    }
+  }
+  return null
+}
+
 function readQuestProgress(value: unknown): QuestProgress {
   if (!isRecord(value)) return emptyQuestProgress()
   const next: QuestProgress = {}
   for (const [id, entry] of Object.entries(value)) {
     if (!isQuestId(id) || !isRecord(entry)) continue
-    const step = finite(entry.step)
-    if (step == null || step < 0) continue
-    next[id] = { step: Math.floor(step), done: entry.done === true }
+    // Drop legacy { step, done } shape without counts/inserts.
+    if (!('counts' in entry) && 'step' in entry) continue
+    const stage = finite(entry.stage)
+    if (stage == null || stage < 0) continue
+    const run = emptyQuestRun()
+    run.stage = Math.floor(stage)
+    run.done = entry.done === true
+    run.rewardMod = finite(entry.rewardMod) ?? 1
+    if (Array.isArray(entry.counts)) {
+      run.counts = entry.counts.map((n) => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0))
+    }
+    if (Array.isArray(entry.history)) {
+      run.history = entry.history.flatMap((h) => {
+        if (!isRecord(h) || typeof h.text !== 'string') return []
+        return [{ text: h.text, success: typeof h.success === 'boolean' ? h.success : undefined }]
+      })
+    }
+    if (Array.isArray(entry.resolvedStages)) {
+      run.resolvedStages = entry.resolvedStages.flatMap((n) =>
+        typeof n === 'number' && Number.isFinite(n) ? [Math.floor(n)] : [],
+      )
+    }
+    if (Array.isArray(entry.inserts)) {
+      run.inserts = entry.inserts.flatMap((ins) => {
+        if (!isRecord(ins)) return []
+        const at = finite(ins.at)
+        if (at == null || at < 0 || !Array.isArray(ins.stages)) return []
+        return [{ at: Math.floor(at), stages: ins.stages as QuestRun['inserts'][number]['stages'] }]
+      })
+    }
+    next[id] = run
   }
   return next
 }
@@ -586,10 +692,12 @@ function readCombat(value: unknown): CombatFight | null {
     roomLog: Array.isArray(value.roomLog)
       ? value.roomLog.filter((line): line is string => typeof line === 'string').slice(-30)
       : [],
-    questId: typeof value.questId === 'string' && isQuestId(value.questId) ? value.questId : null,
+    questId: null,
     pendingCleave: Math.max(0, finite(value.pendingCleave) ?? 0),
     relentlessUsed: value.relentlessUsed === true,
     frightenAttacksLeft: Math.max(0, Math.floor(finite(value.frightenAttacksLeft) ?? 0)),
+    killsThisTick: [],
+    dungeonClearedThisTick: null,
   }
 }
 

@@ -4,7 +4,6 @@ import { getClass, modifiersFor, type ClassId, type ClericFocus } from '../data/
 import { getDungeon } from '../data/dungeons'
 import type { ItemId } from '../data/items'
 import { getMonster, type BiomeId, type CreatureType } from '../data/monsters'
-import { getQuest } from '../data/quests'
 import { isSpellId, type SpellId } from '../data/spells'
 import {
   buyGood as buyShopGood,
@@ -16,11 +15,12 @@ import { beginDungeonFight, createFight } from '../engine/combat'
 import { maybeRareSwap } from '../engine/combat/dungeonRun'
 import { SPELL_INTERVAL_SEC } from '../engine/config'
 import { consumeEntryItem } from '../engine/dungeon'
+import { refreshIfDue, rerollBoard, turnInNotice } from '../engine/noticeBoard'
 import {
-  chooseDialogue,
-  currentStep,
-  deliverQuestStep,
-  tryQuestSkillCheck,
+  acceptQuest,
+  resolvePendingCheck,
+  rollCheck,
+  turnInQuest,
 } from '../engine/quest'
 import { effectiveCasterType, usesSpellLoop } from '../engine/spells'
 import { levelForXp } from '../engine/xp'
@@ -90,8 +90,8 @@ interface GameStore extends SaveData {
   /** Ephemeral: defeat since the last offline summary. */
   lastDefeat: boolean
   startActivity: (activity: Omit<SkillAction, 'kind' | 'progressMs'>) => void
-  startHunt: (monsterId: string, biome: BiomeId, questId?: string) => void
-  startDungeon: (dungeonId: string, questId?: string) => void
+  startHunt: (monsterId: string, biome: BiomeId) => void
+  startDungeon: (dungeonId: string) => void
   stopActivity: () => void
   applyElapsed: (elapsedMs: number, lastTick: number) => void
   dismissOffline: () => void
@@ -112,11 +112,14 @@ interface GameStore extends SaveData {
   setStopWhenOutOfFood: (value: boolean) => void
   clearOfflineCombatFlags: () => void
   setSpellSlot: (classId: ClassId, slotIndex: number, spellId: SpellId | null) => void
-  chooseQuestChoice: (questId: string, choiceId: string) => string
-  tryQuestCheck: (questId: string) => string
-  deliverQuest: (questId: string) => string
-  startQuestCombat: (questId: string) => void
-  startQuestDungeon: (questId: string) => void
+  acceptQuest: (questId: string) => string
+  turnInQuest: (questId: string) => string
+  rollQuestCheck: (questId: string, approachId: string, prepOn: boolean) => string
+  resolveQuestCheck: (questId: string, useInspiration: boolean) => string
+  pinQuest: (questId: string | null) => void
+  turnInNotice: (offerId: string) => void
+  rerollNotice: () => void
+  refreshNoticeBoard: (now?: number) => void
   questMessage: string | null
   readTome: (itemId: ItemId) => void
   readBestiary: (itemId: ItemId) => void
@@ -191,7 +194,7 @@ export const useGameStore = create<GameStore>()(
           isInDungeonOrQuest: false,
           log: [],
         }),
-      startHunt: (monsterId, biome, questId) =>
+      startHunt: (monsterId, biome) =>
         set((state) => {
           if (!state.classId) return state
           const swappedId = maybeRareSwap(monsterId, biome, state.activeBuffs, liveRng)
@@ -210,14 +213,13 @@ export const useGameStore = create<GameStore>()(
             activeBuffs: state.activeBuffs,
           })
           if (!fight) return state
-          if (questId) fight.questId = questId
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
           const baseSec = usesSpellLoop(state.classId)
             ? SPELL_INTERVAL_SEC
             : weaponIntervalBase(weapon)
           return {
             combat: fight,
-            isInDungeonOrQuest: Boolean(questId),
+            isInDungeonOrQuest: false,
             activeAction: {
               kind: 'combat' as const,
               label: `Hunting ${monster.name}`,
@@ -226,12 +228,11 @@ export const useGameStore = create<GameStore>()(
               baseIntervalMs: baseSec * 1000,
               progressMs: 0,
               mode: 'hunt' as const,
-              questId,
             },
             log: [],
           }
         }),
-      startDungeon: (dungeonId, questId) =>
+      startDungeon: (dungeonId) =>
         set((state) => {
           if (!state.classId) return state
           const dungeon = getDungeon(dungeonId)
@@ -247,7 +248,7 @@ export const useGameStore = create<GameStore>()(
             rng: liveRng,
             trace: true,
             spellLoadout: state.spellLoadouts[state.classId],
-            questId: questId ?? null,
+            questId: null,
             activeBuffs: state.activeBuffs,
           })
           if (!fight) return state
@@ -269,7 +270,6 @@ export const useGameStore = create<GameStore>()(
               progressMs: 0,
               mode: 'dungeon' as const,
               dungeonId,
-              questId,
             },
             log: [],
           }
@@ -297,6 +297,7 @@ export const useGameStore = create<GameStore>()(
               classXp: state.classXp,
               combat: state.combat,
               questProgress: state.questProgress,
+              noticeBoard: state.noticeBoard,
               isInDungeonOrQuest: state.isInDungeonOrQuest,
               stopWhenOutOfFood: state.stopWhenOutOfFood,
               tomes: state.tomes,
@@ -311,6 +312,13 @@ export const useGameStore = create<GameStore>()(
           const killsAfter = result.state.combat?.kills ?? result.state.endedHuntKills ?? killsBefore
           const gainedKills = Math.max(0, killsAfter - killsBefore)
           const tracking = !state.combatTrace
+          const noticeBoard = refreshIfDue(
+            result.state.noticeBoard ?? state.noticeBoard,
+            lastTick,
+            liveRng,
+            result.state.skills,
+            result.state.questProgress ?? state.questProgress,
+          )
           return {
             skills: result.state.skills,
             ...withPlacedInventory(state, result.state.inventory),
@@ -322,6 +330,7 @@ export const useGameStore = create<GameStore>()(
             classXp: result.state.classXp ?? state.classXp,
             combat: result.state.combat ?? null,
             questProgress: result.state.questProgress ?? state.questProgress,
+            noticeBoard,
             isInDungeonOrQuest:
               result.state.isInDungeonOrQuest !== undefined
                 ? result.state.isInDungeonOrQuest
@@ -536,125 +545,151 @@ export const useGameStore = create<GameStore>()(
             },
           }
         }),
-      chooseQuestChoice: (questId, choiceId) => {
+      acceptQuest: (questId) => {
         let line = ''
         set((state) => {
-          const result = chooseDialogue(questId, choiceId, state.questProgress, state.skills, liveRng)
+          const result = acceptQuest(state.questProgress, questId, {
+            skills: state.skills,
+            classXp: state.classXp,
+            inventory: state.inventory,
+          })
           line = result.line
-          return { questProgress: result.progress, questMessage: result.line }
-        })
-        return line
-      },
-      tryQuestCheck: (questId) => {
-        let line = ''
-        set((state) => {
-          const result = tryQuestSkillCheck(questId, state.questProgress, state.skills, liveRng)
-          line = result.line
-          return { questProgress: result.progress, questMessage: result.line }
-        })
-        return line
-      },
-      deliverQuest: (questId) => {
-        let line = ''
-        set((state) => {
-          const result = deliverQuestStep(questId, state.questProgress, state.inventory)
-          line = result.line
+          if (!result.ok) return { questMessage: result.line }
           return {
             questProgress: result.progress,
-            ...withPlacedInventory(state, result.inventory),
+            pinnedQuestId: questId,
             questMessage: result.line,
           }
         })
         return line
       },
-      startQuestCombat: (questId) =>
+      turnInQuest: (questId) => {
+        let line = ''
         set((state) => {
-          const quest = getQuest(questId)
-          const step = quest ? currentStep(quest, state.questProgress) : null
-          if (!step || step.type !== 'combat' || !state.classId) return state
-          const monster = getMonster(step.monsterId)
-          if (!monster) return state
-          const fight = createFight({
-            monsterId: step.monsterId,
-            biome: step.biome,
-            skills: state.skills,
-            equipment: state.equipment,
-            activeClassId: state.classId,
-            classXp: state.classXp,
-            rng: liveRng,
-            trace: true,
-            spellLoadout: state.spellLoadouts[state.classId],
-          })
-          if (!fight) return state
-          fight.questId = questId
-          const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
-          const baseSec = usesSpellLoop(state.classId)
-            ? SPELL_INTERVAL_SEC
-            : weaponIntervalBase(weapon)
-          return {
-            combat: fight,
-            isInDungeonOrQuest: true,
-            activeAction: {
-              kind: 'combat' as const,
-              label: `Quest · ${monster.name}`,
-              monsterId: step.monsterId,
-              biome: step.biome,
-              baseIntervalMs: baseSec * 1000,
-              progressMs: 0,
-              mode: 'hunt' as const,
-              questId,
-            },
-            log: [],
-            questMessage: null,
-          }
-        }),
-      startQuestDungeon: (questId) =>
-        set((state) => {
-          const quest = getQuest(questId)
-          const step = quest ? currentStep(quest, state.questProgress) : null
-          if (!step || step.type !== 'dungeon') return state
-          // Reuse startDungeon path via a nested call pattern — inline the same body.
-          const dungeon = getDungeon(step.dungeonId)
-          if (!dungeon || !state.classId) return state
-          const entry = consumeEntryItem(state.inventory, dungeon)
-          if (!entry.ok) return { ...state, questMessage: 'Missing dungeon entry item.' }
-          const fight = beginDungeonFight({
-            dungeonId: step.dungeonId,
-            skills: state.skills,
-            equipment: state.equipment,
-            activeClassId: state.classId,
-            classXp: state.classXp,
-            rng: liveRng,
-            trace: true,
-            spellLoadout: state.spellLoadouts[state.classId],
+          const result = turnInQuest(
             questId,
-            activeBuffs: state.activeBuffs,
-          })
-          if (!fight) return state
-          const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
-          const baseSec = usesSpellLoop(state.classId)
-            ? SPELL_INTERVAL_SEC
-            : weaponIntervalBase(weapon)
-          const monster = getMonster(fight.monsterId)
+            state.questProgress,
+            state.inventory,
+            state.skills,
+            state.classXp,
+            state.gold,
+            state.favor,
+          )
+          line = result.line
+          if (!result.ok) return { questMessage: result.line }
           return {
-            ...withPlacedInventory(state, entry.inventory),
-            combat: fight,
-            isInDungeonOrQuest: true,
-            activeAction: {
-              kind: 'combat' as const,
-              label: `Quest dungeon · ${monster?.name ?? dungeon.name}`,
-              monsterId: fight.monsterId,
-              biome: dungeon.biome,
-              baseIntervalMs: baseSec * 1000,
-              progressMs: 0,
-              mode: 'dungeon' as const,
-              dungeonId: step.dungeonId,
-              questId,
-            },
-            log: [],
-            questMessage: null,
+            questProgress: result.progress,
+            ...withPlacedInventory(state, result.inventory),
+            gold: result.gold,
+            favor: result.favor,
+            pinnedQuestId:
+              result.completed && state.pinnedQuestId === questId ? null : state.pinnedQuestId,
+            questMessage: result.line,
+          }
+        })
+        return line
+      },
+      rollQuestCheck: (questId, approachId, prepOn) => {
+        let line = ''
+        set((state) => {
+          const result = rollCheck(
+            questId,
+            approachId,
+            state.questProgress,
+            state.skills,
+            state.inventory,
+            state.gold,
+            state.favor,
+            liveRng,
+            state.tomes,
+            prepOn,
+          )
+          line = result.line
+          if (!result.ok) return { questMessage: result.line }
+          return {
+            questProgress: result.progress,
+            ...withPlacedInventory(state, result.inventory),
+            gold: result.gold,
+            favor: result.favor,
+            pinnedQuestId:
+              result.progress[questId]?.done && state.pinnedQuestId === questId
+                ? null
+                : state.pinnedQuestId,
+            questMessage: result.line,
+          }
+        })
+        return line
+      },
+      resolveQuestCheck: (questId, useInspiration) => {
+        let line = ''
+        set((state) => {
+          const result = resolvePendingCheck(
+            questId,
+            state.questProgress,
+            state.skills,
+            state.inventory,
+            state.gold,
+            state.favor,
+            liveRng,
+            useInspiration,
+            state.tomes,
+          )
+          line = result.line
+          if (!result.ok) return { questMessage: result.line }
+          return {
+            questProgress: result.progress,
+            ...withPlacedInventory(state, result.inventory),
+            gold: result.gold,
+            favor: result.favor,
+            pinnedQuestId:
+              result.progress[questId]?.done && state.pinnedQuestId === questId
+                ? null
+                : state.pinnedQuestId,
+            questMessage: result.line,
+          }
+        })
+        return line
+      },
+      pinQuest: (questId) => set({ pinnedQuestId: questId }),
+      turnInNotice: (offerId) =>
+        set((state) => {
+          const result = turnInNotice(
+            state.noticeBoard,
+            offerId,
+            state.inventory,
+            state.gold,
+            state.favor,
+          )
+          if (!result.ok) return state
+          return {
+            noticeBoard: result.board,
+            ...withPlacedInventory(state, result.inventory),
+            gold: result.gold,
+            favor: result.favor,
           }
         }),
+      rerollNotice: () =>
+        set((state) => {
+          const result = rerollBoard(
+            state.noticeBoard,
+            state.favor,
+            liveRng,
+            state.skills,
+            state.questProgress,
+          )
+          if (!result.ok) return state
+          return { noticeBoard: result.board, favor: result.favor }
+        }),
+      refreshNoticeBoard: (now = Date.now()) =>
+        set((state) => ({
+          noticeBoard: refreshIfDue(
+            state.noticeBoard,
+            now,
+            liveRng,
+            state.skills,
+            state.questProgress,
+          ),
+        })),
     }),
     {
       name: 'idle_game_slot',
@@ -678,6 +713,8 @@ export const useGameStore = create<GameStore>()(
         combat: state.combat ?? null,
         spellLoadouts: state.spellLoadouts,
         questProgress: state.questProgress,
+        pinnedQuestId: state.pinnedQuestId,
+        noticeBoard: state.noticeBoard,
         upgrades: state.upgrades ?? {},
         stopWhenOutOfFood: state.stopWhenOutOfFood !== false,
         tomes: state.tomes,

@@ -292,6 +292,7 @@ export function advanceDungeonNodes(input: {
         : 'Chest: empty.'
       pushRoomLog(fight, line)
       pushLog(fight, line, trace)
+      fight.dungeonClearedThisTick = dungeon.id
       fight.nodeIndex += 1
       continue
     }
@@ -382,6 +383,7 @@ export function onKill(input: {
   fight.monsterNextDisadvantage = false
 
   pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
+  fight.killsThisTick = [...(fight.killsThisTick ?? []), monster.id]
   const progressed = progressBounty(bounty, monster.id, inventory, favor, fight.goldGained, rng)
   bounty = progressed.bounty
   inventory = progressed.inventory

@@ -10,7 +10,7 @@ import { CombatPage } from './pages/CombatPage/CombatPage'
 import { InventoryPage } from './pages/InventoryPage/InventoryPage'
 import { MainMenuPage } from './pages/MainMenuPage/MainMenuPage'
 import type { PageFocus } from './pages/pageFocus'
-import { QuestPage } from './pages/QuestPage/QuestPage'
+import { MileCampPage } from './pages/MileCampPage/MileCampPage'
 import { ShopPage } from './pages/ShopPage/ShopPage'
 import { SkillPage } from './pages/SkillPage/SkillPage'
 import { flushSave } from './store/gameStore'
@@ -20,7 +20,7 @@ function pageTitle(page: string): string {
   if (page === 'shop') return 'Shop'
   if (page === 'inventory') return 'Inventory'
   if (page === 'monsterHunting') return 'Combat'
-  if (page === 'quests') return 'Quests'
+  if (page === 'mile-camp') return 'Mile-Camp'
   if (page === 'character') return 'Character'
   return SKILLS.find((skill) => skill.id === page)?.name ?? ''
 }
@@ -50,6 +50,7 @@ function App() {
             title={pageTitle(currentPage)}
             currentPage={currentPage}
             setCurrentPage={(page) => navigate(page)}
+            onNavigate={navigate}
             onMainMenu={() => {
               flushSave()
               bindSlot(null)
@@ -75,7 +76,7 @@ function App() {
                 onFocusConsumed={() => setPageFocus(null)}
               />
             )}
-            {currentPage === 'quests' && <QuestPage />}
+            {currentPage === 'mile-camp' && <MileCampPage />}
             {currentPage === 'character' && (
               <CharacterPage
                 focus={pageFocus?.kind === 'spell' ? pageFocus : null}

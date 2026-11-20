@@ -77,9 +77,17 @@ function buildIndex(): ItemIndex {
 
   for (const quest of QUESTS) {
     const link: ItemLink = { kind: 'quest', questId: quest.id, label: quest.title }
-    if (quest.unlock.type === 'item') push(uses, quest.unlock.itemId, link)
-    for (const step of quest.steps) {
-      if (step.type === 'deliver') push(uses, step.itemId, link)
+    for (const stack of quest.prerequisites.items ?? []) push(uses, stack.itemId, link)
+    for (const stage of quest.stages) {
+      if ('objectives' in stage) {
+        for (const obj of stage.objectives) {
+          if (obj.type === 'have' || obj.type === 'deliver') push(uses, obj.itemId, link)
+        }
+      } else {
+        for (const approach of stage.check.approaches) {
+          if (approach.prep) push(uses, approach.prep.itemId, link)
+        }
+      }
     }
   }
 

@@ -119,7 +119,7 @@ export function CharacterPage({
       return
     }
     if (link.kind === 'quest') {
-      onNavigate('quests', { kind: 'quest', questId: link.questId })
+      onNavigate('mile-camp', { kind: 'quest', questId: link.questId })
       return
     }
     if (link.kind === 'combat') {

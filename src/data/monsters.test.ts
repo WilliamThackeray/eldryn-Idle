@@ -1,9 +1,9 @@
 import { expect, test } from 'vitest'
 import { getItem } from './items'
-import { BIOMES, MONSTERS, monstersForBiome } from './monsters'
+import { HUNT_BIOMES, MONSTERS, monstersForBiome } from './monsters'
 
-test('each biome has 3–6 monsters spanning CR 0 to CR 3', () => {
-  for (const biome of BIOMES) {
+test('each hunt biome has 3–6 monsters spanning CR 0 to CR 3', () => {
+  for (const biome of HUNT_BIOMES) {
     const list = monstersForBiome(biome)
     expect(list.length).toBeGreaterThanOrEqual(3)
     expect(list.length).toBeLessThanOrEqual(6)

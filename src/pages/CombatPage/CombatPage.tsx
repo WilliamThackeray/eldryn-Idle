@@ -3,13 +3,14 @@ import { getClass, type ClassId } from '../../data/classes'
 import { DUNGEONS, getDungeon } from '../../data/dungeons'
 import { getItem } from '../../data/items'
 import {
-  BIOMES,
   BIOME_LABELS,
+  HUNT_BIOMES,
   getMonster,
   monstersForBiome,
   type BiomeId,
   type MonsterDef,
 } from '../../data/monsters'
+import { dungeonUnlocked } from '../../engine/quest'
 import type { SkillId } from '../../data/skills'
 import { deriveAbilities } from '../../engine/abilities'
 import {
@@ -78,8 +79,17 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const stopActivity = useGameStore((state) => state.stopActivity)
   const stopWhenOutOfFood = useGameStore((state) => state.stopWhenOutOfFood)
   const setStopWhenOutOfFood = useGameStore((state) => state.setStopWhenOutOfFood)
+  const questProgress = useGameStore((state) => state.questProgress)
 
+  const huntTabs = useMemo(() => {
+    if (biome === 'quest') return [...HUNT_BIOMES, 'quest' as const]
+    return HUNT_BIOMES
+  }, [biome])
   const monsters = useMemo(() => monstersForBiome(biome), [biome])
+  const visibleDungeons = useMemo(
+    () => DUNGEONS.filter((d) => dungeonUnlocked(d.id, d.requiresQuest, questProgress)),
+    [questProgress],
+  )
   const inCombat = activeAction?.kind === 'combat'
   const inDungeon = Boolean(combat?.dungeonId)
   const matchupMonster =
@@ -309,7 +319,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               </div>
             )}
             <div className="flex flex-wrap gap-2">
-              {BIOMES.map((id) => (
+              {huntTabs.map((id) => (
                 <button
                   key={id}
                   type="button"
@@ -364,7 +374,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
         </div>
       ) : (
         <div className="space-y-3">
-          {DUNGEONS.map((d) => {
+          {visibleDungeons.map((d) => {
             const entry = d.entry ? getItem(d.entry.itemId) : null
             const need = d.entry?.quantity ?? 0
             const have = d.entry ? (inventory[d.entry.itemId] ?? 0) : 0

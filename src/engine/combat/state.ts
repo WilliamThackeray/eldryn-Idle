@@ -86,6 +86,10 @@ export interface CombatFight {
   relentlessUsed: boolean
   /** Menace Trophy: remaining Frighten attacks at −25% damage. */
   frightenAttacksLeft: number
+  /** Monster ids killed during the current advance tick (quest progress). */
+  killsThisTick: string[]
+  /** Dungeon cleared this tick (chest looted). */
+  dungeonClearedThisTick: string | null
 }
 
 export interface CombatAction {
@@ -315,6 +319,8 @@ export function createFight(input: {
     pendingCleave: 0,
     relentlessUsed: false,
     frightenAttacksLeft,
+    killsThisTick: [],
+    dungeonClearedThisTick: null,
   }
 
   const hooks = getSignatureHooks(signature.id)
@@ -415,4 +421,8 @@ export interface CombatAdvanceResult {
   questStepComplete?: string | null
   /** True when a dungeon run ended (defeat, stop, missing key, or quest one-shot). */
   leftDungeonOrQuest?: boolean
+  /** Monster ids killed this advance tick. */
+  killsThisTick?: string[]
+  /** Dungeon id cleared (chest looted) this tick. */
+  dungeonCleared?: string | null
 }

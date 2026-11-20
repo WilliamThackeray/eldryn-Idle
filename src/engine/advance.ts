@@ -28,11 +28,9 @@ import {
 import { intervalMs } from './interval'
 import { hasItems, removeItems, addItems, type Inventory } from './inventory'
 import { rollGold, rollLoot } from './loot'
+import { applyNoticeEvents, type NoticeBoard } from './noticeBoard'
 import type { Rng } from './rng'
-import {
-  completeQuestActionStep,
-  type QuestProgress,
-} from './quest'
+import { applyEvents, syncLevels, type QuestProgress } from './quest'
 import { skillCheck, type SkillCheckOutcome, type SkillCheckResult } from './skillCheck'
 import {
   activityHasAdvantage,
@@ -75,6 +73,7 @@ export interface AdvanceState {
   /** Kills credited when a hunt ends during this advance call. */
   endedHuntKills?: number
   questProgress?: QuestProgress
+  noticeBoard?: NoticeBoard
   /** Cleared when leaving a dungeon/quest run. */
   isInDungeonOrQuest?: boolean
   /** Quest id completed this tick (combat or dungeon step). */
@@ -115,7 +114,47 @@ export interface CombatLogEvent {
   lines: string[]
 }
 
-export type GameEvent = SkillEvent | MaterialsEvent | CombatLogEvent
+export interface KillEvent {
+  kind: 'kill'
+  monsterId: string
+  creatureType: string
+}
+
+export interface LevelUpEvent {
+  kind: 'levelUp'
+  skillId: SkillId | 'class'
+  level: number
+}
+
+export interface DungeonClearEvent {
+  kind: 'dungeonClear'
+  dungeonId: string
+}
+
+export type GameEvent =
+  | SkillEvent
+  | MaterialsEvent
+  | CombatLogEvent
+  | KillEvent
+  | LevelUpEvent
+  | DungeonClearEvent
+
+function applyQuestSideEffects(
+  state: AdvanceState,
+  log: GameEvent[],
+): { questProgress?: QuestProgress; noticeBoard?: NoticeBoard } {
+  if (!state.questProgress && !state.noticeBoard) {
+    return { questProgress: state.questProgress, noticeBoard: state.noticeBoard }
+  }
+  let questProgress = state.questProgress
+  if (questProgress) {
+    questProgress = applyEvents(questProgress, log).progress
+    questProgress = syncLevels(questProgress, state.skills, state.classXp ?? 0)
+  }
+  let noticeBoard = state.noticeBoard
+  if (noticeBoard) noticeBoard = applyNoticeEvents(noticeBoard, log)
+  return { questProgress, noticeBoard }
+}
 
 export interface SkillGain {
   skillId: SkillId
@@ -368,7 +407,9 @@ export function advance(
       modifiers,
       tomeXpPct(tomes, skill.id),
     )
+    const beforeLevel = levelForXp(skills[skill.id].xp)
     skills = { ...skills, [skill.id]: { xp: addXp(skills[skill.id].xp, xp) } }
+    const afterLevel = levelForXp(skills[skill.id].xp)
     const beforeItems = inventory
     const beforeGold = gold
     const next = onActivityComplete(
@@ -407,19 +448,24 @@ export function advance(
       items: gainedItems(beforeItems, inventory),
       gold: Math.max(0, gold - beforeGold),
     })
+    if (afterLevel > beforeLevel) {
+      log.push({ kind: 'levelUp', skillId: skill.id, level: afterLevel })
+    }
   }
 
+  const nextState: AdvanceState = {
+    ...state,
+    skills,
+    inventory,
+    gold,
+    favor,
+    renown,
+    activeBuffs,
+    activeAction: action?.kind === 'skill' ? { ...action, progressMs: progress } : action,
+  }
+  const quested = applyQuestSideEffects(nextState, log)
   return {
-    state: {
-      ...state,
-      skills,
-      inventory,
-      gold,
-      favor,
-      renown,
-      activeBuffs,
-      activeAction: action?.kind === 'skill' ? { ...action, progressMs: progress } : action,
-    },
+    state: { ...nextState, ...quested },
     log,
   }
 }
@@ -466,35 +512,42 @@ function advanceCombatAction(
     if (newLines.length) log.push({ kind: 'combat', lines: newLines })
   }
 
-  let questProgress = state.questProgress
-  if (result.questStepComplete && questProgress) {
-    const kind = action.mode === 'dungeon' || action.dungeonId ? 'dungeon' : 'combat'
-    questProgress = completeQuestActionStep(result.questStepComplete, questProgress, kind)
+  for (const monsterId of result.killsThisTick ?? []) {
+    const killed = getMonster(monsterId)
+    if (killed) {
+      log.push({ kind: 'kill', monsterId, creatureType: killed.creatureType })
+    }
+  }
+  if (result.dungeonCleared) {
+    log.push({ kind: 'dungeonClear', dungeonId: result.dungeonCleared })
+  }
+  const beforeClassLevel = levelForXp(state.classXp ?? 0)
+  const afterClassLevel = levelForXp(result.classXp)
+  if (afterClassLevel > beforeClassLevel) {
+    log.push({ kind: 'levelUp', skillId: 'class', level: afterClassLevel })
   }
 
   const activeBuffs = tickBuffs(state.activeBuffs, elapsedMs)
 
   if (result.stop || !result.fight) {
-    return {
-      state: {
-        ...state,
-        skills: result.skills,
-        inventory: result.inventory,
-        gold: result.gold,
-        favor: result.favor ?? state.favor,
-        bounty: result.bounty !== undefined ? result.bounty : state.bounty,
-        classXp: result.classXp,
-        activeBuffs,
-        activeAction: null,
-        combat: null,
-        lastDefeat: result.defeated,
-        endedHuntKills: result.kills,
-        questProgress,
-        isInDungeonOrQuest: result.leftDungeonOrQuest ? false : state.isInDungeonOrQuest,
-        questStepComplete: result.questStepComplete ?? null,
-      },
-      log,
+    const nextState: AdvanceState = {
+      ...state,
+      skills: result.skills,
+      inventory: result.inventory,
+      gold: result.gold,
+      favor: result.favor ?? state.favor,
+      bounty: result.bounty !== undefined ? result.bounty : state.bounty,
+      classXp: result.classXp,
+      activeBuffs,
+      activeAction: null,
+      combat: null,
+      lastDefeat: result.defeated,
+      endedHuntKills: result.kills,
+      isInDungeonOrQuest: result.leftDungeonOrQuest ? false : state.isInDungeonOrQuest,
+      questStepComplete: result.questStepComplete ?? null,
     }
+    const quested = applyQuestSideEffects(nextState, log)
+    return { state: { ...nextState, ...quested }, log }
   }
 
   const monster = getMonster(result.fight.monsterId)
@@ -504,26 +557,24 @@ function advanceCombatAction(
       : monster
         ? `Hunting ${monster.name}`
         : action.label
-  return {
-    state: {
-      ...state,
-      skills: result.skills,
-      inventory: result.inventory,
-      gold: result.gold,
-      favor: result.favor ?? state.favor,
-      bounty: result.bounty !== undefined ? result.bounty : state.bounty,
-      classXp: result.classXp,
-      combat: result.fight,
-      questProgress,
-      activeBuffs,
-      activeAction: {
-        ...action,
-        label: dungeonLabel,
-        monsterId: result.fight.monsterId,
-        progressMs: result.fight.phase === 'rest' ? result.fight.restProgressMs : result.fight.playerProgressMs,
-        baseIntervalMs: result.fight.phase === 'rest' ? RESPAWN_MS : result.fight.playerIntervalMs,
-      },
+  const nextState: AdvanceState = {
+    ...state,
+    skills: result.skills,
+    inventory: result.inventory,
+    gold: result.gold,
+    favor: result.favor ?? state.favor,
+    bounty: result.bounty !== undefined ? result.bounty : state.bounty,
+    classXp: result.classXp,
+    combat: result.fight,
+    activeBuffs,
+    activeAction: {
+      ...action,
+      label: dungeonLabel,
+      monsterId: result.fight.monsterId,
+      progressMs: result.fight.phase === 'rest' ? result.fight.restProgressMs : result.fight.playerProgressMs,
+      baseIntervalMs: result.fight.phase === 'rest' ? RESPAWN_MS : result.fight.playerIntervalMs,
     },
-    log,
   }
+  const quested = applyQuestSideEffects(nextState, log)
+  return { state: { ...nextState, ...quested }, log }
 }

@@ -1,12 +1,23 @@
-import { BookOpen, Coins, Info, Menu, Package, Save, ScrollText, ShoppingCart, Swords, User } from 'lucide-react'
+import { BookOpen, Coins, Info, Menu, Package, Save, ScrollText, ShoppingCart, Swords, Tent, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { getActivity } from '../data/activities'
 import { getClass } from '../data/classes'
-import { SKILLS } from '../data/skills'
+import { getMonster, type BiomeId } from '../data/monsters'
+import { getQuest } from '../data/quests'
+import { SKILLS, isSkillId } from '../data/skills'
 import { actionIntervalMs } from '../engine/advance'
 import { deriveAbilities } from '../engine/abilities'
 import { RESPAWN_MS } from '../engine/config'
+import { sourcesOf } from '../engine/itemIndex'
+import {
+  currentStage,
+  getRun,
+  objectiveLabel,
+  objectiveProgress,
+} from '../engine/quest'
 import { levelForXp } from '../engine/xp'
+import type { PageFocus } from '../pages/pageFocus'
 import { useGameStore } from '../store/gameStore'
 import { CreditsModal } from './CreditsModal'
 import { Link } from './Link'
@@ -16,10 +27,11 @@ interface HeaderProps {
   title: string
   currentPage: string
   setCurrentPage: (page: string) => void
+  onNavigate: (page: string, focus?: PageFocus) => void
   onMainMenu: () => void
 }
 
-export function Header({ title, currentPage, setCurrentPage, onMainMenu }: HeaderProps) {
+export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainMenu }: HeaderProps) {
   const [charTip, setCharTip] = useState<{ top: number; left: number } | null>(null)
   const [creditsOpen, setCreditsOpen] = useState(false)
   const charRef = useRef<HTMLButtonElement>(null)
@@ -28,12 +40,19 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
   const classXp = useGameStore((state) => state.classXp)
   const skills = useGameStore((state) => state.skills)
   const equipment = useGameStore((state) => state.equipment)
+  const inventory = useGameStore((state) => state.inventory)
   const gold = useGameStore((state) => state.gold)
   const favor = useGameStore((state) => state.favor)
   const activeAction = useGameStore((state) => state.activeAction)
   const activeBuffs = useGameStore((state) => state.activeBuffs)
   const combat = useGameStore((state) => state.combat)
+  const pinnedQuestId = useGameStore((state) => state.pinnedQuestId)
+  const questProgress = useGameStore((state) => state.questProgress)
   const saveGame = useGameStore((state) => state.saveGame)
+  const pinnedQuest = pinnedQuestId ? getQuest(pinnedQuestId) : undefined
+  const pinnedRun = pinnedQuestId ? getRun(questProgress, pinnedQuestId) : undefined
+  const pinnedStage =
+    pinnedQuest && pinnedRun && !pinnedRun.done ? currentStage(pinnedQuest, pinnedRun) : null
   const actionInterval =
     activeAction?.kind === 'combat' && combat?.phase === 'rest'
       ? RESPAWN_MS
@@ -75,24 +94,59 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
       <CreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />
       <h1 className="text-2xl font-bold text-gold">{title}</h1>
 
-      <div className="mx-4 flex min-w-0 items-center gap-2" aria-label="Active action">
-        {activeAction ? (
+      <div className="mx-4 flex min-w-0 flex-1 items-center gap-3" aria-label="Active action">
+        <div className="flex min-w-0 items-center gap-2">
+          {activeAction ? (
+            <button
+              type="button"
+              onClick={() =>
+                setCurrentPage(activeAction.kind === 'skill' ? activeAction.skillId : 'monsterHunting')
+              }
+              className="truncate text-sm hover:text-gold hover:underline"
+            >
+              {actionLabel}
+            </button>
+          ) : (
+            <span className="truncate text-sm">{actionLabel}</span>
+          )}
+          {activeAction && (
+            <div className="w-24 shrink-0">
+              <ProgressBar progress={actionProgress} className="h-2" label="Active action progress" />
+            </div>
+          )}
+        </div>
+        {pinnedQuest && pinnedRun && pinnedStage && 'objectives' in pinnedStage && (
+          <div className="flex min-w-0 flex-wrap items-center gap-2 border-l border-brown/40 pl-3" aria-label="Quest tracker">
+            <span className="truncate text-xs text-gold">{pinnedQuest.title}</span>
+            {pinnedStage.objectives.map((obj, i) => {
+              const prog = objectiveProgress(
+                obj,
+                pinnedRun.counts[i] ?? 0,
+                inventory,
+                skills,
+                classXp,
+              )
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => jumpObjective(obj, onNavigate)}
+                  className="truncate text-xs text-sage hover:underline"
+                >
+                  {objectiveLabel(obj)} {Math.min(prog.have, prog.need)}/{prog.need}
+                </button>
+              )
+            })}
+          </div>
+        )}
+        {pinnedQuest && pinnedStage && 'check' in pinnedStage && (
           <button
             type="button"
-            onClick={() =>
-              setCurrentPage(activeAction.kind === 'skill' ? activeAction.skillId : 'monsterHunting')
-            }
-            className="truncate text-sm hover:text-gold hover:underline"
+            onClick={() => onNavigate('mile-camp', { kind: 'quest', questId: pinnedQuest.id })}
+            className="border-l border-brown/40 pl-3 text-xs text-gold hover:underline"
           >
-            {actionLabel}
+            {pinnedQuest.title}: check ready
           </button>
-        ) : (
-          <span className="truncate text-sm">{actionLabel}</span>
-        )}
-        {activeAction && (
-          <div className="w-24 shrink-0">
-            <ProgressBar progress={actionProgress} className="h-2" label="Active action progress" />
-          </div>
         )}
       </div>
 
@@ -142,11 +196,11 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
           active={currentPage === 'monsterHunting'}
         />
         <Link
-          icon={<ScrollText size={20} />}
-          label="Quests"
+          icon={<Tent size={20} />}
+          label="Mile-Camp"
           tipSide="below"
-          onClick={() => setCurrentPage('quests')}
-          active={currentPage === 'quests'}
+          onClick={() => setCurrentPage('mile-camp')}
+          active={currentPage === 'mile-camp'}
         />
 
         <div className="relative">
@@ -209,6 +263,66 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
       </div>
     </div>
   )
+}
+
+function jumpObjective(
+  obj: import('../data/quests').Objective,
+  onNavigate: (page: string, focus?: PageFocus) => void,
+) {
+  if (obj.type === 'kill') {
+    if ('monsterId' in obj) {
+      const monster = getMonster(obj.monsterId)
+      const biome = (monster?.biomes[0] ?? 'forest') as BiomeId
+      onNavigate('monsterHunting', { kind: 'monster', monsterId: obj.monsterId, biome })
+      return
+    }
+    onNavigate('monsterHunting')
+    return
+  }
+  if (obj.type === 'gather' || obj.type === 'craft') {
+    const activity = SKILLS.map((skill) => getActivity(skill.id, obj.activityId)).find(Boolean)
+    if (activity) {
+      onNavigate(activity.skillId, {
+        kind: 'activity',
+        skillId: activity.skillId,
+        activityId: activity.id,
+      })
+      return
+    }
+  }
+  if (obj.type === 'reachLevel') {
+    if (obj.skillId === 'class') {
+      onNavigate('character')
+      return
+    }
+    if (isSkillId(obj.skillId)) onNavigate(obj.skillId)
+    return
+  }
+  if (obj.type === 'clearDungeon') {
+    onNavigate('monsterHunting', { kind: 'dungeon', dungeonId: obj.dungeonId })
+    return
+  }
+  if (obj.type === 'have' || obj.type === 'deliver') {
+    const source = sourcesOf(obj.itemId)[0]
+    if (source?.kind === 'activity') {
+      onNavigate(source.skillId, {
+        kind: 'activity',
+        skillId: source.skillId,
+        activityId: source.activityId,
+      })
+      return
+    }
+    if (source?.kind === 'monster') {
+      const monster = getMonster(source.monsterId)
+      onNavigate('monsterHunting', {
+        kind: 'monster',
+        monsterId: source.monsterId,
+        biome: (monster?.biomes[0] ?? 'forest') as BiomeId,
+      })
+      return
+    }
+    onNavigate('inventory')
+  }
 }
 
 function formatBuffTime(ms: number): string {

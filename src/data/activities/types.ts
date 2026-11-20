@@ -36,5 +36,7 @@ export interface ActivityDef {
   favor?: GoldDrop
   /** Performance venues that need Renown on top of level. */
   renownRequired?: number
+  /** Hidden until this quest is complete. */
+  requiresQuest?: string
   kind: 'gather' | 'craft' | 'train'
 }

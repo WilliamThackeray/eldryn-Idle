@@ -23,6 +23,16 @@ function wildweave() {
 export const natureActivities = [
   activity({ skillId: 'nature', id: 'cook-forest-fish', name: 'Cook Forest Fish', description: 'Cook a raw forest fish.', requiredLevel: 1, inputs: [stack('raw-forest-fish')], outputs: [drop('cooked-forest-fish')] }),
   activity({ skillId: 'nature', id: 'cook-meat', name: 'Cook Meat', description: 'Roast raw meat.', requiredLevel: 1, inputs: [stack('raw-meat')], outputs: [drop('cooked-meat')] }),
+  activity({
+    skillId: 'nature',
+    id: 'cook-stew',
+    name: 'Cook Hearty Stew',
+    description: 'Simmer cooked meat into mile-camp stew.',
+    requiredLevel: 1,
+    inputs: [stack('cooked-meat', 2)],
+    outputs: [drop('hearty-stew')],
+    requiresQuest: 'supper-at-the-mile-camp',
+  }),
   activity({ skillId: 'nature', id: 'cook-fowl', name: 'Cook Fowl', description: 'Roast raw fowl.', requiredLevel: 20, inputs: [stack('raw-fowl')], outputs: [drop('cooked-fowl')] }),
   activity({ skillId: 'nature', id: 'cook-desert-fish', name: 'Cook Desert Fish', description: 'Cook a raw oasis fish.', requiredLevel: 20, inputs: [stack('raw-desert-fish')], outputs: [drop('cooked-desert-fish')] }),
   activity({ skillId: 'nature', id: 'cook-coastal-fish', name: 'Cook Coastal Fish', description: 'Cook a raw coastal fish.', requiredLevel: 40, inputs: [stack('raw-coastal-fish')], outputs: [drop('cooked-coastal-fish')] }),

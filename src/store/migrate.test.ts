@@ -37,7 +37,7 @@ test('a broken save resets to a fresh character', () => {
 })
 
 test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(16)
+  expect(SAVE_VERSION).toBe(17)
 
   const next = migrateSave(
     {
@@ -274,4 +274,68 @@ test('legacy component bags convert to gold at old sell values', () => {
   expect(next.inventory['component-bag-fine']).toBeUndefined()
   expect(next.inventory['iron-ore']).toBe(3)
   expect(next.gold).toBe(10 + 2 * 12 + 50)
+})
+
+test('v17 drops old quest progress and refunds completed shattered-mile', () => {
+  const next = migrateSave(
+    {
+      characterName: 'ada',
+      skills: { athletics: { xp: 0 } },
+      inventory: {},
+      gold: 20,
+      classId: 'fighter',
+      classXp: 0,
+      questProgress: { 'shattered-mile': { step: 6, done: true } },
+      combat: {
+        monsterId: 'wolf',
+        biome: 'forest',
+        playerHp: 10,
+        playerMaxHp: 10,
+        monsterHp: 5,
+        monsterMaxHp: 11,
+        playerProgressMs: 0,
+        monsterProgressMs: 0,
+        phase: 'fight',
+        restProgressMs: 0,
+        playerIntervalMs: 2000,
+        monsterIntervalMs: 2000,
+        playerIntervalCount: 0,
+        nextAttackAdvantage: false,
+        monsterNextDisadvantage: false,
+        slowActive: false,
+        pushDelayMs: 0,
+        cleaveOverflow: 0,
+        ammoSpent: 0,
+        signature: { id: 'secondWind', uses: 0, maxUses: 1 },
+        kills: 0,
+        sessionMs: 0,
+        lootGained: [],
+        goldGained: 0,
+        classXpGained: 0,
+        openingDone: true,
+        outOfAmmo: false,
+        defeated: false,
+        log: [],
+        spellSlots: [],
+        rotationIndex: 0,
+        concentration: null,
+        shieldBonus: 0,
+        dungeonId: null,
+        nodeIndex: 0,
+        runsCompleted: 0,
+        restKind: null,
+        roomLog: [],
+        questId: 'shattered-mile',
+        pendingCleave: 0,
+        relentlessUsed: false,
+        frightenAttacksLeft: 0,
+      },
+    },
+    16,
+  )
+  expect(next.questProgress).toEqual({})
+  expect(next.gold).toBe(70)
+  expect(next.pinnedQuestId).toBeNull()
+  expect(next.noticeBoard.offers).toEqual([])
+  expect(next.combat?.questId).toBeNull()
 })

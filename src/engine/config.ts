@@ -213,3 +213,11 @@ export const FRIGHTEN_DAMAGE_PCT = 0.75
 export const BOUNTY_KILLS = 5
 export const BOUNTY_GOLD = 25
 export const BOUNTY_FAVOR = 5
+
+/** Notice Board refresh interval (wall-clock, includes offline). */
+export const NOTICE_BOARD_MS = 4 * 60 * 60 * 1000
+export const NOTICE_BOARD_QTY = 5
+export const NOTICE_BOARD_KILL_GOLD_PER = 8
+export const NOTICE_BOARD_FAVOR = 2
+export const NOTICE_BOARD_REROLL_FAVOR = 1
+export const LEGACY_QUEST_GOLD = 50

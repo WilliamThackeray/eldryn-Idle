@@ -34,6 +34,7 @@ interface Spec {
   gold?: GoldDrop
   favor?: GoldDrop
   renownRequired?: number
+  requiresQuest?: string
   baseIntervalMs?: number
 }
 
@@ -58,6 +59,7 @@ export function activity(spec: Spec): ActivityDef {
     gold: spec.gold,
     favor: spec.favor,
     renownRequired: spec.renownRequired,
+    requiresQuest: spec.requiresQuest,
     kind,
   }
 }

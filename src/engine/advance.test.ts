@@ -40,7 +40,7 @@ function training(skillId: SkillId, baseXp = 10, dexXp = 0): AdvanceState {
 test('advance over 60s at a 6s interval resolves exactly 10 actions', () => {
   const result = advance(training('athletics', 10), 60_000, mulberry32(1))
 
-  expect(result.log).toHaveLength(10)
+  expect(result.log.filter((event) => event.kind === 'skill')).toHaveLength(10)
   expect(result.state.activeAction).toMatchObject({ kind: 'skill', progressMs: 0 })
   expect(result.state.inventory).toEqual({})
   expect(result.state.skills.athletics.xp).toBeGreaterThan(0)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { activitiesFor, type ActivityDef, type GoldDrop, type LootEntry } from '../../data/activities'
 import { getClass, modifiersFor } from '../../data/classes'
 import {
@@ -14,6 +14,7 @@ import { activePerks, deriveAbilities, effectTotal } from '../../engine/abilitie
 import { actionIntervalMs, activityIntervalMs, type SkillEvent } from '../../engine/advance'
 import { discountTomeInputs, tomeCheckBonus, tomeSpeedBonus, tomeXpPct } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
+import { activityUnlocked } from '../../engine/quest'
 import { checkDc, successChance } from '../../engine/skillCheck'
 import { levelForXp, proficiency, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
@@ -54,6 +55,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const readBestiary = useGameStore((state) => state.readBestiary)
   const activateNotes = useGameStore((state) => state.useNotes)
   const renown = useGameStore((state) => state.renown)
+  const questProgress = useGameStore((state) => state.questProgress)
   const progress = progressToNext(xp)
   const level = levelForXp(xp)
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
@@ -71,7 +73,13 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
         ? `XP ×${(1 + tomePct).toFixed(2)} (History)`
         : null
   const historyLine = historyBonusLine(tomes[skillId] ?? 0)
-  const activities = activitiesFor(skillId)
+  const activities = useMemo(
+    () =>
+      activitiesFor(skillId).filter((activity) =>
+        activityUnlocked(activity.requiresQuest, questProgress),
+      ),
+    [skillId, questProgress],
+  )
   const pageDiscount = effectTotal(activePerks({ skills }), 'historyTomePages')
   const tomeSpeed = tomeSpeedBonus(tomes, skillId)
   const activeSpeed =
@@ -245,15 +253,19 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
           <p className="text-sm text-parchment/70">No rolls yet.</p>
         ) : (
           <ul className="space-y-1 text-sm">
-            {[...log].reverse().map((event, index) =>
-              event.kind === 'combat' ? null : (
+            {[...log].reverse().map((event, index) => {
+              if (event.kind === 'materials') {
+                return (
+                  <li key={`materials-${index}`}>Out of materials: {event.label}. Stopped.</li>
+                )
+              }
+              if (event.kind !== 'skill') return null
+              return (
                 <li key={`${event.activityId}-${index}`}>
-                  {event.kind === 'materials'
-                    ? `Out of materials: ${event.label}. Stopped.`
-                    : `${SKILLS.find((skill) => skill.id === event.skillId)?.name ?? event.label}: roll ${event.roll} (${event.total} vs DC ${event.dc}) ${event.outcome} +${formatXp(event.xp)} XP${formatGains(event)}`}
+                  {`${SKILLS.find((skill) => skill.id === event.skillId)?.name ?? event.label}: roll ${event.roll} (${event.total} vs DC ${event.dc}) ${event.outcome} +${formatXp(event.xp)} XP${formatGains(event)}`}
                 </li>
-              ),
-            )}
+              )
+            })}
           </ul>
         )}
       </section>

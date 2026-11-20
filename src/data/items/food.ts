@@ -11,5 +11,16 @@ export const FOOD = [
   { id: 'cooked-coastal-fish', name: 'Cooked Coastal Fish', description: 'A cooked saltwater fish.', category: 'food', rarity: 'rare', stackable: true, sellValue: 22, tags: ['fish', 'cooked'], heal: 50 },
   { id: 'cooked-meat', name: 'Cooked Meat', description: 'Roasted meat.', category: 'food', rarity: 'common', stackable: true, sellValue: 10, tags: ['meat', 'cooked'], heal: 12 },
   { id: 'cooked-fowl', name: 'Cooked Fowl', description: 'Roasted bird.', category: 'food', rarity: 'common', stackable: true, sellValue: 12, tags: ['meat', 'cooked'], heal: 22 },
+  {
+    id: 'hearty-stew',
+    name: 'Hearty Stew',
+    description: 'Mile-camp pot luck. Slow-simmered meat that sticks to the ribs.',
+    category: 'food',
+    rarity: 'uncommon',
+    stackable: true,
+    sellValue: 18,
+    tags: ['meat', 'cooked'],
+    heal: 22,
+  },
   { id: 'eggs', name: 'Eggs', description: 'Ranch eggs.', category: 'food', rarity: 'common', stackable: true, sellValue: 2, tags: ['raw'] },
 ] as const satisfies readonly ItemDef[]

@@ -47,6 +47,8 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     lootGained: [...input.fight.lootGained],
     roomLog: [...(input.fight.roomLog ?? [])],
     signature: { ...input.fight.signature },
+    killsThisTick: [] as string[],
+    dungeonClearedThisTick: null as string | null,
   }
   let skills = input.skills
   let inventory = input.inventory
@@ -78,6 +80,8 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     ...result,
     favor,
     bounty,
+    killsThisTick: fight.killsThisTick,
+    dungeonCleared: fight.dungeonClearedThisTick,
   })
 
   const finishDefeat = (): CombatAdvanceResult => {

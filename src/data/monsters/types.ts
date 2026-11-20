@@ -2,8 +2,12 @@ import type { AbilityAbbr } from '../../types/game'
 import type { GoldDrop, LootEntry } from '../activities/types'
 import type { DamageType } from '../items/types'
 
-export const BIOMES = ['forest', 'hills', 'swamp'] as const
+export const BIOMES = ['forest', 'hills', 'swamp', 'quest'] as const
 export type BiomeId = (typeof BIOMES)[number]
+
+/** Biomes shown on the Monster Hunting tab. */
+export const HUNT_BIOMES = ['forest', 'hills', 'swamp'] as const satisfies readonly BiomeId[]
+export type HuntBiomeId = (typeof HUNT_BIOMES)[number]
 
 export const CREATURE_TYPES = [
   'aberration',

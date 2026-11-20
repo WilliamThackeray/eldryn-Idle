@@ -17,6 +17,8 @@ export interface DungeonDef {
   /** Consumed once per run (including each loop after long rest). */
   entry?: ItemStack
   rooms?: DungeonRoom[]
+  /** Hidden until this quest is accepted or complete. */
+  requiresQuest?: string
 }
 
 export const DUNGEONS: DungeonDef[] = [
@@ -27,6 +29,7 @@ export const DUNGEONS: DungeonDef[] = [
     recommendedTier: 2,
     encounters: ['wolf', 'dire-wolf'],
     boss: 'owlbear',
+    requiresQuest: 'into-the-thicket',
     chest: [
       { itemId: 'hide', chance: 1, min: 1, max: 2 },
       { itemId: 'valuables', chance: 1, min: 1, max: 1 },
