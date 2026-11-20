@@ -161,11 +161,13 @@ export const COMBAT_LOG_LIMIT = 30
 /**
  * Spell slots inside a fight.
  * expended: each leveled slot casts once, then cantrips until a rest.
- * rotation: the loop cycles through all slots forever (components still limit leveled casts).
- * TODO(design): pick one for shipping; both stay behind this switch.
+ * rotation: the loop cycles through all slots forever (components are the limiter).
  */
 export type SpellSlotModel = 'expended' | 'rotation'
-export const SPELL_SLOT_MODEL: SpellSlotModel = 'expended'
+export const SPELL_SLOT_MODEL: SpellSlotModel = 'rotation'
+
+/** Wizard: chance to cast without consuming components. */
+export const ARCANE_RECOVERY_SAVE_CHANCE = 0.15
 
 /**
  * Casting ability for spell attack / save DC.

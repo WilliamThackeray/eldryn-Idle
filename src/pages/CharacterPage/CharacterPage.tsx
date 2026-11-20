@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getClass } from '../../data/classes'
-import type { ItemId } from '../../data/items'
+import { getItem, type ItemId } from '../../data/items'
+import { getMonster } from '../../data/monsters'
 import { getSkill } from '../../data/skills'
-import { spellsForClass, type SpellId } from '../../data/spells'
+import { getSpell, spellsForClass, type SpellId } from '../../data/spells'
 import { ladderPerksFor, perRankPerkFor } from '../../data/abilityPerks'
 import { ProgressBar } from '../../components/ProgressBar'
 import { CombatStatsPanel } from '../../components/CombatStatsPanel'
@@ -10,8 +11,13 @@ import { ItemDetail } from '../../components/ItemDetail'
 import { PaperDoll } from '../../components/PaperDoll'
 import { deriveAbilities } from '../../engine/abilities'
 import { type EquipmentSlot } from '../../engine/equipment'
+import { sourcesOf, type ItemLink } from '../../engine/itemIndex'
+import type { Inventory } from '../../engine/inventory'
 import {
+  componentCostForCast,
   effectiveCasterType,
+  hasComponents,
+  missingComponentName,
   slotsFor,
   spellFitsSlot,
   unlockSkillFor,
@@ -19,15 +25,21 @@ import {
 } from '../../engine/spells'
 import { levelForXp, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
+import type { PageFocus } from '../pageFocus'
 
 type Tab = 'gear' | 'spellbook'
 
 interface CharacterPageProps {
   focus?: { kind: 'spell'; spellId: string } | null
   onFocusConsumed?: () => void
+  onNavigate?: (page: string, focus?: PageFocus) => void
 }
 
-export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPageProps) {
+export function CharacterPage({
+  focus = null,
+  onFocusConsumed,
+  onNavigate,
+}: CharacterPageProps) {
   const characterName = useGameStore((state) => state.characterName)
   const skills = useGameStore((state) => state.skills)
   const classId = useGameStore((state) => state.classId)
@@ -77,6 +89,56 @@ export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPagePr
   )
   const classSpells = classId ? spellsForClass(classId) : []
   const loadout = classId ? spellLoadouts[classId] : undefined
+
+  function openLink(link: ItemLink) {
+    if (!onNavigate) return
+    if (link.kind === 'activity') {
+      onNavigate(link.skillId, { kind: 'activity', skillId: link.skillId, activityId: link.activityId })
+      return
+    }
+    if (link.kind === 'monster') {
+      const monster = getMonster(link.monsterId)
+      const biome = monster?.biomes[0]
+      if (!biome) return
+      onNavigate('monsterHunting', { kind: 'monster', monsterId: link.monsterId, biome })
+      return
+    }
+    if (link.kind === 'dungeon') {
+      onNavigate('monsterHunting', { kind: 'dungeon', dungeonId: link.dungeonId })
+      return
+    }
+    if (link.kind === 'spell') {
+      onNavigate('character', { kind: 'spell', spellId: link.spellId })
+      return
+    }
+    if (link.kind === 'shop') {
+      onNavigate('shop')
+      return
+    }
+    if (link.kind === 'quest') {
+      onNavigate('quests', { kind: 'quest', questId: link.questId })
+    }
+  }
+
+  function slotWarning(spellId: SpellId | null, slotLevel: number): string | null {
+    if (!classId || !spellId) return null
+    const spell = getSpell(spellId)
+    if (!spell) return null
+    const cost = componentCostForCast({ spell, classId })
+    if (hasComponents(inventory, cost)) return null
+    const missing = missingComponentName(inventory, cost) ?? 'components'
+    if (slotLevel === 0) return `Out of ${missing}: will attack with the main hand`
+    const cantrip = getSpell(
+      (loadout?.slots[0] ?? classSpells.find((entry) => entry.level === 0)?.id) as SpellId,
+    )
+    if (!cantrip) return `Out of ${missing}: will attack with the main hand`
+    const cantripCost = componentCostForCast({ spell: cantrip, classId })
+    if (!hasComponents(inventory, cantripCost)) {
+      const cantripMissing = missingComponentName(inventory, cantripCost) ?? 'components'
+      return `Out of ${missing}: will cast ${cantrip.name} — also out of ${cantripMissing}: will attack with the main hand`
+    }
+    return `Out of ${missing}: will cast ${cantrip.name}`
+  }
 
   return (
     <div className="space-y-6 text-parchment">
@@ -298,56 +360,64 @@ export function CharacterPage({ focus = null, onFocusConsumed }: CharacterPagePr
                     (spell) =>
                       spellFitsSlot(spell, slot.level) && unlockLevel >= unlockSkillLevel(spell.level),
                   )
+                  const warning = slotWarning(selected, slot.level)
                   return (
                     <li
                       key={`${slot.level}-${index}`}
-                      className="flex flex-wrap items-center gap-3 rounded-md bg-ink/40 px-3 py-2 text-sm"
+                      className="flex flex-col gap-1 rounded-md bg-ink/40 px-3 py-2 text-sm"
                     >
-                      <span className="w-28 text-sage">
-                        {slot.level === 0 ? 'Cantrip' : `Slot ${slot.level}`}
-                      </span>
-                      <select
-                        value={selected ?? ''}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setSpellSlot(classId, index, value ? (value as SpellId) : null)
-                        }}
-                        className="min-w-[12rem] rounded-lg border border-brown/40 bg-ink/50 px-2 py-1 text-parchment"
-                      >
-                        <option value="">Empty</option>
-                        {options.map((spell) => (
-                          <option key={spell.id} value={spell.id}>
-                            {spell.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="w-28 text-sage">
+                          {slot.level === 0 ? 'Cantrip' : `Slot ${slot.level}`}
+                        </span>
+                        <select
+                          value={selected ?? ''}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            setSpellSlot(classId, index, value ? (value as SpellId) : null)
+                          }}
+                          className="min-w-[12rem] rounded-lg border border-brown/40 bg-ink/50 px-2 py-1 text-parchment"
+                        >
+                          <option value="">Empty</option>
+                          {options.map((spell) => (
+                            <option key={spell.id} value={spell.id}>
+                              {spell.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {warning && <p className="text-xs text-crimson">{warning}</p>}
                     </li>
                   )
                 })}
               </ul>
 
               <h4 className="mb-2 font-semibold text-sage">Known & locked</h4>
-              <ul className="space-y-1 text-sm">
+              <ul className="space-y-2 text-sm">
                 {classSpells.map((spell) => {
                   const need = unlockSkillLevel(spell.level)
                   const known = unlockLevel >= need
+                  const cost = componentCostForCast({ spell, classId })
                   return (
                     <li
                       key={spell.id}
                       id={`spell-${spell.id}`}
-                      className={`flex justify-between gap-2 rounded px-3 py-1.5 ${
+                      className={`rounded px-3 py-2 ${
                         highlightSpellId === spell.id ? 'bg-gold/20 ring-1 ring-gold' : 'bg-ink/30'
                       }`}
                     >
-                      <span>
-                        {spell.name}{' '}
-                        <span className="text-sage">
-                          (L{spell.level === 0 ? '0 cantrip' : spell.level})
+                      <div className="flex justify-between gap-2">
+                        <span>
+                          {spell.name}{' '}
+                          <span className="text-sage">
+                            (L{spell.level === 0 ? '0 cantrip' : spell.level})
+                          </span>
                         </span>
-                      </span>
-                      <span className={known ? 'text-sage' : 'text-parchment/50'}>
-                        {known ? 'Known' : `Unlocks at ${need}`}
-                      </span>
+                        <span className={known ? 'text-sage' : 'text-parchment/50'}>
+                          {known ? 'Known' : `Unlocks at ${need}`}
+                        </span>
+                      </div>
+                      <ComponentLines cost={cost} inventory={inventory} onOpenLink={openLink} />
                     </li>
                   )
                 })}
@@ -367,5 +437,50 @@ function Stat({ label, value }: { label: string; value: string }) {
       <dt className="text-xs uppercase tracking-wide text-sage/80">{label}</dt>
       <dd className="font-semibold text-parchment">{value}</dd>
     </div>
+  )
+}
+
+function ComponentLines({
+  cost,
+  inventory,
+  onOpenLink,
+}: {
+  cost: ReturnType<typeof componentCostForCast>
+  inventory: Inventory
+  onOpenLink: (link: ItemLink) => void
+}) {
+  if (cost.length === 0) {
+    return <p className="mt-1 text-xs text-parchment/50">No components</p>
+  }
+  return (
+    <ul className="mt-1 space-y-1 text-xs text-parchment/80">
+      {cost.map((stack) => {
+        const owned = inventory[stack.itemId] ?? 0
+        const name = getItem(stack.itemId)?.name ?? stack.itemId
+        const sources = sourcesOf(stack.itemId)
+        return (
+          <li key={stack.itemId}>
+            <span className={owned >= stack.quantity ? 'text-sage' : 'text-crimson'}>
+              {name} ×{stack.quantity} (own {owned})
+            </span>
+            {sources.length > 0 && (
+              <span className="ml-2 text-parchment/50">
+                from{' '}
+                {sources.slice(0, 3).map((link, index) => (
+                  <button
+                    key={`${link.kind}-${link.label}-${index}`}
+                    type="button"
+                    onClick={() => onOpenLink(link)}
+                    className="mr-1 text-gold underline-offset-2 hover:underline"
+                  >
+                    {link.label}
+                  </button>
+                ))}
+              </span>
+            )}
+          </li>
+        )
+      })}
+    </ul>
   )
 }

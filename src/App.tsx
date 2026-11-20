@@ -80,6 +80,7 @@ function App() {
               <CharacterPage
                 focus={pageFocus?.kind === 'spell' ? pageFocus : null}
                 onFocusConsumed={() => setPageFocus(null)}
+                onNavigate={navigate}
               />
             )}
           </div>

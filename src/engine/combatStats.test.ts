@@ -105,7 +105,7 @@ test('fire bolt cantrip expected damage uses attack roll math', () => {
       equipment: emptyEquipment(),
       classId: 'wizard',
       classXp: 0,
-      inventory: {},
+      inventory: { 'arcane-dust': 999 },
       spellLoadout: { slots: ['fire-bolt'] },
     },
     monster,

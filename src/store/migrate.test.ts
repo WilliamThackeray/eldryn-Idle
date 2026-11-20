@@ -37,7 +37,7 @@ test('a broken save resets to a fresh character', () => {
 })
 
 test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(13)
+  expect(SAVE_VERSION).toBe(14)
 
   const next = migrateSave(
     {
@@ -252,4 +252,26 @@ test('a save without inventoryTabs puts every owned item on Tab 1', () => {
   expect(next.inventoryTabs[0].itemIds).toEqual(expect.arrayContaining(['iron-ore', 'coal']))
   expect(next.inventoryTabs[0].itemIds).toHaveLength(2)
   expect(next.inventoryTabs.slice(1).every((tab) => tab.itemIds.length === 0)).toBe(true)
+})
+
+test('legacy component bags convert to gold at old sell values', () => {
+  const next = migrateSave(
+    {
+      characterName: 'ada',
+      skills: { athletics: { xp: 0 } },
+      inventory: {
+        'component-bag-basic': 2,
+        'component-bag-fine': 1,
+        'iron-ore': 3,
+      },
+      gold: 10,
+      classId: 'wizard',
+      classXp: 0,
+    },
+    13,
+  )
+  expect(next.inventory['component-bag-basic']).toBeUndefined()
+  expect(next.inventory['component-bag-fine']).toBeUndefined()
+  expect(next.inventory['iron-ore']).toBe(3)
+  expect(next.gold).toBe(10 + 2 * 12 + 50)
 })

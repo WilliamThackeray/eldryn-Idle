@@ -207,6 +207,11 @@ export function resolvePlayerAttack(input: {
     bonusFlat: 0,
     creatureType: monster.creatureType,
     spendLowestSlot: () => spendLowestSlot(fight.spellSlots),
+    spendHolyWater: () => {
+      if ((inventory['holy-water'] ?? 0) < 1) return false
+      inventory = removeItems(inventory, [{ itemId: 'holy-water', quantity: 1 }])
+      return true
+    },
   }
   hooks.onHit?.(hitCtx)
   if (fight.concentration === 'divineFavor') {

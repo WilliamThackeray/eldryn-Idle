@@ -52,8 +52,10 @@ export interface HitHookContext extends SignatureContext {
   /** Flat bonus damage. */
   bonusFlat: number
   creatureType: string
-  /** Divine Smite: spend the lowest unspent leveled slot. Returns slot level or null. */
+  /** Divine Smite (expended path): spend the lowest unspent leveled slot. Returns slot level or null. */
   spendLowestSlot?: () => number | null
+  /** Divine Smite: spend 1 Holy Water. Returns true if spent. */
+  spendHolyWater?: () => boolean
 }
 
 export interface DamagedHookContext extends SignatureContext {

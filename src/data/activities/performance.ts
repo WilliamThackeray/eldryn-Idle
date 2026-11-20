@@ -17,9 +17,35 @@ function minstrelGear() {
   })
 }
 
+const rosin = [drop('rosin', 5, 10)]
+
 export const performanceActivities = [
-  activity({ skillId: 'performance', id: 'local-music', name: 'Local Music', description: 'Play a set in a local tavern.', requiredLevel: 1, gold: { min: 2, max: 6 } }),
-  activity({ skillId: 'performance', id: 'traveling-music', name: 'Traveling Music', description: 'Play for a road crowd.', requiredLevel: 10, gold: { min: 4, max: 10 } }),
-  activity({ skillId: 'performance', id: 'local-play', name: 'Local Play', description: 'Act in a local play.', requiredLevel: 20, gold: { min: 6, max: 12 } }),
+  activity({
+    skillId: 'performance',
+    id: 'local-music',
+    name: 'Local Music',
+    description: 'Play a set in a local tavern. Collect Rosin.',
+    requiredLevel: 1,
+    outputs: rosin,
+    gold: { min: 2, max: 6 },
+  }),
+  activity({
+    skillId: 'performance',
+    id: 'traveling-music',
+    name: 'Traveling Music',
+    description: 'Play for a road crowd. Collect Rosin.',
+    requiredLevel: 10,
+    outputs: rosin,
+    gold: { min: 4, max: 10 },
+  }),
+  activity({
+    skillId: 'performance',
+    id: 'local-play',
+    name: 'Local Play',
+    description: 'Act in a local play. Collect Rosin.',
+    requiredLevel: 20,
+    outputs: rosin,
+    gold: { min: 6, max: 12 },
+  }),
   ...minstrelGear(),
 ]

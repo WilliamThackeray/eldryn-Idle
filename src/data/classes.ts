@@ -19,9 +19,16 @@ export type ClericFocus = 'INT' | 'STR'
 
 export type CasterType = 'full' | 'half' | 'pact' | 'none'
 
+export type SpellTradition = 'arcane' | 'divine' | 'primal' | 'bardic'
+
 export type Spellcasting =
   | { casterType: 'none' }
-  | { casterType: 'full' | 'half' | 'pact'; unlockSkill: SkillId; castingAbility: AbilityAbbr }
+  | {
+      casterType: 'full' | 'half' | 'pact'
+      unlockSkill: SkillId
+      castingAbility: AbilityAbbr
+      tradition: SpellTradition
+    }
 
 export interface SignatureAbility {
   id: string
@@ -47,10 +54,22 @@ export interface ClassDefinition {
   /** 5e weapon list: category tags and/or specific weapon ids. */
   weaponProficiencies: readonly WeaponProficiency[]
   spellcasting: Spellcasting
-  /** Null for classes that do not cast. */
-  tradition: string | null
   signatureAbility: SignatureAbility
   startingKit: readonly { itemId: ItemId; quantity: number }[]
+}
+
+export const TRADITION_REAGENT: Record<SpellTradition, ItemId> = {
+  arcane: 'arcane-dust',
+  divine: 'holy-water',
+  primal: 'mistletoe-sprig',
+  bardic: 'rosin',
+}
+
+export const TRADITION_LABEL: Record<SpellTradition, string> = {
+  arcane: 'Arcane',
+  divine: 'Divine',
+  primal: 'Primal',
+  bardic: 'Bardic',
 }
 
 const SIMPLE_MARTIAL = ['simple', 'martial'] as const satisfies readonly WeaponProficiency[]
@@ -94,9 +113,17 @@ function martialKit(weapon: ItemId, kind: 'padded' | 'leather'): { itemId: ItemI
   return [{ itemId: weapon, quantity: 1 }, ...armorPieces(kind), FOOD]
 }
 
-function casterKit(weapon: ItemId, kind: KitArmor): { itemId: ItemId; quantity: number }[] {
-  // TODO(Prompt 16): add 50 cantrip reagents. Paladin and Ranger included.
-  return [{ itemId: weapon, quantity: 1 }, ...armorPieces(kind), FOOD]
+function casterKit(
+  weapon: ItemId,
+  kind: KitArmor,
+  tradition: SpellTradition,
+): { itemId: ItemId; quantity: number }[] {
+  return [
+    { itemId: weapon, quantity: 1 },
+    ...armorPieces(kind),
+    FOOD,
+    { itemId: TRADITION_REAGENT[tradition], quantity: 50 },
+  ]
 }
 
 export const CLASSES = [
@@ -111,7 +138,6 @@ export const CLASSES = [
     saveProficiencies: ['STR', 'CON'],
     weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
-    tradition: null,
     startingKit: martialKit('greataxe', 'leather'),
     signatureAbility: {
       id: 'rage',
@@ -131,7 +157,6 @@ export const CLASSES = [
     saveProficiencies: ['STR', 'CON'],
     weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
-    tradition: null,
     startingKit: martialKit('longsword', 'leather'),
     signatureAbility: {
       id: 'secondWind',
@@ -151,7 +176,6 @@ export const CLASSES = [
     saveProficiencies: ['DEX', 'INT'],
     weaponProficiencies: ROGUE_BARD,
     spellcasting: { casterType: 'none' },
-    tradition: null,
     startingKit: martialKit('rapier', 'leather'),
     signatureAbility: {
       id: 'sneakAttack',
@@ -170,7 +194,6 @@ export const CLASSES = [
     saveProficiencies: ['STR', 'DEX'],
     weaponProficiencies: ['simple', 'shortsword'],
     spellcasting: { casterType: 'none' },
-    tradition: null,
     startingKit: martialKit('quarterstaff', 'padded'),
     signatureAbility: {
       id: 'flurryOfBlows',
@@ -189,13 +212,17 @@ export const CLASSES = [
     hitDie: 6,
     saveProficiencies: ['INT', 'WIS'],
     weaponProficiencies: WIZARD_WEAPONS,
-    spellcasting: { casterType: 'full', unlockSkill: 'arcana', castingAbility: 'INT' },
-    tradition: 'Arcane',
-    startingKit: casterKit('quarterstaff', 'arcane'),
+    spellcasting: {
+      casterType: 'full',
+      unlockSkill: 'arcana',
+      castingAbility: 'INT',
+      tradition: 'arcane',
+    },
+    startingKit: casterKit('quarterstaff', 'arcane', 'arcane'),
     signatureAbility: {
       id: 'arcaneRecovery',
       name: 'Arcane Recovery',
-      description: 'Recover some spell slots on a short rest (matters in dungeons).',
+      description: '15% chance not to consume components when casting.',
     },
   },
   {
@@ -210,9 +237,13 @@ export const CLASSES = [
     hitDie: 8,
     saveProficiencies: ['WIS', 'CHA'],
     weaponProficiencies: ['simple'],
-    spellcasting: { casterType: 'full', unlockSkill: 'religion', castingAbility: 'WIS' },
-    tradition: 'Divine',
-    startingKit: casterKit('quarterstaff', 'vestment'),
+    spellcasting: {
+      casterType: 'full',
+      unlockSkill: 'religion',
+      castingAbility: 'WIS',
+      tradition: 'divine',
+    },
+    startingKit: casterKit('quarterstaff', 'vestment', 'divine'),
     signatureAbility: {
       id: 'channelDivinity',
       name: 'Channel Divinity',
@@ -231,34 +262,42 @@ export const CLASSES = [
     saveProficiencies: ['CON', 'CHA'],
     weaponProficiencies: ['simple'],
     // TODO(design): casting ability may become INT after the INT/CHA XP swap.
-    spellcasting: { casterType: 'full', unlockSkill: 'arcana', castingAbility: 'CHA' },
-    tradition: 'Arcane / Pact',
-    startingKit: casterKit('dagger', 'arcane'),
+    spellcasting: {
+      casterType: 'full',
+      unlockSkill: 'arcana',
+      castingAbility: 'CHA',
+      tradition: 'arcane',
+    },
+    startingKit: casterKit('dagger', 'arcane', 'arcane'),
     signatureAbility: {
       id: 'metamagicPactMagic',
       name: 'Metamagic / Pact Magic',
       description:
-        'Metamagic: Quickened Spell makes the next spell interval 50% shorter (sorcery points per long rest). Pact Magic: fewer slots, all at max level, recharged on short rests; Eldritch Blast cantrip.',
+        'Metamagic: Quickened Spell makes the next spell interval 50% shorter (sorcery points per long rest). Pact Magic: fewer slots, all at max level, recharged on short rests; leveled spells cost half the components; Eldritch Blast cantrip.',
     },
   },
   {
     id: 'paladin',
     name: 'Paladin',
     role: 'Holy warrior',
-    playstyle: 'Half caster. Spend a slot to smite while you learn the front line.',
+    playstyle: 'Half caster. Spend Holy Water to smite while you learn the front line.',
     difficulty: 2,
     xpModifiers: { STR: 0.15, INT: 0.15, CON: 0.1, DEX: -0.15, CHA: -0.15 },
     hitDie: 10,
     saveProficiencies: ['WIS', 'CHA'],
     weaponProficiencies: SIMPLE_MARTIAL,
     // TODO(design): casting ability may become INT after the INT/CHA XP swap.
-    spellcasting: { casterType: 'half', unlockSkill: 'religion', castingAbility: 'CHA' },
-    tradition: 'Divine',
-    startingKit: casterKit('longsword', 'leather'),
+    spellcasting: {
+      casterType: 'half',
+      unlockSkill: 'religion',
+      castingAbility: 'CHA',
+      tradition: 'divine',
+    },
+    startingKit: casterKit('longsword', 'leather', 'divine'),
     signatureAbility: {
       id: 'divineSmite',
       name: 'Divine Smite',
-      description: 'On a hit, spend a spell slot for 2d8 radiant (+1d8 vs undead and fiends).',
+      description: 'On a hit, spend 1 Holy Water for 2d8 radiant (+1d8 vs undead and fiends).',
     },
   },
   {
@@ -271,9 +310,13 @@ export const CLASSES = [
     hitDie: 10,
     saveProficiencies: ['STR', 'DEX'],
     weaponProficiencies: SIMPLE_MARTIAL,
-    spellcasting: { casterType: 'half', unlockSkill: 'nature', castingAbility: 'WIS' },
-    tradition: 'Primal',
-    startingKit: casterKit('shortsword', 'leather'),
+    spellcasting: {
+      casterType: 'half',
+      unlockSkill: 'nature',
+      castingAbility: 'WIS',
+      tradition: 'primal',
+    },
+    startingKit: casterKit('shortsword', 'leather', 'primal'),
     signatureAbility: {
       id: 'huntersMark',
       name: "Hunter's Mark",
@@ -290,9 +333,13 @@ export const CLASSES = [
     hitDie: 8,
     saveProficiencies: ['INT', 'WIS'],
     weaponProficiencies: DRUID_WEAPONS,
-    spellcasting: { casterType: 'full', unlockSkill: 'nature', castingAbility: 'WIS' },
-    tradition: 'Primal',
-    startingKit: casterKit('quarterstaff', 'wildweave'),
+    spellcasting: {
+      casterType: 'full',
+      unlockSkill: 'nature',
+      castingAbility: 'WIS',
+      tradition: 'primal',
+    },
+    startingKit: casterKit('quarterstaff', 'wildweave', 'primal'),
     signatureAbility: {
       id: 'wildShape',
       name: 'Wild Shape',
@@ -311,9 +358,13 @@ export const CLASSES = [
     saveProficiencies: ['DEX', 'CHA'],
     weaponProficiencies: ROGUE_BARD,
     // TODO(design): unlockSkill Performance vs Arcana.
-    spellcasting: { casterType: 'full', unlockSkill: 'performance', castingAbility: 'CHA' },
-    tradition: 'Bardic',
-    startingKit: casterKit('dagger', 'minstrel'),
+    spellcasting: {
+      casterType: 'full',
+      unlockSkill: 'performance',
+      castingAbility: 'CHA',
+      tradition: 'bardic',
+    },
+    startingKit: casterKit('dagger', 'minstrel', 'bardic'),
     signatureAbility: {
       id: 'bardicInspiration',
       name: 'Bardic Inspiration',

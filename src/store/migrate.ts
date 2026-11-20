@@ -28,8 +28,17 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v13: stop when out of food. */
-export const SAVE_VERSION = 13
+/** v14: convert legacy component bags to gold. */
+export const SAVE_VERSION = 14
+
+/** Old sell values for bags removed in the specific-components rework. */
+const LEGACY_BAG_SELL: Record<string, number> = {
+  'component-bag-basic': 12,
+  'component-bag-fine': 50,
+  'component-bag-rare': 200,
+  'component-bag-exotic': 800,
+  'component-bag-legendary': 3200,
+}
 
 export interface SaveData {
   characterName: string
@@ -108,7 +117,8 @@ export function normalizeSave(raw: unknown): SaveData {
   // Drop a combat action if the fight state is missing or invalid.
   if (activeAction?.kind === 'combat' && !combat) activeAction = null
 
-  const inventory = readInventory(source.inventory)
+  const { inventory: bagFreeInventory, goldBonus } = convertLegacyComponentBags(source.inventory)
+  const inventory = readInventory(bagFreeInventory)
   const upgrades = readUpgrades(source.upgrades)
   const tabTiers = upgrades['inventory-tabs']
   const tabCount = 5 + (tabTiers == null ? 0 : tabTiers + 1)
@@ -117,7 +127,7 @@ export function normalizeSave(raw: unknown): SaveData {
     skills,
     inventory,
     inventoryTabs: normalizeInventoryTabs(source.inventoryTabs, inventory, tabCount),
-    gold: readGold(source.gold),
+    gold: readGold(source.gold) + goldBonus,
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
     activeAction,
@@ -281,6 +291,38 @@ function parseActiveAction(value: unknown): ActiveAction | null {
 
 function finite(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** Turn owned component bags into gold at their old sell value, then drop the keys. */
+function convertLegacyComponentBags(value: unknown): { inventory: unknown; goldBonus: number } {
+  let goldBonus = 0
+  if (Array.isArray(value)) {
+    const next: unknown[] = []
+    for (const entry of value) {
+      if (!isRecord(entry) || typeof entry.id !== 'string') {
+        next.push(entry)
+        continue
+      }
+      const sell = LEGACY_BAG_SELL[entry.id]
+      const qty = finite(entry.quantity)
+      if (sell != null && qty != null && qty > 0) {
+        goldBonus += sell * Math.floor(qty)
+        continue
+      }
+      next.push(entry)
+    }
+    return { inventory: next, goldBonus }
+  }
+  if (!isRecord(value)) return { inventory: value, goldBonus: 0 }
+  const next: Record<string, unknown> = { ...value }
+  for (const [id, quantity] of Object.entries(value)) {
+    const sell = LEGACY_BAG_SELL[id]
+    if (sell == null) continue
+    const qty = finite(quantity)
+    if (qty != null && qty > 0) goldBonus += sell * Math.floor(qty)
+    delete next[id]
+  }
+  return { inventory: next, goldBonus }
 }
 
 function readInventory(value: unknown): Inventory {

@@ -31,6 +31,7 @@ import {
   MATERIAL_FLAT_BONUS,
   MIN_INTERVAL_FRACTION,
   SPELL_INTERVAL_SEC,
+  SPELL_SLOT_MODEL,
 } from './config'
 /** Expected-value resist (no per-hit floor). */
 function expectResist(
@@ -61,9 +62,9 @@ import { removeItems, type Inventory } from './inventory'
 import {
   buildFightSlots,
   castingAbilityFor,
-  componentBagId,
+  componentCostForCast,
   diceForCast,
-  hasComponentBag,
+  hasComponents,
   pickSlotForCast,
   unlockSkillFor,
   usesSpellLoop,
@@ -359,13 +360,22 @@ function expectedPlayerDps(input: CombatStatsInput, monster: MonsterDef): { dps:
 
     const cantrip = slots.find((entry) => entry.level === 0)
     const trySpell = spellId ? getSpell(spellId) : undefined
+    const leveledCost =
+      trySpell && slotLevel > 0
+        ? componentCostForCast({ spell: trySpell, classId: input.classId })
+        : []
     if (
       !trySpell ||
       slotLevel === 0 ||
-      !hasComponentBag(inventory, trySpell) ||
+      !hasComponents(inventory, leveledCost) ||
       picked.fallbackToCantrip
     ) {
-      if (trySpell && slotLevel > 0 && !hasComponentBag(inventory, trySpell) && !picked.fallbackToCantrip) {
+      if (
+        trySpell &&
+        slotLevel > 0 &&
+        !hasComponents(inventory, leveledCost) &&
+        !picked.fallbackToCantrip
+      ) {
         usedCantripFallback = true
       }
       spellId = cantrip?.spellId ?? null
@@ -374,23 +384,52 @@ function expectedPlayerDps(input: CombatStatsInput, monster: MonsterDef): { dps:
     }
 
     const spell = spellId ? getSpell(spellId) : undefined
-    if (spell && spell.level > 0 && spell.componentTier) {
-      inventory = removeItems(inventory, [{ itemId: componentBagId(spell.componentTier), quantity: 1 }])
-      if (!usedCantripFallback && picked.slotIndex >= 0 && slots[picked.slotIndex]) {
-        slots[picked.slotIndex] = { ...slots[picked.slotIndex]!, spent: true }
-      }
+    if (!spell) {
+      const swing = expectedWeaponSwing({
+        skills: input.skills,
+        equipment: input.equipment,
+        classXp: input.classXp,
+        classId: input.classId,
+        monster,
+      })
+      remaining -= swing
+      casts += 1
+      continue
     }
 
-    const expected = spellId
-      ? expectedSpellDamage({
-          spellId,
-          slotLevel,
-          skills: input.skills,
-          classId: input.classId,
-          classXp: input.classXp,
-          monster,
-        })
-      : 0
+    const cost = componentCostForCast({ spell, classId: input.classId })
+    if (!hasComponents(inventory, cost)) {
+      const swing = expectedWeaponSwing({
+        skills: input.skills,
+        equipment: input.equipment,
+        classXp: input.classXp,
+        classId: input.classId,
+        monster,
+      })
+      remaining -= swing
+      casts += 1
+      continue
+    }
+
+    inventory = removeItems(inventory, [...cost])
+    if (
+      SPELL_SLOT_MODEL === 'expended' &&
+      spell.level > 0 &&
+      !usedCantripFallback &&
+      picked.slotIndex >= 0 &&
+      slots[picked.slotIndex]
+    ) {
+      slots[picked.slotIndex] = { ...slots[picked.slotIndex]!, spent: true }
+    }
+
+    const expected = expectedSpellDamage({
+      spellId: spell.id as SpellId,
+      slotLevel,
+      skills: input.skills,
+      classId: input.classId,
+      classXp: input.classXp,
+      monster,
+    })
     remaining -= expected
     casts += 1
   }

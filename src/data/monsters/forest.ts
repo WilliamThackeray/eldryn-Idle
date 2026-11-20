@@ -45,6 +45,7 @@ export const FOREST_MONSTERS = [
       { itemId: 'raw-meat', chance: 1, min: 1, max: 2 },
       { itemId: 'hide', chance: 0.75, min: 1, max: 1 },
       { itemId: 'animal-scraps', chance: 0.5, min: 1, max: 2 },
+      { itemId: 'wolf-fang', chance: 0.75, min: 1, max: 1 },
     ],
     gold: { min: 0, max: 1 },
     biomes: ['forest'],
@@ -69,6 +70,7 @@ export const FOREST_MONSTERS = [
       { itemId: 'raw-meat', chance: 1, min: 2, max: 3 },
       { itemId: 'hide', chance: 1, min: 1, max: 2 },
       { itemId: 'bones', chance: 0.5, min: 1, max: 2 },
+      { itemId: 'wolf-fang', chance: 0.75, min: 1, max: 1 },
     ],
     gold: { min: 0, max: 2 },
     biomes: ['forest'],
@@ -93,6 +95,7 @@ export const FOREST_MONSTERS = [
     lootTable: [
       { itemId: 'animal-scraps', chance: 1, min: 1, max: 3 },
       { itemId: 'bones', chance: 0.5, min: 1, max: 1 },
+      { itemId: 'spider-silk', chance: 0.75, min: 1, max: 2 },
     ],
     gold: { min: 0, max: 3 },
     biomes: ['forest'],

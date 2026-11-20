@@ -1,21 +1,32 @@
 import { expect, test } from 'vitest'
-import { xpForLevel } from './xp'
-import { createFight, advanceCombat } from './combat'
+import { applyStartingKit } from './equipment'
+import { getClass } from '../data/classes'
+import { getSpell } from '../data/spells'
+import { initialSkillProgress } from '../data/skills'
+import { getMonster } from '../data/monsters'
+import { createFight } from './combat'
+import { resolvePlayerAttack } from './combat/attack'
+import { resolveSpellCast } from './combat/spellcasting'
 import { emptyEquipment } from './equipment'
-import { mulberry32 } from './rng'
+import { mulberry32, type Rng } from './rng'
+import { xpForLevel } from './xp'
 import {
   applyShortRest,
   buildFightSlots,
   cantripDiceCount,
+  componentCostForCast,
   concentrationDc,
-  hasComponentBag,
+  hasComponents,
   pickSlotForCast,
   refreshSlotsOnLongRest,
   slotsFor,
   unlockSkillLevel,
 } from './spells'
-import { initialSkillProgress } from '../data/skills'
-import { getSpell } from '../data/spells'
+
+function scripted(...values: number[]): Rng {
+  let index = 0
+  return () => values[index++] ?? 0.99
+}
 
 test('full / half / pact slot counts include a cantrip slot', () => {
   expect(slotsFor('full', 1).map((s) => s.level)).toEqual([0, 1, 1])
@@ -48,7 +59,6 @@ test('spell unlock levels and cantrip dice scaling', () => {
 })
 
 test('expended model spends a slot then falls back; long rest restores', () => {
-  // Tier 3 full: cantrip + 4×1st + 2×2nd
   const slots = buildFightSlots({
     classId: 'wizard',
     classTier: 3,
@@ -65,8 +75,6 @@ test('expended model spends a slot then falls back; long rest restores', () => {
       ],
     },
   })
-  const rayIndex = slots.findIndex((s) => s.spellId === 'scorching-ray')
-  expect(rayIndex).toBeGreaterThan(0)
 
   const first = pickSlotForCast({ slots, rotationIndex: 0, model: 'expended' })
   expect(slots[first.slotIndex]?.spellId).toBe('magic-missile')
@@ -83,38 +91,195 @@ test('expended model spends a slot then falls back; long rest restores', () => {
   expect(rested[again.slotIndex]?.level).toBeGreaterThan(0)
 })
 
-test('rotation model keeps cycling leveled slots', () => {
+test('rotation model cycles cantrip then leveled slots without spending', () => {
   const slots = buildFightSlots({
     classId: 'wizard',
-    classTier: 3,
-    skillLevel: 21,
+    classTier: 1,
+    skillLevel: 1,
     loadout: {
-      slots: ['fire-bolt', null, null, null, null, 'scorching-ray', null],
+      slots: ['fire-bolt', 'magic-missile', 'magic-missile'],
     },
   })
-  const a = pickSlotForCast({ slots, rotationIndex: 0, model: 'rotation' })
-  expect(slots[a.slotIndex]?.level).toBe(0)
-  // indices 1–4 empty → cantrip fallback; index 5 is Scorching Ray
-  let index = a.nextRotationIndex
-  let foundRay = false
-  for (let i = 0; i < 6; i++) {
+  const order: (string | null)[] = []
+  let index = 0
+  for (let i = 0; i < 4; i++) {
     const pick = pickSlotForCast({ slots, rotationIndex: index, model: 'rotation' })
-    if (slots[pick.slotIndex]?.spellId === 'scorching-ray') {
-      foundRay = true
-      break
-    }
+    order.push(slots[pick.slotIndex]?.spellId ?? null)
     index = pick.nextRotationIndex
   }
-  expect(foundRay).toBe(true)
+  expect(order).toEqual(['fire-bolt', 'magic-missile', 'magic-missile', 'fire-bolt'])
+  expect(slots.every((slot) => !slot.spent)).toBe(true)
 })
 
-test('out of component bags: hasComponentBag is false for Scorching Ray', () => {
+test('Scorching Ray needs coal and desert spices', () => {
   const spell = getSpell('scorching-ray')!
-  expect(hasComponentBag({}, spell)).toBe(false)
-  expect(hasComponentBag({ 'component-bag-basic': 1 }, spell)).toBe(true)
+  const cost = componentCostForCast({ spell, classId: 'wizard' })
+  expect(cost).toEqual([
+    { itemId: 'coal', quantity: 1 },
+    { itemId: 'desert-spices', quantity: 1 },
+  ])
+  expect(hasComponents({}, cost)).toBe(false)
+  expect(hasComponents({ coal: 1, 'desert-spices': 1 }, cost)).toBe(true)
 })
 
-test('out of bags: interval casts cantrip and leaves the leveled slot unspent', () => {
+test('cantrip spends Arcane Dust; out of dust falls back to a weapon attack', () => {
+  const skills = initialSkillProgress()
+  skills.arcana = { xp: xpForLevel(1) }
+  const classXp = xpForLevel(1)
+  const equipment = { ...emptyEquipment(), mainHand: 'quarterstaff' as const }
+  const fight = createFight({
+    monsterId: 'wolf',
+    biome: 'forest',
+    skills,
+    equipment,
+    activeClassId: 'wizard',
+    classXp,
+    rng: mulberry32(9),
+    trace: true,
+    spellLoadout: { slots: ['fire-bolt'] },
+  })
+  expect(fight).not.toBeNull()
+  if (!fight) return
+  const monster = getMonster('wolf')!
+
+  const withDust = resolveSpellCast({
+    fight,
+    monster,
+    skills,
+    inventory: { 'arcane-dust': 2 },
+    equipment,
+    activeClassId: 'wizard',
+    classXp,
+    rng: scripted(0.99, 0.5, 0.5, 0.5, 0.5),
+    trace: true,
+  })
+  expect(withDust.inventory['arcane-dust']).toBe(1)
+  expect(fight.log.some((line) => line.includes('Fire Bolt'))).toBe(true)
+  expect(fight.log.some((line) => line.includes('Spent Arcane Dust'))).toBe(true)
+
+  fight.log = []
+  fight.rotationIndex = 0
+  resolveSpellCast({
+    fight,
+    monster,
+    skills,
+    inventory: {},
+    equipment,
+    activeClassId: 'wizard',
+    classXp,
+    rng: mulberry32(11),
+    trace: true,
+  })
+  expect(fight.log.some((line) => line.includes('Out of Arcane Dust — weapon attack'))).toBe(true)
+  expect(fight.log.some((line) => line.includes('Weapon fallback'))).toBe(true)
+})
+
+test('Magic Missile spends 3 Arcane Dust', () => {
+  const spell = getSpell('magic-missile')!
+  expect(componentCostForCast({ spell, classId: 'wizard' })).toEqual([
+    { itemId: 'arcane-dust', quantity: 3 },
+  ])
+
+  const skills = initialSkillProgress()
+  skills.arcana = { xp: xpForLevel(1) }
+  const classXp = xpForLevel(1)
+  const fight = createFight({
+    monsterId: 'wolf',
+    biome: 'forest',
+    skills,
+    equipment: emptyEquipment(),
+    activeClassId: 'wizard',
+    classXp,
+    rng: mulberry32(1),
+    trace: true,
+    spellLoadout: { slots: ['fire-bolt', 'magic-missile', null] },
+  })
+  expect(fight).not.toBeNull()
+  if (!fight) return
+  fight.rotationIndex = 1
+
+  const cast = resolveSpellCast({
+    fight,
+    monster: getMonster('wolf')!,
+    skills,
+    inventory: { 'arcane-dust': 5 },
+    equipment: emptyEquipment(),
+    activeClassId: 'wizard',
+    classXp,
+    rng: scripted(0.99, 0.5, 0.5, 0.5),
+    trace: true,
+  })
+  expect(cast.inventory['arcane-dust']).toBe(2)
+  expect(fight.log.some((line) => line.includes('Magic Missile'))).toBe(true)
+  expect(fight.log.some((line) => line.includes('Spent Arcane Dust ×3'))).toBe(true)
+})
+
+test('Pact Magic halves each component stack rounded up', () => {
+  const missile = getSpell('magic-missile')!
+  expect(componentCostForCast({ spell: missile, classId: 'sorcererWarlock' })).toEqual([
+    { itemId: 'arcane-dust', quantity: 2 },
+  ])
+  const shield = getSpell('shield')!
+  expect(componentCostForCast({ spell: shield, classId: 'sorcererWarlock' })).toEqual([
+    { itemId: 'iron-bar', quantity: 1 },
+  ])
+})
+
+test('seeded Arcane Recovery can save components', () => {
+  const skills = initialSkillProgress()
+  skills.arcana = { xp: xpForLevel(1) }
+  const classXp = xpForLevel(1)
+  const makeFight = () => {
+    const fight = createFight({
+      monsterId: 'wolf',
+      biome: 'forest',
+      skills,
+      equipment: emptyEquipment(),
+      activeClassId: 'wizard',
+      classXp,
+      rng: mulberry32(1),
+      trace: true,
+      spellLoadout: { slots: ['fire-bolt'] },
+    })
+    expect(fight).not.toBeNull()
+    if (!fight) throw new Error('fight')
+    return fight
+  }
+  const monster = getMonster('wolf')!
+
+  const savedFight = makeFight()
+  const saved = resolveSpellCast({
+    fight: savedFight,
+    monster,
+    skills,
+    inventory: { 'arcane-dust': 1 },
+    equipment: emptyEquipment(),
+    activeClassId: 'wizard',
+    classXp,
+    rng: scripted(0.1, 0.5, 0.5, 0.5, 0.5),
+    trace: true,
+  })
+  expect(saved.inventory['arcane-dust']).toBe(1)
+  expect(savedFight.log.some((line) => line.includes('Arcane Recovery: components saved'))).toBe(
+    true,
+  )
+
+  const spentFight = makeFight()
+  const spent = resolveSpellCast({
+    fight: spentFight,
+    monster,
+    skills,
+    inventory: { 'arcane-dust': 1 },
+    equipment: emptyEquipment(),
+    activeClassId: 'wizard',
+    classXp,
+    rng: scripted(0.2, 0.5, 0.5, 0.5, 0.5),
+    trace: true,
+  })
+  expect(spent.inventory['arcane-dust'] ?? 0).toBe(0)
+})
+
+test('Scorching Ray spends coal and spices then falls back without spending the slot', () => {
   const skills = initialSkillProgress()
   skills.arcana = { xp: xpForLevel(21) }
   const classXp = xpForLevel(15)
@@ -125,7 +290,7 @@ test('out of bags: interval casts cantrip and leaves the leveled slot unspent', 
     equipment: emptyEquipment(),
     activeClassId: 'wizard',
     classXp,
-    rng: mulberry32(9),
+    rng: mulberry32(1),
     trace: true,
     spellLoadout: {
       slots: ['fire-bolt', null, null, null, null, 'scorching-ray', null],
@@ -133,25 +298,90 @@ test('out of bags: interval casts cantrip and leaves the leveled slot unspent', 
   })
   expect(fight).not.toBeNull()
   if (!fight) return
-  fight.monsterHp = 500
-  fight.monsterMaxHp = 500
+  fight.rotationIndex = 5
+  const monster = getMonster('wolf')!
 
-  const result = advanceCombat({
+  const first = resolveSpellCast({
     fight,
+    monster,
     skills,
-    inventory: {},
-    gold: 0,
+    inventory: { coal: 1, 'desert-spices': 1, 'arcane-dust': 10 },
     equipment: emptyEquipment(),
     activeClassId: 'wizard',
     classXp,
-    elapsedMs: 8_000,
-    rng: mulberry32(10),
+    rng: scripted(0.99, 0.5, 0.5, 0.5, 0.5),
     trace: true,
   })
-  expect(result.lastLog.some((line) => line.includes('Fire Bolt') || line.includes('cantrip'))).toBe(
-    true,
-  )
-  expect(result.fight?.spellSlots.some((s) => s.spellId === 'scorching-ray' && s.spent)).toBe(false)
+  expect(first.inventory.coal ?? 0).toBe(0)
+  expect(first.inventory['desert-spices'] ?? 0).toBe(0)
+  expect(fight.log.some((line) => line.includes('Scorching Ray'))).toBe(true)
+  expect(fight.spellSlots.some((s) => s.spellId === 'scorching-ray' && s.spent)).toBe(false)
+
+  fight.rotationIndex = 5
+  fight.log = []
+  const second = resolveSpellCast({
+    fight,
+    monster,
+    skills,
+    inventory: first.inventory,
+    equipment: emptyEquipment(),
+    activeClassId: 'wizard',
+    classXp,
+    rng: scripted(0.99, 0.5, 0.5, 0.5, 0.5),
+    trace: true,
+  })
+  expect(fight.log.some((line) => line.includes('Out of') && line.includes('Fire Bolt'))).toBe(true)
+  expect(second.inventory['arcane-dust']).toBe(9)
+})
+
+test('Divine Smite spends Holy Water and does not spend a slot', () => {
+  const skills = initialSkillProgress()
+  const classXp = xpForLevel(5)
+  const equipment = { ...emptyEquipment(), mainHand: 'longsword' as const }
+  const fight = createFight({
+    monsterId: 'ghoul',
+    biome: 'swamp',
+    skills,
+    equipment,
+    activeClassId: 'paladin',
+    classXp,
+    rng: mulberry32(3),
+    trace: true,
+  })
+  expect(fight).not.toBeNull()
+  if (!fight) return
+  const monster = getMonster('ghoul')!
+
+  const hit = resolvePlayerAttack({
+    fight,
+    monster,
+    skills,
+    equipment,
+    inventory: { 'holy-water': 2 },
+    activeClassId: 'paladin',
+    classXp,
+    rng: scripted(0.95, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1),
+    trace: true,
+    labelPrefix: 'Attack: ',
+  })
+  expect(hit.inventory['holy-water']).toBe(1)
+  expect(fight.log.some((line) => line.includes('Divine Smite (Holy Water)'))).toBe(true)
+  expect(fight.spellSlots.every((s) => !s.spent)).toBe(true)
+
+  fight.log = []
+  resolvePlayerAttack({
+    fight,
+    monster,
+    skills,
+    equipment,
+    inventory: {},
+    activeClassId: 'paladin',
+    classXp,
+    rng: scripted(0.95, 0.1, 0.1, 0.1, 0.1),
+    trace: true,
+    labelPrefix: 'Attack: ',
+  })
+  expect(fight.log.some((line) => line.includes('Divine Smite: out of Holy Water'))).toBe(true)
 })
 
 test('concentration DC is max(10, floor(damage/2))', () => {
@@ -162,7 +392,7 @@ test('concentration DC is max(10, floor(damage/2))', () => {
   expect(concentrationDc(40)).toBe(20)
 })
 
-test('Arcane Recovery restores slot levels up to ceil(tier/2)', () => {
+test('Arcane Recovery short-rest slot restore still works for expended leftovers', () => {
   const slots = buildFightSlots({
     classId: 'wizard',
     classTier: 4,
@@ -190,92 +420,16 @@ test('Arcane Recovery restores slot levels up to ceil(tier/2)', () => {
     arcaneRecoveryUsed: false,
   })
   expect(result.arcaneRecoveryUsed).toBe(true)
-  const recoveredLevels = result.slots.filter((s) => s.level > 0 && !s.spent).reduce((sum, s) => sum + s.level, 0)
+  const recoveredLevels = result.slots
+    .filter((s) => s.level > 0 && !s.spent)
+    .reduce((sum, s) => sum + s.level, 0)
   expect(recoveredLevels).toBeLessThanOrEqual(2)
   expect(recoveredLevels).toBeGreaterThan(0)
 })
 
-test('Wizard acceptance: Scorching Ray burns a Basic bag, falls back to Fire Bolt, refreshes after rest', () => {
-  const skills = initialSkillProgress()
-  skills.arcana = { xp: xpForLevel(21) }
-  const classXp = xpForLevel(15) // Tier 3
-  // Tier 3: indices 0 cantrip, 1–4 1st, 5–6 2nd
-  const fight = createFight({
-    monsterId: 'wolf',
-    biome: 'forest',
-    skills,
-    equipment: emptyEquipment(),
-    activeClassId: 'wizard',
-    classXp,
-    rng: mulberry32(1),
-    trace: true,
-    spellLoadout: {
-      slots: ['fire-bolt', null, null, null, null, 'scorching-ray', null],
-    },
-  })
-  expect(fight).not.toBeNull()
-  if (!fight) return
-
-  // Keep the wolf alive through several spell intervals.
-  fight.monsterHp = 500
-  fight.monsterMaxHp = 500
-
-  const raySlot = fight.spellSlots.find((s) => s.spellId === 'scorching-ray')
-  expect(raySlot).toBeTruthy()
-
-  const inventory = { 'component-bag-basic': 1 }
-  const first = advanceCombat({
-    fight,
-    skills,
-    inventory,
-    gold: 0,
-    equipment: emptyEquipment(),
-    activeClassId: 'wizard',
-    classXp,
-    elapsedMs: 8_000,
-    rng: mulberry32(2),
-    trace: true,
-  })
-  expect(first.inventory['component-bag-basic'] ?? 0).toBe(0)
-  expect(first.lastLog.some((line) => line.includes('Scorching Ray'))).toBe(true)
-
-  const mid = first.fight
-  expect(mid).not.toBeNull()
-  if (!mid) return
-  expect(mid.spellSlots.some((s) => s.spellId === 'scorching-ray' && s.spent)).toBe(true)
-
-  const second = advanceCombat({
-    fight: mid,
-    skills: first.skills,
-    inventory: first.inventory,
-    gold: first.gold,
-    equipment: emptyEquipment(),
-    activeClassId: 'wizard',
-    classXp: first.classXp,
-    elapsedMs: 12_000,
-    rng: mulberry32(3),
-    trace: true,
-  })
-  expect(second.lastLog.some((line) => line.includes('Fire Bolt') || line.includes('cantrip'))).toBe(true)
-
-  if (!second.fight) return
-  second.fight.monsterHp = 1
-  const kill = advanceCombat({
-    fight: second.fight,
-    skills: second.skills,
-    inventory: second.inventory,
-    gold: second.gold,
-    equipment: emptyEquipment(),
-    activeClassId: 'wizard',
-    classXp: second.classXp,
-    elapsedMs: 60_000,
-    rng: mulberry32(4),
-    trace: true,
-  })
-  expect(kill.lastLog.some((line) => line.includes('defeated'))).toBe(true)
-  if (kill.fight?.phase === 'rest') {
-    expect(kill.fight.spellSlots.every((s) => !s.spent)).toBe(true)
-  } else if (kill.fight) {
-    expect(kill.fight.spellSlots.every((s) => !s.spent)).toBe(true)
-  }
+test('casters start with 50 tradition reagents', () => {
+  expect(applyStartingKit(getClass('wizard').startingKit).inventory['arcane-dust']).toBe(50)
+  expect(applyStartingKit(getClass('paladin').startingKit).inventory['holy-water']).toBe(50)
+  expect(applyStartingKit(getClass('ranger').startingKit).inventory['mistletoe-sprig']).toBe(50)
+  expect(applyStartingKit(getClass('bard').startingKit).inventory.rosin).toBe(50)
 })

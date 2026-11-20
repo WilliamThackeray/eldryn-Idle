@@ -1,12 +1,13 @@
-import { getClass, type CasterType, type ClassId } from '../data/classes'
-import { getSkill, type SkillId } from '../data/skills'
+import type { ItemStack } from '../data/activities/types'
 import {
-  getSpell,
-  spellsForClass,
-  type ComponentTier,
-  type SpellDef,
-  type SpellId,
-} from '../data/spells'
+  getClass,
+  TRADITION_REAGENT,
+  type CasterType,
+  type ClassId,
+} from '../data/classes'
+import { getItem, type ItemId } from '../data/items'
+import { getSkill, type SkillId } from '../data/skills'
+import { getSpell, spellsForClass, type SpellDef, type SpellId } from '../data/spells'
 import type { AbilityAbbr } from '../types/game'
 import {
   CASTING_ABILITY_SOURCE,
@@ -14,7 +15,7 @@ import {
   type CastingAbilitySource,
   type SpellSlotModel,
 } from './config'
-import type { Inventory } from './inventory'
+import { hasItems, type Inventory } from './inventory'
 
 export type { SpellSlotModel, CastingAbilitySource }
 
@@ -31,14 +32,6 @@ export interface SpellLoadout {
 }
 
 export type SpellLoadouts = Partial<Record<ClassId, SpellLoadout>>
-
-const BAG_BY_TIER: Record<ComponentTier, string> = {
-  basic: 'component-bag-basic',
-  fine: 'component-bag-fine',
-  rare: 'component-bag-rare',
-  exotic: 'component-bag-exotic',
-  legendary: 'component-bag-legendary',
-}
 
 /** Full caster leveled slots by character level (Tier). Index = level, value = count of that slot level. */
 const FULL_SLOTS: Record<number, number[]> = {
@@ -120,21 +113,62 @@ export function cantripDiceCount(skillLevel: number): number {
   return 1
 }
 
-export function componentBagId(tier: ComponentTier): string {
-  return BAG_BY_TIER[tier]
-}
-
-export function componentTierForSpellLevel(spellLevel: number): ComponentTier | null {
-  if (spellLevel <= 0) return null
-  if (spellLevel <= 2) return 'basic'
-  if (spellLevel <= 4) return 'fine'
-  if (spellLevel <= 6) return 'rare'
-  if (spellLevel <= 8) return 'exotic'
-  return 'legendary'
-}
-
 export function concentrationDc(damage: number): number {
   return Math.max(10, Math.floor(damage / 2))
+}
+
+/** Tradition reagent for a caster class, or null for non-casters. */
+export function traditionReagentFor(classId: ClassId): ItemId | null {
+  const casting = getClass(classId).spellcasting
+  if (casting.casterType === 'none') return null
+  return TRADITION_REAGENT[casting.tradition]
+}
+
+/**
+ * Components required to cast. Cantrips use 1 tradition reagent.
+ * Pact Magic halves each stack (rounded up).
+ */
+export function componentCostForCast(input: {
+  spell: SpellDef
+  classId: ClassId
+}): ItemStack[] {
+  const { spell, classId } = input
+  let stacks: ItemStack[]
+  if (spell.level === 0) {
+    const reagent = traditionReagentFor(classId)
+    stacks = reagent ? [{ itemId: reagent, quantity: 1 }] : []
+  } else {
+    stacks = spell.components.map((stack) => ({ ...stack }))
+  }
+  if (getClass(classId).signatureAbility.id !== 'metamagicPactMagic') return stacks
+  return stacks.map((stack) => ({
+    itemId: stack.itemId,
+    quantity: Math.ceil(stack.quantity / 2),
+  }))
+}
+
+export function hasComponents(inventory: Inventory, cost: readonly ItemStack[]): boolean {
+  if (cost.length === 0) return true
+  return hasItems(inventory, [...cost])
+}
+
+/** First missing component name for UI / log text. */
+export function missingComponentName(inventory: Inventory, cost: readonly ItemStack[]): string | null {
+  for (const stack of cost) {
+    if ((inventory[stack.itemId] ?? 0) < stack.quantity) {
+      return getItem(stack.itemId)?.name ?? stack.itemId
+    }
+  }
+  return null
+}
+
+export function formatComponentSpend(cost: readonly ItemStack[]): string {
+  return cost
+    .map((stack) => {
+      const name = getItem(stack.itemId)?.name ?? stack.itemId
+      return stack.quantity === 1 ? name : `${name} ×${stack.quantity}`
+    })
+    .join(', ')
 }
 
 /**
@@ -221,12 +255,6 @@ export function diceForCast(
   }
   const level = Math.max(spell.level, slotLevel)
   return spell.diceBySlotLevel[level] ?? spell.diceBySlotLevel[spell.level] ?? null
-}
-
-export function hasComponentBag(inventory: Inventory, spell: SpellDef): boolean {
-  if (spell.level === 0 || spell.componentTier == null) return true
-  const bagId = componentBagId(spell.componentTier)
-  return (inventory[bagId] ?? 0) > 0
 }
 
 export function emptyLoadout(): SpellLoadout {

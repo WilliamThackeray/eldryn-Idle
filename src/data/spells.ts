@@ -1,5 +1,7 @@
 import type { AbilityAbbr } from '../types/game'
+import type { ItemStack } from './activities/types'
 import type { ClassId } from './classes'
+import type { ItemId } from './items'
 import type { DamageType } from './items/types'
 
 export type SpellSchool =
@@ -11,8 +13,6 @@ export type SpellSchool =
   | 'illusion'
   | 'necromancy'
   | 'transmutation'
-
-export type ComponentTier = 'basic' | 'fine' | 'rare' | 'exotic' | 'legendary'
 
 export type SpellKind = 'attack' | 'save' | 'heal' | 'buff'
 
@@ -46,7 +46,8 @@ export interface SpellDef {
   diceBySlotLevel: readonly (string | null)[]
   damageType?: DamageType
   concentration: boolean
-  componentTier: ComponentTier | null
+  /** Leveled spells only. Cantrips use the caster's tradition reagent at cast time. */
+  components: readonly ItemStack[]
   buffEffect?: BuffEffectId
 }
 
@@ -58,6 +59,10 @@ function dice(levels: Record<number, string>): (string | null)[] {
 
 function cantrip(base: string): (string | null)[] {
   return dice({ 1: base })
+}
+
+function c(itemId: ItemId, quantity = 1): ItemStack {
+  return { itemId, quantity }
 }
 
 export const SPELLS = [
@@ -72,7 +77,7 @@ export const SPELLS = [
     diceBySlotLevel: cantrip('1d10'),
     damageType: 'fire',
     concentration: false,
-    componentTier: null,
+    components: [],
   },
   {
     id: 'sacred-flame',
@@ -86,7 +91,7 @@ export const SPELLS = [
     diceBySlotLevel: cantrip('1d8'),
     damageType: 'radiant',
     concentration: false,
-    componentTier: null,
+    components: [],
   },
   {
     id: 'eldritch-blast',
@@ -98,7 +103,7 @@ export const SPELLS = [
     diceBySlotLevel: cantrip('1d10'),
     damageType: 'force',
     concentration: false,
-    componentTier: null,
+    components: [],
   },
   {
     id: 'poison-spray',
@@ -112,7 +117,7 @@ export const SPELLS = [
     diceBySlotLevel: cantrip('1d12'),
     damageType: 'poison',
     concentration: false,
-    componentTier: null,
+    components: [],
   },
   {
     id: 'vicious-mockery',
@@ -126,7 +131,7 @@ export const SPELLS = [
     diceBySlotLevel: cantrip('1d6'),
     damageType: 'psychic',
     concentration: false,
-    componentTier: null,
+    components: [],
   },
 
   // --- 1st level ---
@@ -151,7 +156,7 @@ export const SPELLS = [
     }),
     damageType: 'force',
     concentration: false,
-    componentTier: 'basic',
+    components: [c('arcane-dust', 3)],
   },
   {
     id: 'shield',
@@ -162,7 +167,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 1: '0', 2: '0', 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: false,
-    componentTier: 'basic',
+    components: [c('iron-bar')],
     buffEffect: 'shield',
   },
   {
@@ -184,7 +189,7 @@ export const SPELLS = [
       9: '9d8',
     }),
     concentration: false,
-    componentTier: 'basic',
+    components: [c('forest-herbs', 2)],
   },
   {
     id: 'healing-word',
@@ -205,7 +210,7 @@ export const SPELLS = [
       9: '9d4',
     }),
     concentration: false,
-    componentTier: 'basic',
+    components: [c('forest-herbs', 2)],
   },
   {
     id: 'shield-of-faith',
@@ -216,7 +221,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 1: '0', 2: '0', 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: true,
-    componentTier: 'basic',
+    components: [c('blessed-parchment')],
     buffEffect: 'shieldOfFaith',
   },
   {
@@ -228,7 +233,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 1: '0', 2: '0', 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: true,
-    componentTier: 'basic',
+    components: [c('wolf-fang')],
     buffEffect: 'huntersMark',
   },
   {
@@ -240,7 +245,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 1: '0', 2: '0', 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: true,
-    componentTier: 'basic',
+    components: [c('holy-water', 2)],
     buffEffect: 'divineFavor',
   },
   {
@@ -252,7 +257,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 1: '0', 2: '0', 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: true,
-    componentTier: 'basic',
+    components: [c('fey-herbs')],
     buffEffect: 'faerieFire',
   },
   {
@@ -277,7 +282,7 @@ export const SPELLS = [
     }),
     damageType: 'thunder',
     concentration: false,
-    componentTier: 'basic',
+    components: [c('goat-horn')],
   },
 
   // --- 2nd level ---
@@ -301,7 +306,7 @@ export const SPELLS = [
     }),
     damageType: 'fire',
     concentration: false,
-    componentTier: 'basic',
+    components: [c('coal'), c('desert-spices')],
   },
   {
     id: 'blur',
@@ -312,7 +317,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 2: '0', 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: true,
-    componentTier: 'basic',
+    components: [c('frog-skin')],
     buffEffect: 'blur',
   },
   {
@@ -324,7 +329,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 2: '0', 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: true,
-    componentTier: 'basic',
+    components: [c('oak-bark')],
     buffEffect: 'barkskin',
   },
   {
@@ -345,7 +350,7 @@ export const SPELLS = [
       9: '9d8',
     }),
     concentration: false,
-    componentTier: 'basic',
+    components: [c('healing-potion')],
   },
   {
     id: 'shatter',
@@ -368,7 +373,7 @@ export const SPELLS = [
     }),
     damageType: 'thunder',
     concentration: false,
-    componentTier: 'basic',
+    components: [c('mica-chip')],
   },
 
   // --- 3rd level ---
@@ -392,7 +397,7 @@ export const SPELLS = [
     }),
     damageType: 'fire',
     concentration: false,
-    componentTier: 'fine',
+    components: [c('fireball-reagent')],
   },
   {
     id: 'mass-healing-word',
@@ -411,7 +416,7 @@ export const SPELLS = [
       9: '7d4',
     }),
     concentration: false,
-    componentTier: 'fine',
+    components: [c('troll-blood-tonic')],
   },
   {
     id: 'protection-from-energy',
@@ -422,7 +427,7 @@ export const SPELLS = [
     kind: 'buff',
     diceBySlotLevel: dice({ 3: '0', 4: '0', 5: '0', 6: '0', 7: '0', 8: '0', 9: '0' }),
     concentration: true,
-    componentTier: 'fine',
+    components: [c('warding-chalk')],
     buffEffect: 'protectionFromEnergyFire',
   },
   {
@@ -437,7 +442,8 @@ export const SPELLS = [
     diceBySlotLevel: dice({ 3: '3d8', 4: '4d8', 5: '5d8', 6: '6d8', 7: '7d8', 8: '8d8', 9: '9d8' }),
     damageType: 'piercing',
     concentration: false,
-    componentTier: 'fine',
+    // shortcut: bolts/bullets ignored, upgrade if barrage should take any ammo.
+    components: [c('spider-silk'), c('arrows')],
   },
 ] as const satisfies readonly SpellDef[]
 

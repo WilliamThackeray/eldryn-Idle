@@ -1,9 +1,12 @@
 import { expect, test } from 'vitest'
 import { sourcesOf } from '../engine/itemIndex'
 import { ACTIVITIES, activitiesFor, getActivity } from './activities'
+import { CLASSES, TRADITION_REAGENT } from './classes'
 import { ITEMS, isItemId, type ItemId } from './items'
+import { MONSTERS } from './monsters'
 import { GENERAL_GOODS, SHOP_UPGRADES } from './shop'
 import { SKILLS } from './skills'
+import { SPELLS } from './spells'
 
 test('item ids are unique and gold is a counter, not an item', () => {
   const ids = ITEMS.map((item) => item.id)
@@ -24,7 +27,15 @@ test('every skill has a level 1 activity and craft inputs are produced somewhere
     expect(activitiesFor(skill.id).some((activity) => activity.requiredLevel === 1)).toBe(true)
   }
 
-  const produced = new Set(ACTIVITIES.flatMap((activity) => activity.outputs.map((entry) => entry.itemId)))
+  const produced = new Set([
+    ...ACTIVITIES.flatMap((activity) =>
+      [...activity.outputs, ...(activity.rareTable ?? []), ...(activity.byproducts ?? [])].map(
+        (entry) => entry.itemId,
+      ),
+    ),
+    ...MONSTERS.flatMap((monster) => monster.lootTable.map((entry) => entry.itemId)),
+    ...GENERAL_GOODS.map((good) => good.itemId),
+  ])
   for (const activity of ACTIVITIES) {
     for (const input of activity.inputs ?? []) expect(produced.has(input.itemId)).toBe(true)
     for (const entry of [...activity.outputs, ...(activity.rareTable ?? []), ...(activity.byproducts ?? [])]) {
@@ -117,6 +128,21 @@ test('material-tier longswords, chain mail, and arrowheads match MATERIAL_LEVEL'
   expect(getActivity('athletics', 'smith-silvered-chain-mail-chest')?.requiredLevel).toBe(30)
   expect(getActivity('athletics', 'smith-mithral-chain-mail-chest')?.requiredLevel).toBe(60)
   expect(getActivity('athletics', 'smith-adamantine-chain-mail-chest')?.requiredLevel).toBe(80)
+})
+
+test('every spell component and tradition reagent has a source', () => {
+  for (const spell of SPELLS) {
+    for (const stack of spell.components) {
+      expect(sourcesOf(stack.itemId).length, `${spell.id}:${stack.itemId}`).toBeGreaterThan(0)
+    }
+  }
+  for (const reagent of Object.values(TRADITION_REAGENT)) {
+    expect(sourcesOf(reagent).length, reagent).toBeGreaterThan(0)
+  }
+  for (const cls of CLASSES) {
+    if (cls.spellcasting.casterType === 'none') continue
+    expect(sourcesOf(TRADITION_REAGENT[cls.spellcasting.tradition]).length).toBeGreaterThan(0)
+  }
 })
 
 test('general store sells commons and upgrades grant no items', () => {

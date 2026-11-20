@@ -76,7 +76,7 @@ test('Hobgoblin Captain: sword ×1 melee, spell ×1.25 magic in the log', () => 
     monster,
     skills,
     equipment: emptyEquipment(),
-    inventory: {},
+    inventory: { 'arcane-dust': 10 },
     activeClassId: 'wizard',
     classXp: 0,
     rng: () => 0.99,

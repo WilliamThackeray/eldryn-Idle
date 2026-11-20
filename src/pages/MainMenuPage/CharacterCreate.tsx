@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Star, Shuffle } from 'lucide-react'
-import { CLASSES, type ClassId, type ClericFocus } from '../../data/classes'
+import { CLASSES, TRADITION_LABEL, type ClassId, type ClericFocus } from '../../data/classes'
 import { getItem } from '../../data/items'
 import type { AbilityAbbr } from '../../types/game'
 
@@ -119,7 +119,11 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
                   <p className="mt-2 text-sm text-sage">
                     Hit Die 1d{entry.hitDie} · {formatModifiers(entry.xpModifiers, entry.id === 'cleric' ? focus : null)}
                   </p>
-                  {entry.tradition && <p className="mt-1 text-sm text-sage">Tradition: {entry.tradition}</p>}
+                  {entry.spellcasting.casterType !== 'none' && (
+                    <p className="mt-1 text-sm text-sage">
+                      Tradition: {TRADITION_LABEL[entry.spellcasting.tradition]}
+                    </p>
+                  )}
                   <p className="mt-2 text-sm font-semibold">{entry.signatureAbility.name}</p>
                   <p className="mt-1 text-xs text-parchment/70">{entry.signatureAbility.description}</p>
                 </button>
@@ -162,7 +166,10 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
             <p className="mt-1 text-sm text-parchment/70">{chosen.playstyle}</p>
             <p className="mt-3 text-sm text-sage">
               Hit Die 1d{chosen.hitDie}
-              {chosen.tradition ? ` · ${chosen.tradition}` : ''} · {chosen.signatureAbility.name}
+              {chosen.spellcasting.casterType !== 'none'
+                ? ` · ${TRADITION_LABEL[chosen.spellcasting.tradition]}`
+                : ''}{' '}
+              · {chosen.signatureAbility.name}
             </p>
           </section>
           <section className="rounded-lg border border-brown/40 bg-panel p-5">

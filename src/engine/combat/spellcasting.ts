@@ -1,28 +1,29 @@
 import type { ClassId } from '../../data/classes'
-import { type ItemId } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
 import { getSpell, type SpellId } from '../../data/spells'
 import type { SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
 import { activePerks, effectTotal } from '../abilities'
-import { SPELL_SLOT_MODEL } from '../config'
+import { ARCANE_RECOVERY_SAVE_CHANCE, SPELL_SLOT_MODEL } from '../config'
 import { applyDamageModifiers, applyTriangle, triangleNote } from '../damage'
 import { roll, rollD20, rollDamageParts } from '../dice'
 import { removeItems, type Inventory } from '../inventory'
 import type { Rng } from '../rng'
 import {
   castingAbilityFor,
-  componentBagId,
+  componentCostForCast,
   diceForCast,
-  hasComponentBag,
+  formatComponentSpend,
+  hasComponents,
   markSlotSpent,
+  missingComponentName,
   pickSlotForCast,
   type SpellSlot,
   unlockSkillFor,
 } from '../spells'
 import { levelForXp, proficiency, tier } from '../xp'
 import { totalItemStats, type Equipment } from '../equipment'
-import { critThreshold } from './attack'
+import { critThreshold, resolvePlayerAttack } from './attack'
 import { abilityModMap, type CombatFight, pushLog, savingThrow, skillLevel } from './state'
 
 export function resolveSpellCast(input: {
@@ -65,19 +66,22 @@ export function resolveSpellCast(input: {
   let spellId: SpellId | null = slot?.spellId ?? null
   let slotLevel = slot?.level ?? 0
   let usedCantripFallback = false
+  let missingLeveledName: string | null = null
 
   const cantripSlot = fight.spellSlots.find((entry) => entry.level === 0)
   const cantripId = cantripSlot?.spellId ?? null
 
   const trySpell = spellId ? getSpell(spellId) : undefined
-  if (
-    !trySpell ||
-    slotLevel === 0 ||
-    !hasComponentBag(inventory, trySpell) ||
-    picked.fallbackToCantrip
-  ) {
-    if (trySpell && slotLevel > 0 && !hasComponentBag(inventory, trySpell) && !picked.fallbackToCantrip) {
+  const leveledCost =
+    trySpell && slotLevel > 0
+      ? componentCostForCast({ spell: trySpell, classId: input.activeClassId })
+      : []
+  const canPayLeveled = trySpell != null && slotLevel > 0 && hasComponents(inventory, leveledCost)
+
+  if (!trySpell || slotLevel === 0 || !canPayLeveled || picked.fallbackToCantrip) {
+    if (trySpell && slotLevel > 0 && !canPayLeveled && !picked.fallbackToCantrip) {
       usedCantripFallback = true
+      missingLeveledName = missingComponentName(inventory, leveledCost)
     }
     spellId = cantripId
     slotLevel = 0
@@ -90,21 +94,47 @@ export function resolveSpellCast(input: {
     return { inventory, classXp, skills, killed: false, stopped: false }
   }
 
-  if (spell.level > 0 && spell.componentTier) {
-    const bagId = componentBagId(spell.componentTier)
-    inventory = removeItems(inventory, [{ itemId: bagId as ItemId, quantity: 1 }])
-    if (SPELL_SLOT_MODEL === 'expended' && !usedCantripFallback && picked.slotIndex >= 0) {
-      markSlotSpent(fight.spellSlots, picked.slotIndex)
-    }
+  const cost = componentCostForCast({ spell, classId: input.activeClassId })
+  if (!hasComponents(inventory, cost)) {
+    const missing = missingComponentName(inventory, cost) ?? 'components'
+    pushLog(fight, `Out of ${missing} — weapon attack.`, trace)
+    return resolvePlayerAttack({
+      fight,
+      monster,
+      skills,
+      equipment: input.equipment,
+      inventory,
+      activeClassId: input.activeClassId,
+      classXp,
+      rng,
+      trace,
+      labelPrefix: 'Weapon fallback: ',
+    })
+  }
+
+  const isWizard = input.activeClassId === 'wizard'
+  const savedComponents = isWizard && cost.length > 0 && rng() < ARCANE_RECOVERY_SAVE_CHANCE
+  if (!savedComponents && cost.length > 0) {
+    inventory = removeItems(inventory, [...cost])
+  }
+
+  if (
+    SPELL_SLOT_MODEL === 'expended' &&
+    spell.level > 0 &&
+    !usedCantripFallback &&
+    picked.slotIndex >= 0
+  ) {
+    markSlotSpent(fight.spellSlots, picked.slotIndex)
   }
 
   const notation = diceForCast(spell, Math.max(spell.level, slotLevel), skillLvl)
   const intervalSec = (fight.playerIntervalMs / 1000).toFixed(2)
   let line = `Cast ${spell.name}${slotLevel > 0 ? ` (slot ${slotLevel})` : ''}: ${intervalSec}s.`
-  if (usedCantripFallback) line += ' Out of components — cantrip.'
-  if (spell.level > 0 && spell.componentTier) {
-    line += ` Spent ${componentBagId(spell.componentTier)}.`
+  if (usedCantripFallback) {
+    line += ` Out of ${missingLeveledName ?? 'components'} — ${spell.name}.`
   }
+  if (savedComponents) line += ' Arcane Recovery: components saved.'
+  else if (cost.length > 0) line += ` Spent ${formatComponentSpend(cost)}.`
 
   if (spell.kind === 'heal') {
     const healDice = notation ? roll(notation, rng) : 0

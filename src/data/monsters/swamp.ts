@@ -18,7 +18,10 @@ export const SWAMP_MONSTERS = [
     immunities: [],
     saveBonuses: { STR: -5, DEX: 1, CON: -1, INT: -5, WIS: -1, CHA: -4 },
     xp: 10,
-    lootTable: [{ itemId: 'animal-scraps', chance: 0.5, min: 1, max: 1 }],
+    lootTable: [
+      { itemId: 'animal-scraps', chance: 0.5, min: 1, max: 1 },
+      { itemId: 'frog-skin', chance: 0.75, min: 1, max: 1 },
+    ],
     gold: { min: 0, max: 0 },
     biomes: ['swamp'],
   },
@@ -41,6 +44,7 @@ export const SWAMP_MONSTERS = [
     lootTable: [
       { itemId: 'raw-meat', chance: 0.75, min: 1, max: 1 },
       { itemId: 'animal-scraps', chance: 1, min: 1, max: 2 },
+      { itemId: 'frog-skin', chance: 0.75, min: 1, max: 1 },
     ],
     gold: { min: 0, max: 1 },
     biomes: ['swamp'],
@@ -91,6 +95,7 @@ export const SWAMP_MONSTERS = [
     lootTable: [
       { itemId: 'bones', chance: 1, min: 1, max: 2 },
       { itemId: 'animal-scraps', chance: 0.5, min: 1, max: 2 },
+      { itemId: 'ghoul-ichor', chance: 0.75, min: 1, max: 1 },
     ],
     gold: { min: 1, max: 4 },
     biomes: ['swamp'],

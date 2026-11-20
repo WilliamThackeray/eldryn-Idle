@@ -3,9 +3,11 @@ import type { SignatureHooks } from './types'
 
 export const divineSmite: SignatureHooks = {
   onHit(ctx) {
-    if (!ctx.spendLowestSlot) return
-    const spent = ctx.spendLowestSlot()
-    if (spent == null) return
+    if (!ctx.spendHolyWater) return
+    if (!ctx.spendHolyWater()) {
+      if (ctx.trace) ctx.log('Divine Smite: out of Holy Water.')
+      return
+    }
     let bonus = roll('2d8', ctx.rng)
     if (ctx.crit) bonus += roll('2d8', ctx.rng)
     const undeadOrFiend = ctx.creatureType === 'undead' || ctx.creatureType === 'fiend'
@@ -16,7 +18,7 @@ export const divineSmite: SignatureHooks = {
     ctx.bonusDice += bonus
     if (ctx.trace) {
       ctx.log(
-        `Divine Smite (slot ${spent}): +${bonus} radiant${undeadOrFiend ? ' (undead/fiend)' : ''}.`,
+        `Divine Smite (Holy Water): +${bonus} radiant${undeadOrFiend ? ' (undead/fiend)' : ''}.`,
       )
     }
   },

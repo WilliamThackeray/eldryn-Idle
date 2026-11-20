@@ -1,4 +1,5 @@
 import { ACTIVITIES } from '../data/activities'
+import { CLASSES, TRADITION_REAGENT } from '../data/classes'
 import { DUNGEONS } from '../data/dungeons'
 import type { ItemId } from '../data/items'
 import { MONSTERS } from '../data/monsters'
@@ -6,7 +7,6 @@ import { QUESTS } from '../data/quests'
 import { GENERAL_GOODS } from '../data/shop'
 import { SPELLS } from '../data/spells'
 import type { SkillId } from '../data/skills'
-import { componentBagId } from './spells'
 
 export type ItemLink =
   | { kind: 'activity'; skillId: SkillId; activityId: string; label: string }
@@ -88,13 +88,23 @@ function buildIndex(): ItemIndex {
   }
 
   for (const spell of SPELLS) {
-    if (spell.level === 0 || spell.componentTier == null) continue
-    const bagId = componentBagId(spell.componentTier)
-    push(uses, bagId as ItemId, {
-      kind: 'spell',
-      spellId: spell.id,
-      label: spell.name,
-    })
+    const link: ItemLink = { kind: 'spell', spellId: spell.id, label: spell.name }
+    if (spell.level === 0) {
+      const traditions = new Set(
+        CLASSES.filter(
+          (cls) =>
+            cls.spellcasting.casterType !== 'none' &&
+            (spell.classes as readonly string[]).includes(cls.id),
+        ).map((cls) =>
+          cls.spellcasting.casterType === 'none' ? null : TRADITION_REAGENT[cls.spellcasting.tradition],
+        ),
+      )
+      for (const reagent of traditions) {
+        if (reagent) push(uses, reagent, link)
+      }
+      continue
+    }
+    for (const stack of spell.components) push(uses, stack.itemId, link)
   }
 
   return { sources, uses }

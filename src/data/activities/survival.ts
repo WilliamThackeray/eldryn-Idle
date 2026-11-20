@@ -92,9 +92,9 @@ function woodGear(): ActivityDef[] {
 }
 
 export const survivalActivities = [
-  activity({ skillId: 'survival', id: 'chop-wood', name: 'Chop Wood', description: 'Fell ordinary trees for timber.', requiredLevel: 1, outputs: [drop('logs')] }),
-  activity({ skillId: 'survival', id: 'chop-hardwood', name: 'Chop Hardwood', description: 'Fell dense trees for bows and hafts.', requiredLevel: 20, outputs: [drop('hardwood')] }),
-  activity({ skillId: 'survival', id: 'chop-ironwood', name: 'Chop Ironwood', description: 'Fell ironwood.', requiredLevel: 50, outputs: [drop('ironwood')] }),
+  activity({ skillId: 'survival', id: 'chop-wood', name: 'Chop Wood', description: 'Fell ordinary trees for timber.', requiredLevel: 1, outputs: [drop('logs'), drop('oak-bark', 1, 1, 0.25)] }),
+  activity({ skillId: 'survival', id: 'chop-hardwood', name: 'Chop Hardwood', description: 'Fell dense trees for bows and hafts.', requiredLevel: 20, outputs: [drop('hardwood'), drop('oak-bark', 1, 1, 0.25)] }),
+  activity({ skillId: 'survival', id: 'chop-ironwood', name: 'Chop Ironwood', description: 'Fell ironwood.', requiredLevel: 50, outputs: [drop('ironwood'), drop('oak-bark', 1, 1, 0.25)] }),
   activity({ skillId: 'survival', id: 'forage-forest', name: 'Forage Forest Herbs', description: 'Gather herbs on the forest floor.', requiredLevel: 1, outputs: [drop('forest-herbs')] }),
   activity({ skillId: 'survival', id: 'forage-desert', name: 'Forage Desert Herbs', description: 'Gather bitter plants from dry ground.', requiredLevel: 20, outputs: [drop('desert-herbs')] }),
   activity({ skillId: 'survival', id: 'forage-spices', name: 'Forage Desert Spices', description: 'Gather spices in the waste.', requiredLevel: 40, outputs: [drop('desert-spices')] }),
