@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getClass } from '../../data/classes'
+import { BESTIARY_TYPES } from '../../data/historyContent'
 import { getItem, type ItemId } from '../../data/items'
 import { getMonster } from '../../data/monsters'
-import { getSkill } from '../../data/skills'
+import { getSkill, SKILLS } from '../../data/skills'
 import { getSpell, spellsForClass, type SpellId } from '../../data/spells'
 import { ladderPerksFor, perRankPerkFor } from '../../data/abilityPerks'
 import { ProgressBar } from '../../components/ProgressBar'
@@ -56,6 +57,8 @@ export function CharacterPage({
   const saveEquipmentSet = useGameStore((state) => state.saveEquipmentSet)
   const loadEquipmentSet = useGameStore((state) => state.loadEquipmentSet)
   const deleteEquipmentSet = useGameStore((state) => state.deleteEquipmentSet)
+  const tomes = useGameStore((state) => state.tomes)
+  const bestiaries = useGameStore((state) => state.bestiaries)
   const [setName, setSetName] = useState('')
   const [tab, setTab] = useState<Tab>('gear')
   const [highlightSpellId, setHighlightSpellId] = useState<string | null>(null)
@@ -223,10 +226,56 @@ export function CharacterPage({
           <p className="mt-3 text-sm font-semibold">{active.signatureAbility.name}</p>
           <p className="mt-1 text-sm text-parchment/80">{active.signatureAbility.description}</p>
           {active.id === 'cleric' && (
-            <p className="mt-3 text-sm text-sage">Focus {clericFocus}</p>
+            <p className="mt-3 text-sage text-sm">Focus {clericFocus}</p>
           )}
         </section>
       )}
+
+      <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
+        <h3 className="mb-3 font-bold text-gold">History</h3>
+        <div className="space-y-3 text-sm">
+          <div>
+            <h4 className="mb-1 text-xs uppercase tracking-wide text-sage">Tomes</h4>
+            {SKILLS.filter((skill) => skill.id !== 'history' && (tomes[skill.id] ?? 0) > 0).length ===
+            0 ? (
+              <p className="text-parchment/60">No tomes read yet.</p>
+            ) : (
+              <ul className="space-y-1">
+                {SKILLS.filter((skill) => skill.id !== 'history' && (tomes[skill.id] ?? 0) > 0).map(
+                  (skill) => {
+                    const volumes = tomes[skill.id] ?? 0
+                    const extras = [
+                      volumes >= 5 ? '−5% interval' : null,
+                      volumes >= 10 ? '+1 check' : null,
+                    ].filter(Boolean)
+                    return (
+                      <li key={skill.id}>
+                        {skill.name} Vol. {volumes} (+{Math.min(volumes, 10)}% XP
+                        {extras.length ? `; ${extras.join(', ')}` : ''})
+                      </li>
+                    )
+                  },
+                )}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h4 className="mb-1 text-xs uppercase tracking-wide text-sage">Bestiaries</h4>
+            {BESTIARY_TYPES.filter((type) => (bestiaries[type] ?? 0) > 0).length === 0 ? (
+              <p className="text-parchment/60">No bestiaries read yet.</p>
+            ) : (
+              <ul className="space-y-1">
+                {BESTIARY_TYPES.filter((type) => (bestiaries[type] ?? 0) > 0).map((type) => (
+                  <li key={type}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)} Vol. {bestiaries[type]} (+
+                    {bestiaries[type]} to hit)
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </section>
 
       <div className="flex gap-2">
         {(['gear', 'spellbook'] as const).map((id) => (
@@ -316,6 +365,7 @@ export function CharacterPage({
                 classXp={classXp}
                 inventory={inventory}
                 spellLoadout={classId ? spellLoadouts[classId] : undefined}
+                bestiaries={bestiaries}
               />
               <div className="rounded-lg border border-brown/40 bg-ink/40 p-3">
                 <ItemDetail

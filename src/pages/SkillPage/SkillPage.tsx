@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import { activitiesFor, type ActivityDef, type GoldDrop, type LootEntry } from '../../data/activities'
 import { getClass, modifiersFor } from '../../data/classes'
-import { getItem } from '../../data/items'
+import {
+  parseBestiaryItemId,
+  parseNoteItemId,
+  parseTomeActivityId,
+  parseTomeItemId,
+} from '../../data/historyContent'
+import { getItem, type ItemId } from '../../data/items'
 import { intervalBonus } from '../../data/shop'
 import { SKILLS, type SkillId } from '../../data/skills'
-import { deriveAbilities } from '../../engine/abilities'
+import { activePerks, deriveAbilities, effectTotal } from '../../engine/abilities'
 import { actionIntervalMs, activityIntervalMs, type SkillEvent } from '../../engine/advance'
+import { discountTomeInputs, tomeCheckBonus, tomeSpeedBonus, tomeXpPct } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
 import { checkDc, successChance } from '../../engine/skillCheck'
 import { levelForXp, proficiency, progressToNext, tier } from '../../engine/xp'
@@ -20,38 +27,63 @@ interface SkillPageProps {
   onFocusConsumed?: () => void
 }
 
+const HISTORY_GROUPS = [
+  { id: 'study', title: 'Study', match: (id: string) => id === 'chronicles' || id === 'lost-runes' },
+  { id: 'tomes', title: 'Tomes', match: (id: string) => id.startsWith('craft-tome-') },
+  { id: 'notes', title: 'Notes', match: (id: string) => id.startsWith('craft-notes-') },
+  { id: 'bestiaries', title: 'Bestiaries', match: (id: string) => id.startsWith('craft-bestiary-') },
+] as const
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const
+
 export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageProps) {
   const xp = useGameStore((state) => state.skills[skillId].xp)
   const skills = useGameStore((state) => state.skills)
   const inventory = useGameStore((state) => state.inventory)
   const equipment = useGameStore((state) => state.equipment)
   const upgrades = useGameStore((state) => state.upgrades)
+  const tomes = useGameStore((state) => state.tomes)
+  const bestiaries = useGameStore((state) => state.bestiaries)
   const activeAction = useGameStore((state) => state.activeAction)
   const classId = useGameStore((state) => state.classId)
   const clericFocus = useGameStore((state) => state.clericFocus)
   const log = useGameStore((state) => state.log)
   const startActivity = useGameStore((state) => state.startActivity)
   const stopActivity = useGameStore((state) => state.stopActivity)
+  const readTome = useGameStore((state) => state.readTome)
+  const readBestiary = useGameStore((state) => state.readBestiary)
+  const activateNotes = useGameStore((state) => state.useNotes)
   const progress = progressToNext(xp)
   const level = levelForXp(xp)
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
   const modifier = deriveAbilities(skills).find((entry) => entry.abbr === ability)?.modifier ?? 0
-  const bonus = modifier + proficiency(tier(level))
+  const checkBonus = tomeCheckBonus(tomes, skillId)
+  const bonus = modifier + proficiency(tier(level)) + checkBonus
   const classMods = modifiersFor(classId, clericFocus)
   const className = classId ? getClass(classId).name : null
+  const tomePct = tomeXpPct(tomes, skillId)
+  const classFrac = ability ? (classMods[ability] ?? 0) : 0
   const xpMultiplierLabel =
     ability && className
-      ? `XP ×${(1 + (classMods[ability] ?? 0)).toFixed(2)} (${className})`
-      : null
+      ? `XP ×${(1 + classFrac + tomePct).toFixed(2)} (${className}${tomePct > 0 ? ' + History' : ''})`
+      : tomePct > 0
+        ? `XP ×${(1 + tomePct).toFixed(2)} (History)`
+        : null
+  const historyLine = historyBonusLine(tomes[skillId] ?? 0)
   const activities = activitiesFor(skillId)
+  const pageDiscount = effectTotal(activePerks({ skills }), 'historyTomePages')
+  const tomeSpeed = tomeSpeedBonus(tomes, skillId)
   const activeSpeed =
-    activeAction?.kind === 'skill' ? intervalBonus(upgrades, activeAction.activityId) : 0
+    (activeAction?.kind === 'skill' ? intervalBonus(upgrades, activeAction.activityId) : 0) +
+    (activeAction?.kind === 'skill' && activeAction.skillId === skillId ? tomeSpeed : 0)
   const activeInterval =
     activeAction?.kind === 'skill' && activeAction.skillId === skillId
       ? actionIntervalMs(activeAction, skills, equipment, null, activeSpeed)
       : 0
 
-  const [selectedId, setSelectedId] = useState(() => defaultActivityId(skillId, activeAction?.kind === 'skill' ? activeAction : null, activities))
+  const [selectedId, setSelectedId] = useState(() =>
+    defaultActivityId(skillId, activeAction?.kind === 'skill' ? activeAction : null, activities),
+  )
 
   useEffect(() => {
     const running = useGameStore.getState().activeAction
@@ -69,6 +101,37 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   }, [focus, skillId, onFocusConsumed])
 
   const selected = activities.find((activity) => activity.id === selectedId) ?? activities[0]
+  const secondary = selected ? secondaryAction(selected, inventory, tomes, bestiaries) : null
+
+  const renderCard = (activity: ActivityDef) => {
+    const active =
+      activeAction?.kind === 'skill' &&
+      activeAction.skillId === skillId &&
+      activeAction.activityId === activity.id
+    const interval = activityIntervalMs(
+      skillId,
+      activity.baseIntervalMs,
+      skills,
+      equipment,
+      intervalBonus(upgrades, activity.id) + tomeSpeed,
+    )
+    return (
+      <SkillCard
+        key={activity.id}
+        title={activity.name}
+        description={activity.description}
+        intervalSeconds={formatInterval(interval)}
+        xpMultiplierLabel={xpMultiplierLabel}
+        requiredLevel={activity.requiredLevel}
+        needsMaterials={lacksInputs(activity, inventory, pageDiscount)}
+        locked={level < activity.requiredLevel}
+        selected={selected?.id === activity.id}
+        active={active}
+        progress={active && activeInterval > 0 ? Math.min(100, (activeAction.progressMs / activeInterval) * 100) : 0}
+        onSelect={() => setSelectedId(activity.id)}
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -81,37 +144,28 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
         capped={progress.capped}
       />
 
+      {historyLine && skillId !== 'history' && (
+        <p className="text-sm text-sage">{historyLine}</p>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)]">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {activities.map((activity) => {
-            const active =
-              activeAction?.kind === 'skill' &&
-              activeAction.skillId === skillId &&
-              activeAction.activityId === activity.id
-            const interval = activityIntervalMs(
-              skillId,
-              activity.baseIntervalMs,
-              skills,
-              equipment,
-              intervalBonus(upgrades, activity.id),
-            )
-            return (
-              <SkillCard
-                key={activity.id}
-                title={activity.name}
-                description={activity.description}
-                intervalSeconds={formatInterval(interval)}
-                xpMultiplierLabel={xpMultiplierLabel}
-                requiredLevel={activity.requiredLevel}
-                needsMaterials={lacksInputs(activity, inventory)}
-                locked={level < activity.requiredLevel}
-                selected={selected?.id === activity.id}
-                active={active}
-                progress={active && activeInterval > 0 ? Math.min(100, (activeAction.progressMs / activeInterval) * 100) : 0}
-                onSelect={() => setSelectedId(activity.id)}
-              />
-            )
-          })}
+        <div className="space-y-6">
+          {skillId === 'history'
+            ? HISTORY_GROUPS.map((group) => {
+                const groupActivities = activities.filter((activity) => group.match(activity.id))
+                if (groupActivities.length === 0) return null
+                return (
+                  <section key={group.id}>
+                    <h2 className="mb-3 font-bold text-gold">{group.title}</h2>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      {groupActivities.map(renderCard)}
+                    </div>
+                  </section>
+                )
+              })
+            : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{activities.map(renderCard)}</div>
+            )}
         </div>
 
         {selected && (
@@ -126,15 +180,15 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
                 selected.baseIntervalMs,
                 skills,
                 equipment,
-                intervalBonus(upgrades, selected.id),
+                intervalBonus(upgrades, selected.id) + tomeSpeed,
               ),
             )}
             requiredLevel={selected.requiredLevel}
             dc={checkDc(selected.requiredLevel)}
             successPercent={Math.round(successChance(bonus, selected.requiredLevel) * 100)}
             bonus={bonus}
-            details={activityDetails(selected, inventory)}
-            needsMaterials={lacksInputs(selected, inventory)}
+            details={activityDetails(selected, inventory, pageDiscount)}
+            needsMaterials={lacksInputs(selected, inventory, pageDiscount)}
             locked={level < selected.requiredLevel}
             active={
               activeAction?.kind === 'skill' &&
@@ -160,6 +214,17 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
               })
             }
             onStop={stopActivity}
+            secondaryLabel={secondary?.label ?? null}
+            secondaryDisabled={secondary ? !secondary.ready : false}
+            onSecondary={
+              secondary
+                ? () => {
+                    if (secondary.kind === 'tome') readTome(secondary.itemId)
+                    else if (secondary.kind === 'bestiary') readBestiary(secondary.itemId)
+                    else activateNotes(secondary.itemId)
+                  }
+                : null
+            }
           />
         )}
       </div>
@@ -186,6 +251,54 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   )
 }
 
+function historyBonusLine(volumes: number): string | null {
+  if (volumes <= 0) return null
+  const roman = ROMAN[Math.min(volumes, 10) - 1] ?? String(volumes)
+  const parts = [`History: Vol. ${roman} (+${Math.min(volumes, 10)}% XP)`]
+  if (volumes >= 5) parts.push('−5% interval')
+  if (volumes >= 10) parts.push('+1 check')
+  return parts.join(' · ')
+}
+
+function secondaryAction(
+  activity: ActivityDef,
+  inventory: Inventory,
+  tomes: Record<SkillId, number>,
+  bestiaries: Record<string, number>,
+): { kind: 'tome' | 'bestiary' | 'notes'; itemId: ItemId; label: string; ready: boolean } | null {
+  const outputId = activity.outputs[0]?.itemId
+  if (!outputId) return null
+  const tome = parseTomeItemId(outputId)
+  if (tome) {
+    const current = tomes[tome.skillId] ?? 0
+    return {
+      kind: 'tome',
+      itemId: outputId,
+      label: 'Read',
+      ready: (inventory[outputId] ?? 0) > 0 && tome.volume === current + 1,
+    }
+  }
+  const bestiary = parseBestiaryItemId(outputId)
+  if (bestiary) {
+    const current = bestiaries[bestiary.type] ?? 0
+    return {
+      kind: 'bestiary',
+      itemId: outputId,
+      label: 'Read',
+      ready: (inventory[outputId] ?? 0) > 0 && bestiary.volume === current + 1,
+    }
+  }
+  if (parseNoteItemId(outputId)) {
+    return {
+      kind: 'notes',
+      itemId: outputId,
+      label: 'Use',
+      ready: (inventory[outputId] ?? 0) > 0,
+    }
+  }
+  return null
+}
+
 function defaultActivityId(
   skillId: SkillId,
   activeAction: { skillId: SkillId; activityId: string } | null,
@@ -198,15 +311,22 @@ function defaultActivityId(
   return activities[0]?.id ?? ''
 }
 
-function lacksInputs(activity: ActivityDef, inventory: Inventory): boolean {
-  return (activity.inputs ?? []).some((stack) => (inventory[stack.itemId] ?? 0) < stack.quantity)
+function craftInputs(activity: ActivityDef, pageDiscount: number) {
+  if (!activity.inputs?.length) return []
+  if (!parseTomeActivityId(activity.id)) return activity.inputs
+  return discountTomeInputs(activity.id, activity.inputs, pageDiscount).filter((stack) => stack.quantity > 0)
 }
 
-function activityDetails(activity: ActivityDef, inventory: Inventory): string[] {
+function lacksInputs(activity: ActivityDef, inventory: Inventory, pageDiscount: number): boolean {
+  return craftInputs(activity, pageDiscount).some((stack) => (inventory[stack.itemId] ?? 0) < stack.quantity)
+}
+
+function activityDetails(activity: ActivityDef, inventory: Inventory, pageDiscount: number): string[] {
   const lines: string[] = []
-  if (activity.inputs?.length) {
+  const inputs = craftInputs(activity, pageDiscount)
+  if (inputs.length) {
     lines.push(
-      `Needs ${activity.inputs
+      `Needs ${inputs
         .map((stack) => `${itemName(stack.itemId)} ${inventory[stack.itemId] ?? 0}/${stack.quantity}`)
         .join(', ')}`,
     )

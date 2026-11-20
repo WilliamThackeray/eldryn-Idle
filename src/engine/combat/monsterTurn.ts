@@ -23,6 +23,7 @@ export function applyPlayerDamage(input: {
   trace: boolean
   modifiers: Partial<Record<AbilityAbbr, number>>
   equipment?: Equipment
+  xpExtra?: number
 }): { skills: Record<SkillId, SkillProgress>; defeated: boolean } {
   const { fight, rng, trace } = input
   let skills = input.skills
@@ -62,7 +63,7 @@ export function applyPlayerDamage(input: {
   if (taken > 0) {
     if (fight.shieldBonus > 0) fight.shieldBonus = 0
     fight.playerHp = Math.max(0, fight.playerHp - taken)
-    const vitalityXp = applyXpModifiers(taken, 'CON', input.modifiers)
+    const vitalityXp = applyXpModifiers(taken, 'CON', input.modifiers, input.xpExtra ?? 0)
     skills = {
       ...skills,
       vitality: { xp: addXp(skills.vitality.xp, vitalityXp) },
@@ -104,7 +105,7 @@ export function applyPlayerDamage(input: {
       heal: (healAmt) => {
         if (healAmt <= 0) return
         fight.playerHp = Math.min(fight.playerMaxHp, fight.playerHp + healAmt)
-        const vitalityXp = applyXpModifiers(healAmt, 'CON', input.modifiers)
+        const vitalityXp = applyXpModifiers(healAmt, 'CON', input.modifiers, input.xpExtra ?? 0)
         skills = {
           ...skills,
           vitality: { xp: addXp(skills.vitality.xp, vitalityXp) },
@@ -141,46 +142,48 @@ export function resolveMonsterAttacks(input: {
   rng: Rng
   trace: boolean
   modifiers: Partial<Record<AbilityAbbr, number>>
+  xpExtra?: number
 }): { skills: Record<SkillId, SkillProgress>; defeated: boolean } {
   const { fight, monster, equipment, trace } = input
   let skills = input.skills
   fight.monsterProgressMs = 0
   const playerAc = playerArmorClass(fight, equipment, input.dexMod)
-      const disadvSources: Array<'advantage' | 'disadvantage'> = []
-      if (fight.monsterNextDisadvantage) disadvSources.push('disadvantage')
-      if (fight.concentration === 'blur') disadvSources.push('disadvantage')
-      const mode = resolveRollMode(disadvSources)
-      fight.monsterNextDisadvantage = false
+  const disadvSources: Array<'advantage' | 'disadvantage'> = []
+  if (fight.monsterNextDisadvantage) disadvSources.push('disadvantage')
+  if (fight.concentration === 'blur') disadvSources.push('disadvantage')
+  const mode = resolveRollMode(disadvSources)
+  fight.monsterNextDisadvantage = false
 
-      for (const attack of monster.attacks) {
-        const natural = rollD20(input.rng, mode)
-        const total = natural + attack.toHit
-        const autoMiss = natural === 1
-        const crit = natural === 20
-        const hit = !autoMiss && (crit || total >= playerAc)
-        let line = `${monster.name} ${attack.name}: to hit ${total} - ${hit ? 'hits' : 'misses'}.`
-        if (hit) {
-          const parts = rollDamageParts(attack.damage, input.rng, crit)
-          const dealt = parts.total
-          line += ` ${dealt} ${attack.damageType}.`
-          pushLog(fight, line, trace)
-          const result = applyPlayerDamage({
-            fight,
-            amount: dealt,
-            damageType: attack.damageType,
-            skills,
-            activeClassId: input.activeClassId,
-            classXp: input.classXp,
-            rng: input.rng,
-            trace,
-            modifiers: input.modifiers,
-            equipment: input.equipment,
-          })
-          skills = result.skills
-          if (result.defeated) return { skills, defeated: true }
-        } else {
-          pushLog(fight, line, trace)
-        }
-      }
+  for (const attack of monster.attacks) {
+    const natural = rollD20(input.rng, mode)
+    const total = natural + attack.toHit
+    const autoMiss = natural === 1
+    const crit = natural === 20
+    const hit = !autoMiss && (crit || total >= playerAc)
+    let line = `${monster.name} ${attack.name}: to hit ${total} - ${hit ? 'hits' : 'misses'}.`
+    if (hit) {
+      const parts = rollDamageParts(attack.damage, input.rng, crit)
+      const dealt = parts.total
+      line += ` ${dealt} ${attack.damageType}.`
+      pushLog(fight, line, trace)
+      const result = applyPlayerDamage({
+        fight,
+        amount: dealt,
+        damageType: attack.damageType,
+        skills,
+        activeClassId: input.activeClassId,
+        classXp: input.classXp,
+        rng: input.rng,
+        trace,
+        modifiers: input.modifiers,
+        equipment: input.equipment,
+        xpExtra: input.xpExtra,
+      })
+      skills = result.skills
+      if (result.defeated) return { skills, defeated: true }
+    } else {
+      pushLog(fight, line, trace)
+    }
+  }
   return { skills, defeated: false }
 }

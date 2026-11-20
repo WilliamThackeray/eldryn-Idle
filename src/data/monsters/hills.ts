@@ -22,6 +22,7 @@ export const HILLS_MONSTERS = [
       { itemId: 'raw-meat', chance: 1, min: 1, max: 1 },
       { itemId: 'hide', chance: 0.4, min: 1, max: 1 },
       { itemId: 'goat-horn', chance: 0.75, min: 1, max: 1 },
+      { itemId: 'beast-trophy', chance: 0.25, min: 1, max: 1 },
     ],
     gold: { min: 0, max: 0 },
     biomes: ['hills'],
@@ -45,6 +46,7 @@ export const HILLS_MONSTERS = [
     lootTable: [
       { itemId: 'animal-scraps', chance: 0.5, min: 1, max: 1 },
       { itemId: 'bones', chance: 0.25, min: 1, max: 1 },
+      { itemId: 'fey-trophy', chance: 0.25, min: 1, max: 1 },
     ],
     gold: { min: 1, max: 4 },
     biomes: ['hills'],
@@ -70,6 +72,7 @@ export const HILLS_MONSTERS = [
       { itemId: 'hide', chance: 0.75, min: 1, max: 1 },
       { itemId: 'bones', chance: 0.5, min: 1, max: 2 },
       { itemId: 'goat-horn', chance: 0.75, min: 1, max: 1 },
+      { itemId: 'beast-trophy', chance: 0.25, min: 1, max: 1 },
     ],
     gold: { min: 0, max: 2 },
     biomes: ['hills'],
@@ -93,6 +96,7 @@ export const HILLS_MONSTERS = [
     lootTable: [
       { itemId: 'bat-guano', chance: 0.75, min: 1, max: 2 },
       { itemId: 'animal-scraps', chance: 0.5, min: 1, max: 1 },
+      { itemId: 'beast-trophy', chance: 0.25, min: 1, max: 1 },
     ],
     gold: { min: 0, max: 1 },
     biomes: ['hills'],
@@ -117,6 +121,7 @@ export const HILLS_MONSTERS = [
       { itemId: 'raw-meat', chance: 0.5, min: 1, max: 2 },
       { itemId: 'bones', chance: 1, min: 1, max: 3 },
       { itemId: 'hide', chance: 0.25, min: 1, max: 1 },
+      { itemId: 'giant-trophy', chance: 0.25, min: 1, max: 1 },
     ],
     gold: { min: 2, max: 8 },
     biomes: ['hills'],
@@ -143,6 +148,7 @@ export const HILLS_MONSTERS = [
     lootTable: [
       { itemId: 'bones', chance: 0.5, min: 1, max: 2 },
       { itemId: 'iron-bar', chance: 0.25, min: 1, max: 1 },
+      { itemId: 'fey-trophy', chance: 0.25, min: 1, max: 1 },
     ],
     gold: { min: 5, max: 15 },
     biomes: ['hills'],

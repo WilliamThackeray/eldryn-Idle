@@ -24,6 +24,7 @@ export function runOpening(input: {
   classTier: number
   casting: boolean
   stopWhenOutOfFood?: boolean
+  bestiaryBonus?: number
 }): {
   inventory: Inventory
   classXp: number
@@ -44,6 +45,7 @@ export function runOpening(input: {
     classXp,
     rng: input.rng,
     trace,
+    bestiaryBonus: input.bestiaryBonus,
   })
   inventory = opened.inventory
   classXp = opened.classXp
@@ -93,6 +95,7 @@ export function runOpening(input: {
       rng: input.rng,
       trace,
       labelPrefix: 'Action Surge: ',
+      bestiaryBonus: input.bestiaryBonus,
     })
     inventory = surged.inventory
     classXp = surged.classXp

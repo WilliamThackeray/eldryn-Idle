@@ -1,4 +1,4 @@
-import { Coins, Info, Menu, Package, Save, ScrollText, ShoppingCart, Swords, User } from 'lucide-react'
+import { BookOpen, Coins, Info, Menu, Package, Save, ScrollText, ShoppingCart, Swords, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getClass } from '../data/classes'
@@ -30,6 +30,7 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
   const equipment = useGameStore((state) => state.equipment)
   const gold = useGameStore((state) => state.gold)
   const activeAction = useGameStore((state) => state.activeAction)
+  const activeBuffs = useGameStore((state) => state.activeBuffs)
   const combat = useGameStore((state) => state.combat)
   const saveGame = useGameStore((state) => state.saveGame)
   const actionInterval =
@@ -95,6 +96,20 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
       </div>
 
       <div className="flex items-center gap-2">
+        {activeBuffs.length > 0 && (
+          <div className="flex items-center gap-1" aria-label="Active buffs">
+            {activeBuffs.map((buff) => (
+              <span
+                key={buff.id}
+                title={`${buff.id.replace(/^notes-/, 'Notes: ')} · ${formatBuffTime(buff.remainingMs)} left`}
+                className="inline-flex items-center gap-0.5 rounded bg-ink/60 px-1.5 py-0.5 text-[10px] text-sage"
+              >
+                <BookOpen size={12} />
+                {formatBuffTime(buff.remainingMs)}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-1 text-gold" aria-label="Gold">
           <Coins size={18} />
           <span>{gold.toLocaleString()} gp</span>
@@ -189,4 +204,13 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
       </div>
     </div>
   )
+}
+
+function formatBuffTime(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000))
+  const hours = Math.floor(totalSec / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  if (hours > 0) return `${hours}h${minutes > 0 ? `${minutes}m` : ''}`
+  if (minutes > 0) return `${minutes}m`
+  return `${totalSec}s`
 }

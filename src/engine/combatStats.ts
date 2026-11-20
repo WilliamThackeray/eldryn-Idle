@@ -5,6 +5,7 @@ import type { SkillId } from '../data/skills'
 import { getSpell, type SpellId } from '../data/spells'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { activePerks, nickCeiling } from './abilities'
+import { bestiaryBonus, type Bestiaries } from './history'
 import {
   averageDamage,
   critThreshold,
@@ -89,6 +90,7 @@ export interface CombatStatsInput {
   classXp: number
   inventory: Inventory
   spellLoadout?: SpellLoadout
+  bestiaries?: Bestiaries
 }
 
 export interface CombatMatchup {
@@ -214,12 +216,19 @@ function expectedWeaponSwing(input: {
   classXp: number
   classId: ClassId
   monster: MonsterDef
+  bestiaries?: Bestiaries
 }): number {
   const mods = abilityModMap(input.skills)
   const weapon = playerWeapon(input.equipment)
   const { mod: abilityBonus } = attackAbilityMod(weapon, mods)
   const item = totalItemStats(input.equipment)
-  const toHit = playerToHitBonus(input.skills, input.equipment, input.classXp, input.classId)
+  const toHit = playerToHitBonus(
+    input.skills,
+    input.equipment,
+    input.classXp,
+    input.classId,
+    bestiaryBonus(input.bestiaries, input.monster.creatureType),
+  )
   const pHit = hitChance(toHit, input.monster.ac)
   const critFloor = critThreshold(item.critRange)
   const pCrit = (21 - critFloor) / 20
@@ -328,6 +337,7 @@ function expectedPlayerDps(input: CombatStatsInput, monster: MonsterDef): { dps:
       classXp: input.classXp,
       classId: input.classId,
       monster,
+      bestiaries: input.bestiaries,
     })
     const dps = intervalSec > 0 ? perSwing / intervalSec : 0
     const ttk = dps > 0 ? monster.hp / dps : Infinity
@@ -391,6 +401,7 @@ function expectedPlayerDps(input: CombatStatsInput, monster: MonsterDef): { dps:
         classXp: input.classXp,
         classId: input.classId,
         monster,
+        bestiaries: input.bestiaries,
       })
       remaining -= swing
       casts += 1
@@ -405,6 +416,7 @@ function expectedPlayerDps(input: CombatStatsInput, monster: MonsterDef): { dps:
         classXp: input.classXp,
         classId: input.classId,
         monster,
+        bestiaries: input.bestiaries,
       })
       remaining -= swing
       casts += 1
@@ -536,8 +548,17 @@ export function computeCombatStats(input: CombatStatsInput, monster?: MonsterDef
     saves[ability] = breakdown(parts)
   }
 
-  // Lock to-hit to the combat helper.
-  toHit.value = playerToHitBonus(input.skills, input.equipment, input.classXp, input.classId)
+  const bestiary =
+    monster != null ? bestiaryBonus(input.bestiaries, monster.creatureType) : 0
+  if (bestiary > 0) toHit.parts.push({ label: 'Bestiary', value: bestiary })
+  // Lock to-hit to the combat helper (includes bestiary when a monster is selected).
+  toHit.value = playerToHitBonus(
+    input.skills,
+    input.equipment,
+    input.classXp,
+    input.classId,
+    bestiary,
+  )
 
   const stats: CombatStats = {
     toHit,

@@ -13,6 +13,17 @@ import {
 } from './combat'
 import { OFFLINE_CAP_MS, RESPAWN_MS } from './config'
 import { emptyEquipment, gearRollMode, heavyArmorIntervalMultiplier, type Equipment } from './equipment'
+import {
+  discountTomeInputs,
+  noteYieldPct,
+  tickBuffs,
+  tomeCheckBonus,
+  tomeSpeedBonus,
+  tomeXpPct,
+  type ActiveBuff,
+  type Bestiaries,
+  type Tomes,
+} from './history'
 import { intervalMs } from './interval'
 import { hasItems, removeItems, addItems, type Inventory } from './inventory'
 import { rollGold, rollLoot } from './loot'
@@ -63,6 +74,9 @@ export interface AdvanceState {
   questStepComplete?: string | null
   /** Missing means on. */
   stopWhenOutOfFood?: boolean
+  tomes?: Tomes
+  bestiaries?: Bestiaries
+  activeBuffs?: ActiveBuff[]
 }
 
 export interface SkillEvent {
@@ -166,13 +180,17 @@ export function onActivityComplete(
   action: SkillAction,
   check: SkillCheckResult,
   rng: Rng,
+  pageDiscount = 0,
 ): AdvanceState {
   const activity = getActivity(action.skillId, action.activityId)
   if (!activity) return state
-  if (activity.inputs?.length && !hasItems(state.inventory, activity.inputs)) return state
+  const inputs = activity.inputs?.length
+    ? discountTomeInputs(activity.id, activity.inputs, pageDiscount).filter((stack) => stack.quantity > 0)
+    : []
+  if (inputs.length && !hasItems(state.inventory, inputs)) return state
 
   // TODO(design): confirm inputs are spent on failures and fumbles.
-  let inventory = activity.inputs?.length ? removeItems(state.inventory, activity.inputs) : state.inventory
+  let inventory = inputs.length ? removeItems(state.inventory, inputs) : state.inventory
   const multiplier = check.itemMultiplier
   let stacks = [
     ...rollLoot(activity.outputs, rng, multiplier),
@@ -182,7 +200,8 @@ export function onActivityComplete(
   let goldGain = rollGold(activity.gold, rng, multiplier)
   const ability = getSkill(action.skillId).ability
   const perks = activePerks(state)
-  const yieldPct = effectTotal(perks, 'skillYieldPct', ability)
+  const yieldPct =
+    effectTotal(perks, 'skillYieldPct', ability) + noteYieldPct(state.activeBuffs, action.activityId)
   if (yieldPct > 0) {
     // One extra draw after loot/gold so scripted skill-check RNG stays aligned.
     const roll = rng()
@@ -251,7 +270,10 @@ export function advance(
   let skills = state.skills
   let inventory = state.inventory
   let gold = state.gold
+  let activeBuffs = state.activeBuffs ?? []
   const equipment = state.equipment ?? emptyEquipment()
+  const tomes = state.tomes
+  const pageDiscount = effectTotal(activePerks(state), 'historyTomePages')
   let action: ActiveAction | null = current
   let progress = current.progressMs
   let remaining = elapsedMs
@@ -260,7 +282,10 @@ export function advance(
   while (action?.kind === 'skill' && remaining > 0) {
     const acting = action
     const activity = getActivity(acting.skillId, acting.activityId)
-    if (activity?.inputs?.length && !hasItems(inventory, activity.inputs)) {
+    const craftInputs = activity?.inputs?.length
+      ? discountTomeInputs(activity.id, activity.inputs, pageDiscount).filter((stack) => stack.quantity > 0)
+      : []
+    if (craftInputs.length && !hasItems(inventory, craftInputs)) {
       log.push({
         kind: 'materials',
         skillId: acting.skillId,
@@ -277,13 +302,16 @@ export function advance(
       break
     }
 
-    const speed = intervalBonus(state.upgrades ?? {}, acting.activityId)
+    const speed =
+      intervalBonus(state.upgrades ?? {}, acting.activityId) + tomeSpeedBonus(tomes, acting.skillId)
     const interval = activityIntervalMs(acting.skillId, acting.baseIntervalMs, skills, equipment, speed)
     if (!Number.isFinite(interval) || interval <= 0) break
 
     const need = Math.max(0, interval - progress)
     if (remaining < need) {
       progress += remaining
+      activeBuffs = tickBuffs(activeBuffs, remaining)
+      remaining = 0
       break
     }
 
@@ -295,21 +323,36 @@ export function advance(
       abilityModifier: deriveAbilities(skills).find((ability) => ability.abbr === skill.ability)?.modifier ?? 0,
       skillLevel: levelForXp(skills[skill.id].xp),
       requiredLevel: acting.requiredLevel,
+      checkBonus: tomeCheckBonus(tomes, skill.id),
     })
-    const xp = applyXpModifiers(acting.baseXp * check.xpMultiplier, skill.ability, modifiers)
+    const xp = applyXpModifiers(
+      acting.baseXp * check.xpMultiplier,
+      skill.ability,
+      modifiers,
+      tomeXpPct(tomes, skill.id),
+    )
     skills = { ...skills, [skill.id]: { xp: addXp(skills[skill.id].xp, xp) } }
     const beforeItems = inventory
     const beforeGold = gold
     const next = onActivityComplete(
-      { skills, inventory, gold, activeAction: { ...acting, progressMs: 0 }, equipment },
+      {
+        skills,
+        inventory,
+        gold,
+        activeAction: { ...acting, progressMs: 0 },
+        equipment,
+        activeBuffs,
+      },
       acting,
       check,
       rng,
+      pageDiscount,
     )
     skills = next.skills
     inventory = next.inventory
     gold = next.gold
     action = next.activeAction
+    activeBuffs = tickBuffs(activeBuffs, need)
     log.push({
       kind: 'skill',
       skillId: skill.id,
@@ -331,6 +374,7 @@ export function advance(
       skills,
       inventory,
       gold,
+      activeBuffs,
       activeAction: action?.kind === 'skill' ? { ...action, progressMs: progress } : action,
     },
     log,
@@ -366,6 +410,8 @@ function advanceCombatAction(
     trace,
     modifiers,
     stopWhenOutOfFood: state.stopWhenOutOfFood,
+    bestiaries: state.bestiaries,
+    tomes: state.tomes,
   })
 
   const log: GameEvent[] = []
@@ -380,6 +426,8 @@ function advanceCombatAction(
     questProgress = completeQuestActionStep(result.questStepComplete, questProgress, kind)
   }
 
+  const activeBuffs = tickBuffs(state.activeBuffs, elapsedMs)
+
   if (result.stop || !result.fight) {
     return {
       state: {
@@ -388,6 +436,7 @@ function advanceCombatAction(
         inventory: result.inventory,
         gold: result.gold,
         classXp: result.classXp,
+        activeBuffs,
         activeAction: null,
         combat: null,
         lastDefeat: result.defeated,
@@ -416,6 +465,7 @@ function advanceCombatAction(
       classXp: result.classXp,
       combat: result.fight,
       questProgress,
+      activeBuffs,
       activeAction: {
         ...action,
         label: dungeonLabel,

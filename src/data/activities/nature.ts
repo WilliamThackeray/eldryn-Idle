@@ -37,6 +37,15 @@ export const natureActivities = [
   activity({ skillId: 'nature', id: 'herb-plot', name: 'Herb Plot', description: 'One plot. Grows forest herbs on a long timer.', requiredLevel: 1, outputs: [drop('forest-herbs', 1, 3)], baseIntervalMs: PLOT_MS }),
   activity({
     skillId: 'nature',
+    id: 'craft-ink',
+    name: 'Craft Ink',
+    description: 'Boil herbs with coal into black ink.',
+    requiredLevel: 1,
+    inputs: [stack('forest-herbs'), stack('coal')],
+    outputs: [drop('ink')],
+  }),
+  activity({
+    skillId: 'nature',
     id: 'craft-druidic-focus',
     name: 'Craft Druidic Focus',
     description: 'Bind a druidic focus for the off hand.',

@@ -6,11 +6,13 @@ import {
 } from '../data/classes'
 import { isDungeonId } from '../data/dungeons'
 import { isItemId } from '../data/items'
-import { getMonster, isBiomeId } from '../data/monsters'
+import { NOTE_GROUPS, type NoteGroupId } from '../data/historyContent'
+import { CREATURE_TYPES, getMonster, isBiomeId, type CreatureType } from '../data/monsters'
 import { isQuestId } from '../data/quests'
 import { isSpellId } from '../data/spells'
-import { initialSkillProgress, isSkillId, type SkillId } from '../data/skills'
+import { initialSkillProgress, isSkillId, SKILLS, type SkillId } from '../data/skills'
 import type { ActiveAction, CombatFight } from '../engine/advance'
+import type { ActiveBuff } from '../engine/history'
 import { emptyQuestProgress, type QuestProgress } from '../engine/quest'
 import { emptySignatureRuntime } from '../engine/signatures'
 import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
@@ -28,8 +30,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v14: convert legacy component bags to gold. */
-export const SAVE_VERSION = 14
+/** v15: History tomes, bestiaries, and timed study-note buffs. */
+export const SAVE_VERSION = 15
 
 /** Old sell values for bags removed in the specific-components rework. */
 const LEGACY_BAG_SELL: Record<string, number> = {
@@ -63,6 +65,12 @@ export interface SaveData {
   upgrades: Record<string, number>
   /** End hunt/dungeon after a rest when food runs out and HP is still below max. Default on. */
   stopWhenOutOfFood: boolean
+  /** Highest History tome volume read per skill. */
+  tomes: Record<SkillId, number>
+  /** Highest bestiary volume read per creature type. */
+  bestiaries: Record<CreatureType, number>
+  /** Timed buffs (Study Notes). Tick during active actions, including offline. */
+  activeBuffs: ActiveBuff[]
 }
 
 export function createInitialSave(): SaveData {
@@ -86,7 +94,22 @@ export function createInitialSave(): SaveData {
     questProgress: emptyQuestProgress(),
     upgrades: {},
     stopWhenOutOfFood: true,
+    tomes: emptyTomes(),
+    bestiaries: emptyBestiaries(),
+    activeBuffs: [],
   }
+}
+
+function emptyTomes(): Record<SkillId, number> {
+  const tomes = {} as Record<SkillId, number>
+  for (const skill of SKILLS) tomes[skill.id] = 0
+  return tomes
+}
+
+function emptyBestiaries(): Record<CreatureType, number> {
+  const bestiaries = {} as Record<CreatureType, number>
+  for (const type of CREATURE_TYPES) bestiaries[type] = 0
+  return bestiaries
 }
 
 export function migrateSave(persisted: unknown, version: number): SaveData {
@@ -141,7 +164,57 @@ export function normalizeSave(raw: unknown): SaveData {
     questProgress: readQuestProgress(source.questProgress),
     upgrades,
     stopWhenOutOfFood: source.stopWhenOutOfFood !== false,
+    tomes: readTomes(source.tomes),
+    bestiaries: readBestiaries(source.bestiaries),
+    activeBuffs: readActiveBuffs(source.activeBuffs),
   }
+}
+
+function readTomes(value: unknown): Record<SkillId, number> {
+  const tomes = emptyTomes()
+  if (!isRecord(value)) return tomes
+  for (const skill of SKILLS) {
+    const raw = finite(value[skill.id])
+    if (raw == null || raw < 0) continue
+    tomes[skill.id] = Math.min(10, Math.floor(raw))
+  }
+  return tomes
+}
+
+function readBestiaries(value: unknown): Record<CreatureType, number> {
+  const bestiaries = emptyBestiaries()
+  if (!isRecord(value)) return bestiaries
+  for (const type of CREATURE_TYPES) {
+    const raw = finite(value[type])
+    if (raw == null || raw < 0) continue
+    bestiaries[type] = Math.min(3, Math.floor(raw))
+  }
+  return bestiaries
+}
+
+function isNoteGroupId(value: string): value is NoteGroupId {
+  return NOTE_GROUPS.some((group) => group.id === value)
+}
+
+function readActiveBuffs(value: unknown): ActiveBuff[] {
+  if (!Array.isArray(value)) return []
+  const buffs: ActiveBuff[] = []
+  for (const entry of value) {
+    if (!isRecord(entry)) continue
+    if (typeof entry.id !== 'string' || entry.id.length === 0) continue
+    const remainingMs = finite(entry.remainingMs)
+    if (remainingMs == null || remainingMs <= 0) continue
+    if (!isRecord(entry.effect) || entry.effect.type !== 'noteYield') continue
+    if (typeof entry.effect.groupId !== 'string' || !isNoteGroupId(entry.effect.groupId)) continue
+    const amount = finite(entry.effect.value)
+    if (amount == null || amount <= 0) continue
+    buffs.push({
+      id: entry.id,
+      effect: { type: 'noteYield', groupId: entry.effect.groupId, value: amount },
+      remainingMs,
+    })
+  }
+  return buffs
 }
 
 function readUpgrades(value: unknown): Record<string, number> {

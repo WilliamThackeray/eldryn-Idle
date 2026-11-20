@@ -69,6 +69,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const skills = useGameStore((state) => state.skills)
   const equipment = useGameStore((state) => state.equipment)
   const inventory = useGameStore((state) => state.inventory)
+  const bestiaries = useGameStore((state) => state.bestiaries)
   const activeAction = useGameStore((state) => state.activeAction)
   const log = useGameStore((state) => state.log)
   const startHunt = useGameStore((state) => state.startHunt)
@@ -80,13 +81,19 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const monsters = useMemo(() => monstersForBiome(biome), [biome])
   const inCombat = activeAction?.kind === 'combat'
   const inDungeon = Boolean(combat?.dungeonId)
-  const toHit = playerToHitBonus(skills, equipment, classXp, classId)
   const matchupMonster =
     (combat?.monsterId ? getMonster(combat.monsterId) : null) ??
     (selectedMonsterId ? getMonster(selectedMonsterId) : null) ??
     (highlightMonsterId ? getMonster(highlightMonsterId) : null) ??
     monsters[0] ??
     null
+  const toHit = playerToHitBonus(
+    skills,
+    equipment,
+    classXp,
+    classId,
+    matchupMonster ? bestiaries[matchupMonster.creatureType] ?? 0 : 0,
+  )
 
   const combatLines = log.flatMap((entry) => (entry.kind === 'combat' ? entry.lines : []))
   const displayLog = combat?.log?.length ? combat.log : combatLines
@@ -332,6 +339,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               inventory={inventory}
               spellLoadout={classId ? spellLoadouts[classId] : undefined}
               monster={matchupMonster}
+              bestiaries={bestiaries}
             />
             <div className="rounded-lg border border-brown/40 bg-panel p-3 text-sm">
               <div className="text-parchment/70">Food</div>

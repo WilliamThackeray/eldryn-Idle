@@ -41,6 +41,7 @@ export function eatOneFood(input: {
   skills: Record<SkillId, SkillProgress>
   modifiers: Partial<Record<AbilityAbbr, number>>
   trace: boolean
+  xpExtra?: number
 }): { inventory: Inventory; skills: Record<SkillId, SkillProgress>; ate: boolean } {
   const { fight, equipment, trace } = input
   let inventory = input.inventory
@@ -57,7 +58,7 @@ export function eatOneFood(input: {
   fight.playerHp = Math.min(fight.playerMaxHp, fight.playerHp + healAmt)
   const healed = fight.playerHp - before
   if (healed > 0) {
-    const vitalityXp = applyXpModifiers(healed, 'CON', input.modifiers)
+    const vitalityXp = applyXpModifiers(healed, 'CON', input.modifiers, input.xpExtra ?? 0)
     skills = { ...skills, vitality: { xp: addXp(skills.vitality.xp, vitalityXp) } }
   }
   pushLog(fight, `Eat ${item?.name ?? foodId}: +${healAmt} HP.`, trace)
@@ -71,6 +72,7 @@ export function tryAutoEat(input: {
   skills: Record<SkillId, SkillProgress>
   modifiers: Partial<Record<AbilityAbbr, number>>
   trace: boolean
+  xpExtra?: number
 }): { inventory: Inventory; skills: Record<SkillId, SkillProgress>; ate: boolean; defeated: boolean } {
   const { fight, equipment, trace } = input
   let inventory = input.inventory
@@ -85,6 +87,7 @@ export function tryAutoEat(input: {
     skills,
     modifiers: input.modifiers,
     trace,
+    xpExtra: input.xpExtra,
   })
   inventory = bitten.inventory
   skills = bitten.skills

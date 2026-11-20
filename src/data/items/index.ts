@@ -3,6 +3,7 @@ import { AMMO } from './ammo'
 import { ARMOR } from './armor'
 import { COMPONENTS } from './components'
 import { FOOD } from './food'
+import { KNOWLEDGE } from './knowledge'
 import { MATERIALS } from './materials'
 import { MISC } from './misc'
 import { POTIONS } from './potions'
@@ -41,6 +42,7 @@ export const ITEMS = [
   ...POTIONS,
   ...COMPONENTS,
   ...MISC,
+  ...KNOWLEDGE,
   ...WEAPONS,
   ...ARMOR,
   ...ACCESSORIES,

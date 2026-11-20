@@ -31,6 +31,11 @@ import {
 } from '../engine/equipment'
 import { getItem } from '../data/items'
 import { activePerks, effectTotal } from '../engine/abilities'
+import {
+  readBestiary as applyReadBestiary,
+  readTome as applyReadTome,
+  useNotes as applyUseNotes,
+} from '../engine/history'
 import { sellItems, type Inventory } from '../engine/inventory'
 import {
   appendInventoryTab,
@@ -98,6 +103,9 @@ interface GameStore extends SaveData {
   startQuestCombat: (questId: string) => void
   startQuestDungeon: (questId: string) => void
   questMessage: string | null
+  readTome: (itemId: ItemId) => void
+  readBestiary: (itemId: ItemId) => void
+  useNotes: (itemId: ItemId) => void
 }
 
 const liveRng: Rng = () => Math.random()
@@ -269,6 +277,9 @@ export const useGameStore = create<GameStore>()(
               questProgress: state.questProgress,
               isInDungeonOrQuest: state.isInDungeonOrQuest,
               stopWhenOutOfFood: state.stopWhenOutOfFood,
+              tomes: state.tomes,
+              bestiaries: state.bestiaries,
+              activeBuffs: state.activeBuffs,
             },
             elapsedMs,
             liveRng,
@@ -290,11 +301,33 @@ export const useGameStore = create<GameStore>()(
               result.state.isInDungeonOrQuest !== undefined
                 ? result.state.isInDungeonOrQuest
                 : state.isInDungeonOrQuest,
+            activeBuffs: result.state.activeBuffs ?? state.activeBuffs,
             log: [...state.log, ...result.log].slice(-LOG_LIMIT),
             offlineKills: tracking ? state.offlineKills + gainedKills : state.offlineKills,
             lastDefeat: tracking ? state.lastDefeat || Boolean(result.state.lastDefeat) : state.lastDefeat,
             lastTick,
           }
+        }),
+      readTome: (itemId) =>
+        set((state) => {
+          const next = applyReadTome(state.inventory, state.tomes, itemId)
+          if (!next) return state
+          return { ...withPlacedInventory(state, next.inventory), tomes: { ...state.tomes, ...next.tomes } }
+        }),
+      readBestiary: (itemId) =>
+        set((state) => {
+          const next = applyReadBestiary(state.inventory, state.bestiaries, itemId)
+          if (!next) return state
+          return {
+            ...withPlacedInventory(state, next.inventory),
+            bestiaries: { ...state.bestiaries, ...next.bestiaries },
+          }
+        }),
+      useNotes: (itemId) =>
+        set((state) => {
+          const next = applyUseNotes(state.inventory, state.activeBuffs, itemId)
+          if (!next) return state
+          return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
         }),
       dismissOffline: () => set({ offlineReport: null }),
       saveGame: () => {
@@ -574,6 +607,9 @@ export const useGameStore = create<GameStore>()(
         questProgress: state.questProgress,
         upgrades: state.upgrades ?? {},
         stopWhenOutOfFood: state.stopWhenOutOfFood !== false,
+        tomes: state.tomes,
+        bestiaries: state.bestiaries,
+        activeBuffs: state.activeBuffs,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

@@ -1,6 +1,7 @@
 import { getMonster } from '../../data/monsters'
 import { QUICKENED_INTERVAL_FACTOR } from '../config'
 import { emptyEquipment } from '../equipment'
+import { bestiaryBonus, tomeXpPct } from '../history'
 import { flurryDieSides, shouldFlurry, tryQuicken } from '../signatures'
 import { usesSpellLoop } from '../spells'
 import { levelForXp, tier } from '../xp'
@@ -48,6 +49,9 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   }
   let skills = input.skills
   let inventory = input.inventory
+  const vitalityXpExtra = tomeXpPct(input.tomes, 'vitality')
+  const monsterBestiary = () =>
+    monster ? bestiaryBonus(input.bestiaries, monster.creatureType) : 0
   let gold = input.gold
   let classXp = input.classXp
   let remaining = input.elapsedMs
@@ -154,6 +158,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         classTier: classTier(),
         casting,
         stopWhenOutOfFood: input.stopWhenOutOfFood,
+        bestiaryBonus: monsterBestiary(),
       })
       inventory = opened.inventory
       classXp = opened.classXp
@@ -223,7 +228,15 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       fight.playerProgressMs = 0
       fight.playerIntervalCount += 1
 
-      const eaten = tryAutoEat({ fight, inventory, equipment, skills, modifiers, trace })
+      const eaten = tryAutoEat({
+        fight,
+        inventory,
+        equipment,
+        skills,
+        modifiers,
+        trace,
+        xpExtra: vitalityXpExtra,
+      })
       inventory = eaten.inventory
       skills = eaten.skills
       if (eaten.defeated) return finishDefeat()
@@ -239,6 +252,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               classXp,
               rng: input.rng,
               trace,
+              bestiaryBonus: monsterBestiary(),
             })
           : resolvePlayerAttack({
               fight,
@@ -251,6 +265,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               rng: input.rng,
               trace,
               labelPrefix: `Int${fight.playerIntervalCount}: `,
+              bestiaryBonus: monsterBestiary(),
             })
         inventory = attack.inventory
         classXp = attack.classXp
@@ -304,6 +319,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             trace,
             labelPrefix: 'Flurry: ',
             unarmedOverride: { dice: `1d${sides}`, damageType: 'bludgeoning', mastery: null },
+            bestiaryBonus: monsterBestiary(),
           })
           inventory = flurry.inventory
           classXp = flurry.classXp
@@ -353,6 +369,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         rng: input.rng,
         trace,
         modifiers,
+        xpExtra: vitalityXpExtra,
       })
       skills = turn.skills
       if (turn.defeated) return finishDefeat()

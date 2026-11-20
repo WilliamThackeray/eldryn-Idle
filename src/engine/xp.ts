@@ -64,13 +64,14 @@ export function progressToNext(xp: number): XpProgress {
   return { level, xp: safe, xpToNextLevel, progress, capped }
 }
 
-/** `modifiers` are fractions: 0.3 is +30% XP for that ability. Rolls ignore them. */
+/** `modifiers` are fractions: 0.3 is +30% XP for that ability. Rolls ignore them. `extra` stacks additively (e.g. History tomes). */
 export function applyXpModifiers(
   baseXp: number,
   skillAbility: AbilityAbbr,
   modifiers: Partial<Record<AbilityAbbr, number>>,
+  extra = 0,
 ): number {
-  return baseXp * (1 + (modifiers[skillAbility] ?? 0))
+  return baseXp * (1 + (modifiers[skillAbility] ?? 0) + extra)
 }
 
 export function addXp(xp: number, amount: number): number {

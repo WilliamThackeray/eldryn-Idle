@@ -23,6 +23,8 @@ export interface SkillCheckInput {
   abilityModifier: number
   skillLevel: number
   requiredLevel: number
+  /** Flat bonus from History Vol. X tomes. */
+  checkBonus?: number
 }
 
 export interface SkillCheckResult {
@@ -52,7 +54,8 @@ export function successChance(bonus: number, requiredLevel: number): number {
 
 export function skillCheck(input: SkillCheckInput): SkillCheckResult {
   const natural = rollD20(input.rng, input.mode ?? 'normal')
-  const total = natural + input.abilityModifier + proficiency(tier(input.skillLevel))
+  const total =
+    natural + input.abilityModifier + proficiency(tier(input.skillLevel)) + (input.checkBonus ?? 0)
   const dc = checkDc(input.requiredLevel)
   const result = (outcome: SkillCheckOutcome, xpMultiplier: number, itemMultiplier: number, rareRoll: boolean, byproduct: boolean): SkillCheckResult => ({
     roll: natural,

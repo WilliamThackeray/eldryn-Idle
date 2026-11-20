@@ -88,6 +88,7 @@ export function resolvePlayerAttack(input: {
   trace: boolean
   labelPrefix: string
   unarmedOverride?: { dice: string; damageType: DamageType; mastery: null }
+  bestiaryBonus?: number
 }): {
   inventory: Inventory
   classXp: number
@@ -143,8 +144,9 @@ export function resolvePlayerAttack(input: {
   }
   hooks.onBeforeAttack?.({ ...sigCtx, hasAdvantage, intervalIndex: fight.playerIntervalCount })
 
+  const bestiary = Math.max(0, Math.floor(input.bestiaryBonus ?? 0))
   const natural = rollD20(rng, mode)
-  let total = natural + abilityBonus + prof + itemToHit
+  let total = natural + abilityBonus + prof + itemToHit + bestiary
   let bardicNote = ''
   if (fight.signature.id === 'bardicInspiration') {
     const result = tryBardicInspiration(
@@ -273,6 +275,7 @@ export function doOpeningAttacks(input: {
   classXp: number
   rng: Rng
   trace: boolean
+  bestiaryBonus?: number
 }): ReturnType<typeof resolvePlayerAttack> {
   const { fight, monster, equipment } = input
   fight.openingDone = true
@@ -338,13 +341,14 @@ export function playerToHitBonus(
   equipment: Equipment,
   classXp: number,
   classId: ClassId | null = null,
+  bestiary = 0,
 ): number {
   const mods = abilityModMap(skills)
   const weapon = playerWeapon(equipment)
   const { mod } = attackAbilityMod(weapon, mods)
   const proficient = isWeaponProficient(classId, equipment.mainHand)
   const prof = proficient ? proficiency(tier(levelForXp(classXp))) : 0
-  return mod + prof + totalItemStats(equipment).toHit
+  return mod + prof + totalItemStats(equipment).toHit + Math.max(0, Math.floor(bestiary))
 }
 
 /** Exported for tests: nick check uses 1d10, proc on 1–ceiling (default 2). */

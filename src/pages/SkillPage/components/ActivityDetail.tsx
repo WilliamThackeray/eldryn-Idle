@@ -17,6 +17,9 @@ interface ActivityDetailProps {
   progress: number
   onStart: () => void
   onStop: () => void
+  secondaryLabel?: string | null
+  secondaryDisabled?: boolean
+  onSecondary?: (() => void) | null
 }
 
 export function ActivityDetail({
@@ -36,6 +39,9 @@ export function ActivityDetail({
   progress,
   onStart,
   onStop,
+  secondaryLabel = null,
+  secondaryDisabled = false,
+  onSecondary = null,
 }: ActivityDetailProps) {
   return (
     <aside className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg lg:sticky lg:top-4">
@@ -67,13 +73,25 @@ export function ActivityDetail({
       ) : needsMaterials && !active ? (
         <p className="text-sm text-parchment/70">Need materials</p>
       ) : (
-        <button
-          type="button"
-          onClick={active ? onStop : onStart}
-          className="rounded-lg bg-crimson px-4 py-2 text-parchment transition-colors hover:bg-brown"
-        >
-          {active ? 'Stop' : 'Start'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={active ? onStop : onStart}
+            className="rounded-lg bg-crimson px-4 py-2 text-parchment transition-colors hover:bg-brown"
+          >
+            {active ? 'Stop' : 'Start'}
+          </button>
+          {secondaryLabel && onSecondary && (
+            <button
+              type="button"
+              disabled={secondaryDisabled}
+              onClick={onSecondary}
+              className="rounded-lg border border-gold/50 px-4 py-2 text-gold transition-colors hover:bg-ink disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {secondaryLabel}
+            </button>
+          )}
+        </div>
       )}
     </aside>
   )

@@ -3,6 +3,7 @@ import type { ClassId } from '../data/classes'
 import type { SkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
 import type { Equipment } from '../engine/equipment'
+import type { Bestiaries } from '../engine/history'
 import type { Inventory } from '../engine/inventory'
 import type { SpellLoadout } from '../engine/spells'
 import {
@@ -20,6 +21,7 @@ interface CombatStatsPanelProps {
   spellLoadout?: SpellLoadout
   monster?: MonsterDef | null
   compact?: boolean
+  bestiaries?: Bestiaries
 }
 
 function formatSigned(value: number, digits = 0): string {
@@ -68,6 +70,7 @@ export function CombatStatsPanel({
   spellLoadout,
   monster = null,
   compact = false,
+  bestiaries,
 }: CombatStatsPanelProps) {
   if (!classId) {
     return (
@@ -78,7 +81,7 @@ export function CombatStatsPanel({
   }
 
   const stats: CombatStats = computeCombatStats(
-    { skills, equipment, classId, classXp, inventory, spellLoadout },
+    { skills, equipment, classId, classXp, inventory, spellLoadout, bestiaries },
     monster ?? undefined,
   )
 

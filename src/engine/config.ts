@@ -184,3 +184,16 @@ export const SPELL_INTERVAL_SEC = 6
 /** Sorcery points spent for Quickened Spell (next interval × 0.5). */
 export const QUICKENED_COST = 2
 export const QUICKENED_INTERVAL_FACTOR = 0.5
+
+/** History tomes: max XP bonus percent per skill from volumes read. */
+export const HISTORY_MAX_XP_PCT = 10
+
+/** History Vol. V+: interval speed bonus (5% faster). */
+export const HISTORY_TOME_SPEED_BONUS = 0.05
+
+/** History Vol. X: flat skill-check bonus. */
+export const HISTORY_TOME_CHECK_BONUS = 1
+
+/** Study Notes: yield bonus and duration. */
+export const HISTORY_NOTE_YIELD_PCT = 0.1
+export const HISTORY_NOTE_DURATION_MS = 60 * 60 * 1000

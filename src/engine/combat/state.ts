@@ -365,6 +365,10 @@ export interface CombatAdvanceInput {
   modifiers?: Partial<Record<AbilityAbbr, number>>
   /** Missing means on. */
   stopWhenOutOfFood?: boolean
+  /** History bestiary volumes by creature type. */
+  bestiaries?: Partial<Record<import('../../data/monsters/types').CreatureType, number>>
+  /** History tome volumes; Vitality XP uses the vitality entry. */
+  tomes?: Partial<Record<SkillId, number>>
 }
 
 export interface CombatAdvanceResult {

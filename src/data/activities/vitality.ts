@@ -1,4 +1,4 @@
-import { activity } from './define'
+import { activity, drop } from './define'
 
 export const vitalityActivities = [
   activity({
@@ -7,5 +7,6 @@ export const vitalityActivities = [
     name: 'Conditioning',
     description: 'Hardening drills. Later, Vitality rises when you take or heal damage.',
     requiredLevel: 1,
+    outputs: [drop('bandages')],
   }),
 ]

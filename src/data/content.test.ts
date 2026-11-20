@@ -2,7 +2,9 @@ import { expect, test } from 'vitest'
 import { sourcesOf } from '../engine/itemIndex'
 import { ACTIVITIES, activitiesFor, getActivity } from './activities'
 import { CLASSES, TRADITION_REAGENT } from './classes'
+import { themedItemFor, TOME_SKILLS } from './historyContent'
 import { ITEMS, isItemId, type ItemId } from './items'
+import { TOME_VOLUME_LEVELS } from './items/knowledge'
 import { MONSTERS } from './monsters'
 import { GENERAL_GOODS, SHOP_UPGRADES } from './shop'
 import { SKILLS } from './skills'
@@ -154,6 +156,38 @@ test('general store sells commons and upgrades grant no items', () => {
   for (const upgrade of SHOP_UPGRADES) {
     for (const tier of upgrade.tiers) {
       expect(tier.effect.kind).not.toBe('item')
+    }
+  }
+})
+
+test('History tomes use themed skill items and Chronicles can drop Ancient Pages', () => {
+  expect(getActivity('history', 'craft-tome-athletics-3')?.inputs).toEqual(
+    expect.arrayContaining([
+      { itemId: 'ancient-page', quantity: 3 },
+      { itemId: 'ink', quantity: 1 },
+      { itemId: 'steel-bar', quantity: 1 },
+    ]),
+  )
+  expect(themedItemFor('athletics', 20)).toBe('steel-bar')
+  expect(getActivity('history', 'chronicles')?.outputs.some((entry) => entry.itemId === 'ancient-page')).toBe(
+    true,
+  )
+  expect(getActivity('nature', 'craft-ink')?.inputs).toEqual([
+    { itemId: 'forest-herbs', quantity: 1 },
+    { itemId: 'coal', quantity: 1 },
+  ])
+
+  const producedBySkill = (skillId: string) =>
+    new Set(
+      activitiesFor(skillId as (typeof SKILLS)[number]['id']).flatMap((activity) =>
+        activity.outputs.map((entry) => entry.itemId),
+      ),
+    )
+  for (const skillId of TOME_SKILLS) {
+    const produced = producedBySkill(skillId)
+    for (const level of TOME_VOLUME_LEVELS) {
+      const themed = themedItemFor(skillId, level)
+      expect(produced.has(themed), `${skillId} @${level} → ${themed}`).toBe(true)
     }
   }
 })

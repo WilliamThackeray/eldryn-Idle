@@ -19,7 +19,7 @@ export type PerkEffect =
   | { type: 'shortRestAdvantage' } // TODO(Prompt 15)
   | { type: 'poisonResistance' } // TODO(Prompt 15)
   | { type: 'componentSaveChance'; value: number } // TODO(Prompt 16)
-  | { type: 'historyTomeDiscountPct'; value: number } // TODO(Prompt 17)
+  | { type: 'historyTomePages'; value: number }
   | { type: 'extraSpellSlot'; value: number } // TODO(Prompt 16)
   | { type: 'doubleGatherChance'; value: number } // TODO(Prompt 14)
   | { type: 'forageWhileHunting' } // TODO(Prompt 15)
@@ -187,8 +187,8 @@ export const ABILITY_PERKS = [
     rank: 10,
     id: 'int-tomes',
     name: 'Library Pass',
-    description: 'History tomes cost 10% less.',
-    effect: { type: 'historyTomeDiscountPct', value: 0.1 },
+    description: 'Tomes cost 1 fewer Ancient Page.',
+    effect: { type: 'historyTomePages', value: 1 },
   },
   {
     ability: 'INT',

@@ -36,6 +36,7 @@ export function resolveSpellCast(input: {
   classXp: number
   rng: Rng
   trace: boolean
+  bestiaryBonus?: number
 }): {
   inventory: Inventory
   classXp: number
@@ -109,6 +110,7 @@ export function resolveSpellCast(input: {
       rng,
       trace,
       labelPrefix: 'Weapon fallback: ',
+      bestiaryBonus: input.bestiaryBonus,
     })
   }
 
@@ -185,7 +187,8 @@ export function resolveSpellCast(input: {
     }
 
     const natural = rollD20(rng)
-    const total = natural + castMod + prof
+    const bestiary = Math.max(0, Math.floor(input.bestiaryBonus ?? 0))
+    const total = natural + castMod + prof + bestiary
     const autoMiss = natural === 1
     const critFloor = critThreshold(totalItemStats(input.equipment).critRange)
     const crit = !autoMiss && natural >= critFloor
