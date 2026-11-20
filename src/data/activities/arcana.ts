@@ -1,4 +1,21 @@
+import { ARMOR } from '../items/armor'
+import type { ItemId } from '../items'
 import { activity, drop, stack } from './define'
+
+function arcaneRobes() {
+  return ARMOR.filter((item) => item.id.startsWith('arcane-')).map((item) => {
+    const isChest = item.id.endsWith('-chest')
+    return activity({
+      skillId: 'arcana',
+      id: `craft-${item.id}`,
+      name: `Craft ${item.name}`,
+      description: `Stitch ${item.name.toLowerCase()}.`,
+      requiredLevel: 1,
+      inputs: [stack('forest-herbs', isChest ? 2 : 1)],
+      outputs: [drop(item.id as ItemId)],
+    })
+  })
+}
 
 export const arcanaActivities = [
   activity({
@@ -22,6 +39,34 @@ export const arcanaActivities = [
     description: 'Practice divination. Components come later.',
     requiredLevel: 20,
   }),
+  activity({
+    skillId: 'arcana',
+    id: 'craft-arcane-wand',
+    name: 'Craft Arcane Wand',
+    description: 'Carve a wand for the off hand.',
+    requiredLevel: 1,
+    inputs: [stack('bones'), stack('forest-herbs')],
+    outputs: [drop('arcane-wand')],
+  }),
+  activity({
+    skillId: 'arcana',
+    id: 'craft-arcane-staff',
+    name: 'Craft Arcane Staff',
+    description: 'Carve a staff for the off hand.',
+    requiredLevel: 1,
+    inputs: [stack('bones'), stack('forest-herbs')],
+    outputs: [drop('arcane-staff')],
+  }),
+  activity({
+    skillId: 'arcana',
+    id: 'craft-arcane-orb',
+    name: 'Craft Arcane Orb',
+    description: 'Bind an orb for the off hand.',
+    requiredLevel: 1,
+    inputs: [stack('bones'), stack('forest-herbs')],
+    outputs: [drop('arcane-orb')],
+  }),
+  ...arcaneRobes(),
   activity({
     skillId: 'arcana',
     id: 'craft-component-basic',

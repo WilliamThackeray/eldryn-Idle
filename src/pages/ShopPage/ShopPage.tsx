@@ -1,82 +1,179 @@
+import { useMemo, useState } from 'react'
 import { RARITY_TEXT } from '../../components/rarity'
 import { getItem, type ItemId } from '../../data/items'
-import { SHOP_CATALOG } from '../../data/shop'
+import {
+  GENERAL_GOODS,
+  goodPrice,
+  upgradesForSection,
+  type ShopSection,
+  type ShopUpgrade,
+} from '../../data/shop'
+import { SKILLS, type SkillId } from '../../data/skills'
+import { levelForXp } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
+
+const SECTIONS: { id: ShopSection; label: string }[] = [
+  { id: 'general', label: 'General Store' },
+  ...SKILLS.map((skill) => ({ id: skill.id as ShopSection, label: skill.name })),
+  { id: 'combat', label: 'Combat' },
+]
 
 export function ShopPage() {
   const gold = useGameStore((state) => state.gold)
   const inventory = useGameStore((state) => state.inventory)
-  const buyItem = useGameStore((state) => state.buyItem)
-  const sellItem = useGameStore((state) => state.sellItem)
+  const upgrades = useGameStore((state) => state.upgrades)
+  const skills = useGameStore((state) => state.skills)
+  const buyGood = useGameStore((state) => state.buyGood)
+  const buyUpgrade = useGameStore((state) => state.buyUpgrade)
+  const [section, setSection] = useState<ShopSection>('general')
 
-  const owned = (Object.entries(inventory) as [ItemId, number][])
-    .flatMap(([id, quantity]) => {
-      const def = getItem(id)
-      if (!def || quantity <= 0) return []
-      return [{ id, quantity, def }]
-    })
-    .sort((a, b) => a.def.name.localeCompare(b.def.name))
+  const sectionUpgrades = useMemo(() => upgradesForSection(section), [section])
 
   return (
-    <div className="space-y-8 text-parchment">
-      <section>
-        <h2 className="mb-3 text-xl font-bold text-gold">Buy</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {SHOP_CATALOG.map((listing) => {
-            const def = getItem(listing.itemId)
-            if (!def) return null
-            const qty = listing.quantity ?? 1
-            const affordable = gold >= listing.price
+    <div className="grid grid-cols-1 gap-6 text-parchment lg:grid-cols-[220px_minmax(0,1fr)]">
+      <nav className="space-y-1">
+        <h2 className="mb-2 text-xl font-bold text-gold">Shop</h2>
+        {SECTIONS.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => setSection(entry.id)}
+            className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+              section === entry.id ? 'bg-gold text-ink' : 'bg-panel text-parchment hover:bg-brown/40'
+            }`}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="space-y-6">
+        {section === 'general' && (
+          <section>
+            <h3 className="mb-3 text-lg font-bold text-gold">Goods</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {GENERAL_GOODS.map((listing) => {
+                const def = getItem(listing.itemId)
+                const price = goodPrice(listing.itemId)
+                if (!def || price == null) return null
+                const affordable = gold >= price
+                return (
+                  <article
+                    key={listing.itemId}
+                    className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-4"
+                  >
+                    <h4 className={`font-bold ${RARITY_TEXT[def.rarity]}`}>{def.name}</h4>
+                    <p className="text-sm text-parchment/80">{def.description}</p>
+                    <p className="text-sm text-sage">{price} gp</p>
+                    <button
+                      type="button"
+                      disabled={!affordable}
+                      onClick={() => buyGood(listing.itemId)}
+                      className="mt-auto rounded-lg bg-sage px-3 py-1 text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Buy
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        <section>
+          <h3 className="mb-3 text-lg font-bold text-gold">Upgrades</h3>
+          {sectionUpgrades.length === 0 ? (
+            <p className="text-parchment/70">Nothing here yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {sectionUpgrades.map((upgrade) => (
+                <UpgradeCard
+                  key={upgrade.id}
+                  upgrade={upgrade}
+                  gold={gold}
+                  inventory={inventory}
+                  ownedTier={upgrades[upgrade.id]}
+                  skills={skills}
+                  onBuy={() => buyUpgrade(upgrade.id)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function UpgradeCard({
+  upgrade,
+  gold,
+  inventory,
+  ownedTier,
+  skills,
+  onBuy,
+}: {
+  upgrade: ShopUpgrade
+  gold: number
+  inventory: Partial<Record<ItemId, number>>
+  ownedTier: number | undefined
+  skills: Record<SkillId, { xp: number }>
+  onBuy: () => void
+}) {
+  const nextIndex = ownedTier == null ? 0 : ownedTier + 1
+  const next = upgrade.tiers[nextIndex]
+  const ownedCount = ownedTier == null ? 0 : ownedTier + 1
+  const total = upgrade.tiers.length
+  const maxed = next == null
+  const soon = next?.effect.kind === 'soon'
+  const favorLocked = next?.cost.favor != null
+  const requires = next?.requires
+  const skillOk =
+    !requires || levelForXp(skills[requires.skillId]?.xp ?? 0) >= requires.level
+  const items = next?.cost.items ?? []
+  const hasItems = items.every((stack) => (inventory[stack.itemId] ?? 0) >= stack.quantity)
+  const affordable = next != null && gold >= next.cost.gold && hasItems && skillOk
+  const disabled = maxed || soon || favorLocked || !affordable
+
+  return (
+    <article className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-4">
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="font-bold text-gold">{upgrade.name}</h4>
+        <span className="text-sm text-sage">
+          {ownedCount}/{total}
+        </span>
+      </div>
+      <p className="text-sm text-parchment/80">{upgrade.description}</p>
+      {soon && <p className="text-sm text-parchment/60">Coming soon</p>}
+      {favorLocked && <p className="text-sm text-parchment/60">Requires Guild Favor (locked)</p>}
+      {maxed && !soon && <p className="text-sm text-sage">Maxed</p>}
+      {next && !soon && !favorLocked && (
+        <div className="space-y-1 text-sm">
+          <p className="text-sage">{next.cost.gold} gp</p>
+          {items.map((stack) => {
+            const def = getItem(stack.itemId)
+            const have = inventory[stack.itemId] ?? 0
             return (
-              <article
-                key={`${listing.itemId}-${qty}`}
-                className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-4"
-              >
-                <h3 className={`font-bold ${RARITY_TEXT[def.rarity]}`}>{def.name}</h3>
-                <p className="text-sm text-parchment/80">{def.description}</p>
-                <p className="text-sm text-sage">
-                  {qty > 1 ? `${qty} for ` : ''}
-                  {listing.price} gp
-                </p>
-                <button
-                  type="button"
-                  disabled={!affordable}
-                  onClick={() => buyItem(listing.itemId)}
-                  className="mt-auto rounded-lg bg-sage px-3 py-1 text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Buy
-                </button>
-              </article>
+              <p key={stack.itemId} className={have >= stack.quantity ? 'text-parchment' : 'text-red-300'}>
+                {def?.name ?? stack.itemId}: {have}/{stack.quantity}
+              </p>
             )
           })}
+          {requires && (
+            <p className={skillOk ? 'text-parchment/70' : 'text-red-300'}>
+              Requires {requires.skillId} {requires.level}
+            </p>
+          )}
         </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-xl font-bold text-gold">Sell</h2>
-        {owned.length === 0 ? (
-          <p className="text-parchment/70">Nothing to sell.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-            {owned.map((entry) => (
-              <article
-                key={entry.id}
-                className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-3"
-              >
-                <h3 className={`font-bold ${RARITY_TEXT[entry.def.rarity]}`}>{entry.def.name}</h3>
-                <p className="text-sm text-parchment">x{entry.quantity}</p>
-                <button
-                  type="button"
-                  onClick={() => sellItem(entry.id)}
-                  className="mt-auto rounded-lg bg-sage px-3 py-1 text-ink transition-colors hover:bg-gold"
-                >
-                  Sell {entry.def.sellValue * entry.quantity} gp
-                </button>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onBuy}
+        className="mt-auto rounded-lg bg-sage px-3 py-1 text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Buy
+      </button>
+    </article>
   )
 }

@@ -1,6 +1,69 @@
+import { ARMOR } from '../items/armor'
+import type { GearMaterial, ItemId } from '../items'
+import { WEAPONS } from '../items/weapons'
+import { MATERIAL_LEVEL } from '../../engine/config'
 import { activity, drop, stack } from './define'
+import type { ActivityDef } from './types'
 
 const slag = [drop('slag')]
+
+const BAR_FOR: Record<GearMaterial, ItemId> = {
+  iron: 'iron-bar',
+  steel: 'steel-bar',
+  silvered: 'silver-bar',
+  mithral: 'mithral-bar',
+  adamantine: 'adamantine-bar',
+}
+
+const ARROWHEADS: { id: ItemId; material: GearMaterial; name: string }[] = [
+  { id: 'iron-arrowhead', material: 'iron', name: 'Iron Arrowheads' },
+  { id: 'steel-arrowhead', material: 'steel', name: 'Steel Arrowheads' },
+  { id: 'silvered-arrowhead', material: 'silvered', name: 'Silvered Arrowheads' },
+  { id: 'mithral-arrowhead', material: 'mithral', name: 'Mithral Arrowheads' },
+  { id: 'adamantine-arrowhead', material: 'adamantine', name: 'Adamantine Arrowheads' },
+]
+
+function barCount(itemId: string, slot?: string): number {
+  if (itemId === 'dagger' || itemId === 'dart' || itemId === 'sickle') return 1
+  if (itemId.endsWith('-longsword') || itemId === 'longsword') return 3
+  if (slot === 'chest' || itemId.endsWith('-chest')) return 3
+  return 2
+}
+
+function smithMetalGear(): ActivityDef[] {
+  const recipes: ActivityDef[] = []
+  for (const item of [...WEAPONS, ...ARMOR]) {
+    const material = item.gear?.material
+    if (!material) continue
+    const bars = barCount(item.id, item.gear?.slot)
+    const barId = BAR_FOR[material]
+    recipes.push(
+      activity({
+        skillId: 'athletics',
+        id: `smith-${item.id}`,
+        name: `Smith ${item.name}`,
+        description: `Forge ${item.name.toLowerCase()} from ${barId.replace('-', ' ')}s.`,
+        requiredLevel: MATERIAL_LEVEL[material],
+        inputs: [stack(barId, bars)],
+        outputs: [drop(item.id as ItemId)],
+      }),
+    )
+  }
+  for (const tip of ARROWHEADS) {
+    recipes.push(
+      activity({
+        skillId: 'athletics',
+        id: `smith-${tip.id}`,
+        name: `Smith ${tip.name}`,
+        description: `Forge a batch of ${tip.name.toLowerCase()}.`,
+        requiredLevel: MATERIAL_LEVEL[tip.material],
+        inputs: [stack(BAR_FOR[tip.material])],
+        outputs: [drop(tip.id, 10)],
+      }),
+    )
+  }
+  return recipes
+}
 
 export const athleticsActivities = [
   activity({ skillId: 'athletics', id: 'mine-iron', name: 'Mine Iron', description: 'Work a surface vein of iron.', requiredLevel: 1, outputs: [drop('iron-ore')], rareTable: [drop('coal', 1, 1, 0.05)] }),
@@ -15,11 +78,5 @@ export const athleticsActivities = [
   activity({ skillId: 'athletics', id: 'smith-gold', name: 'Smith Gold Bar', description: 'Smelt gold ore into a bar.', requiredLevel: 40, inputs: [stack('gold-ore')], outputs: [drop('gold-bar')], byproducts: slag }),
   activity({ skillId: 'athletics', id: 'smith-mithral', name: 'Smith Mithral Bar', description: 'Smelt mithral ore into a bar.', requiredLevel: 60, inputs: [stack('mithral-ore')], outputs: [drop('mithral-bar')], byproducts: slag }),
   activity({ skillId: 'athletics', id: 'smith-adamantine', name: 'Smith Adamantine Bar', description: 'Smelt adamantine ore into a bar.', requiredLevel: 80, inputs: [stack('adamantine-ore')], outputs: [drop('adamantine-bar')], byproducts: slag }),
-  activity({ skillId: 'athletics', id: 'smith-dagger', name: 'Smith Dagger', description: 'Forge a dagger from an iron bar.', requiredLevel: 1, inputs: [stack('iron-bar')], outputs: [drop('dagger')] }),
-  activity({ skillId: 'athletics', id: 'smith-mace', name: 'Smith Mace', description: 'Forge a mace from iron bars.', requiredLevel: 5, inputs: [stack('iron-bar', 2)], outputs: [drop('mace')] }),
-  activity({ skillId: 'athletics', id: 'smith-longsword', name: 'Smith Longsword', description: 'Forge a longsword from iron bars.', requiredLevel: 10, inputs: [stack('iron-bar', 3)], outputs: [drop('longsword')] }),
-  activity({ skillId: 'athletics', id: 'smith-steel-longsword', name: 'Smith Steel Longsword', description: 'Forge a longsword from steel bars.', requiredLevel: 20, inputs: [stack('steel-bar', 3)], outputs: [drop('steel-longsword')] }),
-  activity({ skillId: 'athletics', id: 'smith-chain-chest', name: 'Smith Chain Mail Chest', description: 'Forge a chain mail chest from iron bars.', requiredLevel: 10, inputs: [stack('iron-bar', 3)], outputs: [drop('chain-mail-chest')] }),
-  activity({ skillId: 'athletics', id: 'smith-chain-helmet', name: 'Smith Chain Mail Helmet', description: 'Forge a chain mail helmet from iron bars.', requiredLevel: 10, inputs: [stack('iron-bar', 2)], outputs: [drop('chain-mail-helmet')] }),
-  activity({ skillId: 'athletics', id: 'smith-breastplate-chest', name: 'Smith Breastplate Chest', description: 'Forge a steel breastplate chest.', requiredLevel: 30, inputs: [stack('steel-bar', 3)], outputs: [drop('breastplate-chest')] }),
+  ...smithMetalGear(),
 ]

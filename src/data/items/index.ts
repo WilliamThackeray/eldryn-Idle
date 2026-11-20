@@ -1,3 +1,4 @@
+import { ACCESSORIES } from './accessories'
 import { AMMO } from './ammo'
 import { ARMOR } from './armor'
 import { COMPONENTS } from './components'
@@ -42,6 +43,7 @@ export const ITEMS = [
   ...MISC,
   ...WEAPONS,
   ...ARMOR,
+  ...ACCESSORIES,
   ...AMMO,
 ] as const satisfies readonly ItemDef[]
 export type ItemId = (typeof ITEMS)[number]['id']

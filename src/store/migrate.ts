@@ -28,8 +28,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v11: inventory organization tabs. */
-export const SAVE_VERSION = 11
+/** v12: shop upgrades. */
+export const SAVE_VERSION = 12
 
 export interface SaveData {
   characterName: string
@@ -50,6 +50,8 @@ export interface SaveData {
   combat: CombatFight | null
   spellLoadouts: Record<ClassId, SpellLoadout>
   questProgress: QuestProgress
+  /** Owned shop upgrade tier index per upgrade id. */
+  upgrades: Record<string, number>
 }
 
 export function createInitialSave(): SaveData {
@@ -71,6 +73,7 @@ export function createInitialSave(): SaveData {
     combat: null,
     spellLoadouts: initialSpellLoadouts(),
     questProgress: emptyQuestProgress(),
+    upgrades: {},
   }
 }
 
@@ -103,11 +106,14 @@ export function normalizeSave(raw: unknown): SaveData {
   if (activeAction?.kind === 'combat' && !combat) activeAction = null
 
   const inventory = readInventory(source.inventory)
+  const upgrades = readUpgrades(source.upgrades)
+  const tabTiers = upgrades['inventory-tabs']
+  const tabCount = 5 + (tabTiers == null ? 0 : tabTiers + 1)
   return {
     characterName,
     skills,
     inventory,
-    inventoryTabs: normalizeInventoryTabs(source.inventoryTabs, inventory),
+    inventoryTabs: normalizeInventoryTabs(source.inventoryTabs, inventory, tabCount),
     gold: readGold(source.gold),
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
@@ -120,7 +126,19 @@ export function normalizeSave(raw: unknown): SaveData {
     combat,
     spellLoadouts: readSpellLoadouts(source.spellLoadouts),
     questProgress: readQuestProgress(source.questProgress),
+    upgrades,
   }
+}
+
+function readUpgrades(value: unknown): Record<string, number> {
+  if (!isRecord(value)) return {}
+  const next: Record<string, number> = {}
+  for (const [id, tier] of Object.entries(value)) {
+    if (typeof id !== 'string' || id.length === 0) continue
+    if (typeof tier !== 'number' || !Number.isFinite(tier) || tier < 0) continue
+    next[id] = Math.floor(tier)
+  }
+  return next
 }
 
 function readQuestProgress(value: unknown): QuestProgress {

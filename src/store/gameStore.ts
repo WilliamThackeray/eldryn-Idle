@@ -6,7 +6,7 @@ import type { ItemId } from '../data/items'
 import { getMonster, type BiomeId } from '../data/monsters'
 import { getQuest } from '../data/quests'
 import { isSpellId, type SpellId } from '../data/spells'
-import { buyItem as buyShopItem } from '../data/shop'
+import { buyGood as buyShopGood, buyUpgrade as buyShopUpgrade } from '../data/shop'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
 import { beginDungeonFight, createFight } from '../engine/combat'
 import { SPELL_INTERVAL_SEC } from '../engine/config'
@@ -33,6 +33,7 @@ import { getItem } from '../data/items'
 import { activePerks, effectTotal } from '../engine/abilities'
 import { sellItems, type Inventory } from '../engine/inventory'
 import {
+  appendInventoryTab,
   moveItemToTab,
   placeIncoming,
   renameTab,
@@ -76,7 +77,8 @@ interface GameStore extends SaveData {
   dismissOffline: () => void
   saveGame: () => void
   sellItem: (itemId: ItemId, quantity?: number) => void
-  buyItem: (itemId: ItemId) => void
+  buyGood: (itemId: ItemId) => void
+  buyUpgrade: (upgradeId: string) => void
   equipItem: (itemId: ItemId) => void
   unequipSlot: (slot: EquipmentSlot) => void
   saveEquipmentSet: (name: string) => void
@@ -258,6 +260,7 @@ export const useGameStore = create<GameStore>()(
               gold: state.gold,
               activeAction: state.activeAction,
               equipment: state.equipment,
+              upgrades: state.upgrades,
               classId: state.classId,
               classXp: state.classXp,
               combat: state.combat,
@@ -306,10 +309,38 @@ export const useGameStore = create<GameStore>()(
           )
           return { ...withPlacedInventory(state, sold.inventory), gold: sold.gold }
         }),
-      buyItem: (itemId) =>
+      buyGood: (itemId) =>
         set((state) => {
-          const bought = buyShopItem(state.inventory, state.gold, itemId)
+          const bought = buyShopGood(state.inventory, state.gold, itemId)
           return { ...withPlacedInventory(state, bought.inventory), gold: bought.gold }
+        }),
+      buyUpgrade: (upgradeId) =>
+        set((state) => {
+          const before = state.upgrades[upgradeId]
+          const bought = buyShopUpgrade(
+            {
+              gold: state.gold,
+              inventory: state.inventory,
+              upgrades: state.upgrades,
+              skills: state.skills,
+            },
+            upgradeId,
+          )
+          if (bought.upgrades === state.upgrades && bought.gold === state.gold) return state
+          let inventoryTabs = state.inventoryTabs
+          if (
+            upgradeId === 'inventory-tabs' &&
+            bought.upgrades[upgradeId] !== before &&
+            bought.upgrades[upgradeId] != null
+          ) {
+            inventoryTabs = appendInventoryTab(inventoryTabs)
+          }
+          return {
+            ...withPlacedInventory(state, bought.inventory),
+            gold: bought.gold,
+            upgrades: bought.upgrades,
+            inventoryTabs,
+          }
         }),
       equipItem: (itemId) =>
         set((state) => {
@@ -538,6 +569,7 @@ export const useGameStore = create<GameStore>()(
         combat: state.combat ?? null,
         spellLoadouts: state.spellLoadouts,
         questProgress: state.questProgress,
+        upgrades: state.upgrades ?? {},
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

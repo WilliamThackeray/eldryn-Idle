@@ -1,62 +1,266 @@
-import type { ItemId } from './items'
-import { addItems, type Inventory } from '../engine/inventory'
+import { getItem, type ItemId } from './items'
+import type { SkillId } from './skills'
+import { SKILLS } from './skills'
+import { addItems, hasItems, removeItems, type Inventory } from '../engine/inventory'
+import { levelForXp } from '../engine/xp'
+import type { ItemStack } from './activities/types'
+import type { SkillProgress } from '../types/game'
 
-export interface ShopListing {
+export type ShopSection = 'general' | SkillId | 'combat'
+
+export type UpgradeEffect =
+  | { kind: 'inventoryTabs' }
+  | { kind: 'interval'; match: 'mine' | 'chop' | 'fish' | 'herb-plot'; pct: number }
+  | { kind: 'soon' }
+
+export interface ShopUpgradeTier {
+  cost: { gold: number; items?: ItemStack[]; favor?: number }
+  effect: UpgradeEffect
+  requires?: { skillId: SkillId; level: number }
+}
+
+export interface ShopUpgrade {
+  id: string
+  section: ShopSection
+  name: string
+  description: string
+  tiers: ShopUpgradeTier[]
+}
+
+export interface ShopGood {
   itemId: ItemId
-  price: number
-  quantity?: number
 }
 
-const ARMOR_PIECES = ['helmet', 'chest', 'chaps', 'gauntlets', 'boots'] as const
-
-function setPieces(prefix: string, price: number): ShopListing[] {
-  return ARMOR_PIECES.map((piece) => ({ itemId: `${prefix}-${piece}` as ItemId, price }))
-}
-
-export const SHOP_CATALOG: readonly ShopListing[] = [
-  { itemId: 'club', price: 1 },
-  { itemId: 'dagger', price: 1 },
-  { itemId: 'handaxe', price: 5 },
-  { itemId: 'mace', price: 5 },
-  { itemId: 'spear', price: 1 },
-  { itemId: 'shortsword', price: 10 },
-  { itemId: 'longsword', price: 15 },
-  { itemId: 'shortbow', price: 25 },
-  { itemId: 'light-crossbow', price: 25 },
-  { itemId: 'sling', price: 1 },
-  { itemId: 'shield', price: 10 },
-  ...setPieces('padded', 1),
-  ...setPieces('arcane', 1),
-  ...setPieces('vestment', 1),
-  ...setPieces('wildweave', 1),
-  ...setPieces('minstrel', 1),
-  ...setPieces('leather', 2),
-  ...setPieces('hide', 2),
-  { itemId: 'arrows', price: 1, quantity: 20 },
-  { itemId: 'bolts', price: 1, quantity: 20 },
-  { itemId: 'sling-bullets', price: 1, quantity: 20 },
-  { itemId: 'component-bag-basic', price: 25 },
-  { itemId: 'component-bag-fine', price: 100 },
-  { itemId: 'component-bag-rare', price: 400 },
-  { itemId: 'component-bag-exotic', price: 1600 },
-  { itemId: 'component-bag-legendary', price: 6400 },
+/** Cheap commons only. Price is sellValue × 2. */
+export const GENERAL_GOODS: readonly ShopGood[] = [
+  { itemId: 'cooked-meat' },
+  { itemId: 'cooked-forest-fish' },
+  { itemId: 'empty-vial' },
+  { itemId: 'ink' },
+  { itemId: 'bandages' },
 ]
 
-const BY_ID = new Map(SHOP_CATALOG.map((entry) => [entry.itemId, entry]))
+const toolTiers = (
+  gold: [number, number, number],
+  items: [ItemStack, ItemStack, ItemStack],
+  skillId: SkillId,
+  match: 'mine' | 'chop' | 'fish',
+): ShopUpgradeTier[] => [
+  {
+    cost: { gold: gold[0], items: [items[0]] },
+    effect: { kind: 'interval', match, pct: 0.05 },
+    requires: { skillId, level: 1 },
+  },
+  {
+    cost: { gold: gold[1], items: [items[1]] },
+    effect: { kind: 'interval', match, pct: 0.05 },
+    requires: { skillId, level: 15 },
+  },
+  {
+    cost: { gold: gold[2], items: [items[2]] },
+    effect: { kind: 'interval', match, pct: 0.05 },
+    requires: { skillId, level: 30 },
+  },
+]
 
-export function getShopListing(itemId: string): ShopListing | undefined {
-  return BY_ID.get(itemId as ItemId)
+const soon = (section: ShopSection, id: string, name: string, description: string): ShopUpgrade => ({
+  id,
+  section,
+  name,
+  description,
+  tiers: [{ cost: { gold: 0 }, effect: { kind: 'soon' } }],
+})
+
+export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
+  {
+    id: 'inventory-tabs',
+    section: 'general',
+    name: 'Inventory Tabs',
+    description: 'Add another inventory tab.',
+    tiers: [
+      { cost: { gold: 100 }, effect: { kind: 'inventoryTabs' } },
+      { cost: { gold: 250 }, effect: { kind: 'inventoryTabs' } },
+      { cost: { gold: 500 }, effect: { kind: 'inventoryTabs' } },
+      { cost: { gold: 1000 }, effect: { kind: 'inventoryTabs' } },
+      { cost: { gold: 2000 }, effect: { kind: 'inventoryTabs' } },
+    ],
+  },
+  {
+    id: 'pickaxe',
+    section: 'athletics',
+    name: 'Pickaxe',
+    description: 'Mining interval −5% per tier.',
+    tiers: toolTiers(
+      [50, 200, 800],
+      [
+        { itemId: 'iron-bar', quantity: 1 },
+        { itemId: 'iron-bar', quantity: 5 },
+        { itemId: 'steel-bar', quantity: 5 },
+      ],
+      'athletics',
+      'mine',
+    ),
+  },
+  soon('athletics', 'bellows', 'Bellows', 'Smithing yield. Coming soon.'),
+  {
+    id: 'hatchet',
+    section: 'survival',
+    name: 'Hatchet',
+    description: 'Woodcutting interval −5% per tier.',
+    tiers: toolTiers(
+      [50, 200, 800],
+      [
+        { itemId: 'logs', quantity: 1 },
+        { itemId: 'logs', quantity: 5 },
+        { itemId: 'hardwood', quantity: 5 },
+      ],
+      'survival',
+      'chop',
+    ),
+  },
+  {
+    id: 'rod',
+    section: 'survival',
+    name: 'Rod',
+    description: 'Fishing interval −5% per tier.',
+    tiers: toolTiers(
+      [50, 200, 800],
+      [
+        { itemId: 'logs', quantity: 1 },
+        { itemId: 'logs', quantity: 5 },
+        { itemId: 'hardwood', quantity: 5 },
+      ],
+      'survival',
+      'fish',
+    ),
+  },
+  {
+    id: 'extra-farm-plot',
+    section: 'nature',
+    name: 'Extra Farm Plot',
+    description: 'Halve the herb plot interval (a second plot).',
+    tiers: [
+      {
+        cost: { gold: 100, items: [{ itemId: 'forest-herbs', quantity: 5 }] },
+        effect: { kind: 'interval', match: 'herb-plot', pct: 0.5 },
+        requires: { skillId: 'nature', level: 1 },
+      },
+    ],
+  },
+  soon('sleightOfHand', 'lockpick-set', 'Lockpick Set', 'Lockpicking yield. Coming soon.'),
+  soon('arcana', 'scribes-desk', "Scribe's Desk", 'Component crafting yield. Coming soon.'),
+  soon('combat', 'auto-eat-threshold', 'Auto-eat Threshold', 'Combat food threshold. Coming soon.'),
+  soon('combat', 'second-loadout', 'Second Loadout', 'A second equipment loadout. Coming soon.'),
+  {
+    id: 'guild-discount',
+    section: 'persuasion',
+    name: 'Guild Discount',
+    description: 'Shop discounts. Costs Guild Favor (locked until Prompt 18).',
+    tiers: [
+      {
+        // TODO(Prompt 18): Guild Favor
+        cost: { gold: 10, favor: 1 },
+        effect: { kind: 'inventoryTabs' },
+      },
+    ],
+  },
+  ...SKILLS.filter(
+    (skill) =>
+      skill.id !== 'athletics' &&
+      skill.id !== 'survival' &&
+      skill.id !== 'nature' &&
+      skill.id !== 'sleightOfHand' &&
+      skill.id !== 'arcana' &&
+      skill.id !== 'persuasion',
+  ).map((skill) =>
+    soon(skill.id, `coming-soon-${skill.id}`, 'Coming soon', `${skill.name} upgrades. Coming soon.`),
+  ),
+]
+
+const UPGRADE_BY_ID = new Map(SHOP_UPGRADES.map((entry) => [entry.id, entry]))
+
+export function getShopUpgrade(id: string): ShopUpgrade | undefined {
+  return UPGRADE_BY_ID.get(id)
 }
 
-export function buyItem(
+export function upgradesForSection(section: ShopSection): ShopUpgrade[] {
+  return SHOP_UPGRADES.filter((entry) => entry.section === section)
+}
+
+export function goodPrice(itemId: ItemId): number | null {
+  if (!GENERAL_GOODS.some((entry) => entry.itemId === itemId)) return null
+  const def = getItem(itemId)
+  if (!def) return null
+  return def.sellValue * 2
+}
+
+export function buyGood(
   inventory: Inventory,
   gold: number,
-  itemId: string,
+  itemId: ItemId,
 ): { inventory: Inventory; gold: number } {
-  const listing = getShopListing(itemId)
-  if (!listing || gold < listing.price) return { inventory, gold }
+  const price = goodPrice(itemId)
+  if (price == null || gold < price) return { inventory, gold }
   return {
-    inventory: addItems(inventory, [{ itemId: listing.itemId, quantity: listing.quantity ?? 1 }]),
-    gold: gold - listing.price,
+    inventory: addItems(inventory, [{ itemId, quantity: 1 }]),
+    gold: gold - price,
   }
+}
+
+export type OwnedUpgrades = Record<string, number>
+
+export function buyUpgrade(
+  state: {
+    gold: number
+    inventory: Inventory
+    upgrades: OwnedUpgrades
+    skills: Record<SkillId, SkillProgress>
+  },
+  id: string,
+): { gold: number; inventory: Inventory; upgrades: OwnedUpgrades } {
+  const upgrade = getShopUpgrade(id)
+  if (!upgrade) return state
+  const owned = state.upgrades[id]
+  const nextIndex = owned == null ? 0 : owned + 1
+  const tier = upgrade.tiers[nextIndex]
+  if (!tier) return state
+  if (tier.effect.kind === 'soon') return state
+  // TODO(Prompt 18): Guild Favor
+  if (tier.cost.favor != null) return state
+  if (tier.requires) {
+    const xp = state.skills[tier.requires.skillId]?.xp ?? 0
+    if (levelForXp(xp) < tier.requires.level) return state
+  }
+  if (state.gold < tier.cost.gold) return state
+  const items = tier.cost.items ?? []
+  if (!hasItems(state.inventory, items)) return state
+  return {
+    gold: state.gold - tier.cost.gold,
+    inventory: removeItems(state.inventory, items),
+    upgrades: { ...state.upgrades, [id]: nextIndex },
+  }
+}
+
+export function intervalBonus(upgrades: OwnedUpgrades, activityId: string): number {
+  let total = 0
+  for (const upgrade of SHOP_UPGRADES) {
+    const owned = upgrades[upgrade.id]
+    if (owned == null) continue
+    for (let i = 0; i <= owned; i++) {
+      const effect = upgrade.tiers[i]?.effect
+      if (!effect || effect.kind !== 'interval') continue
+      const match =
+        effect.match === 'herb-plot'
+          ? activityId === 'herb-plot'
+          : activityId.startsWith(`${effect.match}-`)
+      if (match) total += effect.pct
+    }
+  }
+  return total
+}
+
+export function ownedTabTiers(upgrades: OwnedUpgrades): number {
+  const owned = upgrades['inventory-tabs']
+  if (owned == null) return 0
+  return owned + 1
 }

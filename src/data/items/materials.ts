@@ -24,4 +24,10 @@ export const MATERIALS = [
   { id: 'bones', name: 'Bones', description: 'Cleaned bones.', category: 'material', rarity: 'common', stackable: true, sellValue: 2, tags: ['bone'] },
   { id: 'animal-scraps', name: 'Animal Scraps', description: 'Fur and sinew too small to butcher.', category: 'material', rarity: 'common', stackable: true, sellValue: 1, tags: ['scrap'] },
   { id: 'slag', name: 'Slag', description: 'Cinder from a spoiled heat.', category: 'material', rarity: 'common', stackable: true, sellValue: 1, tags: ['scrap'] },
+  { id: 'iron-arrowhead', name: 'Iron Arrowhead', description: 'A forged tip for arrows or bolts.', category: 'material', rarity: 'common', stackable: true, sellValue: 1, tags: ['arrowhead'] },
+  { id: 'steel-arrowhead', name: 'Steel Arrowhead', description: 'A steel tip for arrows or bolts.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 2, tags: ['arrowhead'] },
+  { id: 'silvered-arrowhead', name: 'Silvered Arrowhead', description: 'A silvered tip for arrows or bolts.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 4, tags: ['arrowhead'] },
+  { id: 'mithral-arrowhead', name: 'Mithral Arrowhead', description: 'A mithral tip for arrows or bolts.', category: 'material', rarity: 'very-rare', stackable: true, sellValue: 8, tags: ['arrowhead'] },
+  { id: 'adamantine-arrowhead', name: 'Adamantine Arrowhead', description: 'An adamantine tip for arrows or bolts.', category: 'material', rarity: 'legendary', stackable: true, sellValue: 16, tags: ['arrowhead'] },
+  { id: 'gem', name: 'Gem', description: 'An uncommon stone for jewelcrafting.', category: 'material', rarity: 'uncommon', stackable: true, sellValue: 12, tags: ['gem'] },
 ] as const satisfies readonly ItemDef[]

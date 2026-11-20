@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest'
+import { sourcesOf } from '../engine/itemIndex'
 import { ACTIVITIES, activitiesFor, getActivity } from './activities'
-import { ITEMS, isItemId } from './items'
+import { ITEMS, isItemId, type ItemId } from './items'
+import { GENERAL_GOODS, SHOP_UPGRADES } from './shop'
 import { SKILLS } from './skills'
 
 test('item ids are unique and gold is a counter, not an item', () => {
@@ -66,11 +68,66 @@ test('smithing, fletching, and leatherworking craft gear', () => {
     outputs: [{ itemId: 'dagger' }],
   })
   expect(getActivity('survival', 'fletch-arrows')).toMatchObject({
-    inputs: [{ itemId: 'logs', quantity: 1 }],
+    inputs: [
+      { itemId: 'logs', quantity: 1 },
+      { itemId: 'iron-arrowhead', quantity: 1 },
+    ],
     outputs: [{ itemId: 'arrows', min: 20, max: 20 }],
   })
   expect(getActivity('survival', 'leather-chest')).toMatchObject({
     inputs: [{ itemId: 'hide', quantity: 2 }],
     outputs: [{ itemId: 'leather-chest' }],
   })
+})
+
+test('every equippable item and every recipe input has a source', () => {
+  for (const item of ITEMS) {
+    if (!('gear' in item) || !item.gear) continue
+    expect(sourcesOf(item.id as ItemId).length, item.id).toBeGreaterThan(0)
+  }
+  for (const activity of ACTIVITIES) {
+    for (const input of activity.inputs ?? []) {
+      expect(sourcesOf(input.itemId).length, `${activity.id}:${input.itemId}`).toBeGreaterThan(0)
+    }
+  }
+})
+
+test('material-tier longswords, chain mail, and arrowheads match MATERIAL_LEVEL', () => {
+  const levels = [1, 15, 30, 60, 80]
+  const swords = [
+    'longsword',
+    'steel-longsword',
+    'silvered-longsword',
+    'mithral-longsword',
+    'adamantine-longsword',
+  ]
+  const tips = [
+    'iron-arrowhead',
+    'steel-arrowhead',
+    'silvered-arrowhead',
+    'mithral-arrowhead',
+    'adamantine-arrowhead',
+  ]
+  for (let i = 0; i < levels.length; i++) {
+    expect(getActivity('athletics', `smith-${swords[i]}`)?.requiredLevel).toBe(levels[i])
+    expect(getActivity('athletics', `smith-${tips[i]}`)?.requiredLevel).toBe(levels[i])
+  }
+  expect(getActivity('athletics', 'smith-chain-mail-chest')?.requiredLevel).toBe(1)
+  expect(getActivity('athletics', 'smith-steel-chain-mail-chest')?.requiredLevel).toBe(15)
+  expect(getActivity('athletics', 'smith-silvered-chain-mail-chest')?.requiredLevel).toBe(30)
+  expect(getActivity('athletics', 'smith-mithral-chain-mail-chest')?.requiredLevel).toBe(60)
+  expect(getActivity('athletics', 'smith-adamantine-chain-mail-chest')?.requiredLevel).toBe(80)
+})
+
+test('general store sells commons and upgrades grant no items', () => {
+  for (const good of GENERAL_GOODS) {
+    const def = ITEMS.find((item) => item.id === good.itemId)
+    expect(def?.category).not.toBe('gear')
+    expect(def?.category).not.toBe('ammo')
+  }
+  for (const upgrade of SHOP_UPGRADES) {
+    for (const tier of upgrade.tiers) {
+      expect(tier.effect.kind).not.toBe('item')
+    }
+  }
 })

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { activitiesFor, type ActivityDef, type GoldDrop, type LootEntry } from '../../data/activities'
 import { getClass, modifiersFor } from '../../data/classes'
 import { getItem } from '../../data/items'
+import { intervalBonus } from '../../data/shop'
 import { SKILLS, type SkillId } from '../../data/skills'
 import { deriveAbilities } from '../../engine/abilities'
 import { actionIntervalMs, activityIntervalMs, type SkillEvent } from '../../engine/advance'
@@ -24,6 +25,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const skills = useGameStore((state) => state.skills)
   const inventory = useGameStore((state) => state.inventory)
   const equipment = useGameStore((state) => state.equipment)
+  const upgrades = useGameStore((state) => state.upgrades)
   const activeAction = useGameStore((state) => state.activeAction)
   const classId = useGameStore((state) => state.classId)
   const clericFocus = useGameStore((state) => state.clericFocus)
@@ -42,9 +44,11 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
       ? `XP ×${(1 + (classMods[ability] ?? 0)).toFixed(2)} (${className})`
       : null
   const activities = activitiesFor(skillId)
+  const activeSpeed =
+    activeAction?.kind === 'skill' ? intervalBonus(upgrades, activeAction.activityId) : 0
   const activeInterval =
     activeAction?.kind === 'skill' && activeAction.skillId === skillId
-      ? actionIntervalMs(activeAction, skills, equipment)
+      ? actionIntervalMs(activeAction, skills, equipment, null, activeSpeed)
       : 0
 
   const [selectedId, setSelectedId] = useState(() => defaultActivityId(skillId, activeAction?.kind === 'skill' ? activeAction : null, activities))
@@ -84,7 +88,13 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
               activeAction?.kind === 'skill' &&
               activeAction.skillId === skillId &&
               activeAction.activityId === activity.id
-            const interval = activityIntervalMs(skillId, activity.baseIntervalMs, skills, equipment)
+            const interval = activityIntervalMs(
+              skillId,
+              activity.baseIntervalMs,
+              skills,
+              equipment,
+              intervalBonus(upgrades, activity.id),
+            )
             return (
               <SkillCard
                 key={activity.id}
@@ -110,7 +120,15 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
             description={selected.description}
             xpGain={selected.xp}
             xpMultiplierLabel={xpMultiplierLabel}
-            intervalSeconds={formatInterval(activityIntervalMs(skillId, selected.baseIntervalMs, skills, equipment))}
+            intervalSeconds={formatInterval(
+              activityIntervalMs(
+                skillId,
+                selected.baseIntervalMs,
+                skills,
+                equipment,
+                intervalBonus(upgrades, selected.id),
+              ),
+            )}
             requiredLevel={selected.requiredLevel}
             dc={checkDc(selected.requiredLevel)}
             successPercent={Math.round(successChance(bonus, selected.requiredLevel) * 100)}

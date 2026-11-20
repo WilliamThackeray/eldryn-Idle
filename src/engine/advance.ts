@@ -2,6 +2,7 @@ import { getActivity } from '../data/activities'
 import type { ClassId } from '../data/classes'
 import { getItem } from '../data/items'
 import { getMonster } from '../data/monsters'
+import { intervalBonus } from '../data/shop'
 import { getSkill, SKILLS, type SkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { activePerks, deriveAbilities, effectTotal } from './abilities'
@@ -46,6 +47,8 @@ export interface AdvanceState {
   activeAction: ActiveAction | null
   /** Missing means empty; keeps older advance tests valid. */
   equipment?: Equipment
+  /** Missing means none; shop interval upgrades. */
+  upgrades?: Record<string, number>
   classId?: ClassId | null
   classXp?: number
   combat?: CombatFight | null
@@ -196,18 +199,18 @@ export function onActivityComplete(
   return { ...state, inventory, gold: state.gold + goldGain }
 }
 
-// shortcut: other speed bonuses stay 0 until potions and buffs exist.
 export function activityIntervalMs(
   skillId: SkillId,
   baseIntervalMs: number,
   skills: Record<SkillId, SkillProgress>,
   equipment: Equipment = emptyEquipment(),
+  otherSpeedBonus = 0,
 ): number {
   const abilities = deriveAbilities(skills)
   const dex = abilities.find((ability) => ability.abbr === 'DEX')?.modifier ?? 0
   const str = abilities.find((ability) => ability.abbr === 'STR')?.score ?? 10
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
-  const base = intervalMs(baseIntervalMs, dex, 0, ability === 'STR' || ability === 'DEX')
+  const base = intervalMs(baseIntervalMs, dex, otherSpeedBonus, ability === 'STR' || ability === 'DEX')
   return base * heavyArmorIntervalMultiplier(equipment, str)
 }
 
@@ -216,6 +219,7 @@ export function actionIntervalMs(
   skills: Record<SkillId, SkillProgress>,
   equipment: Equipment = emptyEquipment(),
   combat?: CombatFight | null,
+  otherSpeedBonus = 0,
 ): number {
   if (action.kind === 'combat') {
     if (combat?.phase === 'rest') return RESPAWN_MS
@@ -225,7 +229,7 @@ export function actionIntervalMs(
     const str = abilities.find((ability) => ability.abbr === 'STR')?.score ?? 10
     return intervalMs(action.baseIntervalMs, dex, 0, true) * heavyArmorIntervalMultiplier(equipment, str)
   }
-  return activityIntervalMs(action.skillId, action.baseIntervalMs, skills, equipment)
+  return activityIntervalMs(action.skillId, action.baseIntervalMs, skills, equipment, otherSpeedBonus)
 }
 
 export function advance(
@@ -271,7 +275,8 @@ export function advance(
       break
     }
 
-    const interval = activityIntervalMs(acting.skillId, acting.baseIntervalMs, skills, equipment)
+    const speed = intervalBonus(state.upgrades ?? {}, acting.activityId)
+    const interval = activityIntervalMs(acting.skillId, acting.baseIntervalMs, skills, equipment, speed)
     if (!Number.isFinite(interval) || interval <= 0) break
 
     const need = Math.max(0, interval - progress)

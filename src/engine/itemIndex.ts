@@ -3,7 +3,7 @@ import { DUNGEONS } from '../data/dungeons'
 import type { ItemId } from '../data/items'
 import { MONSTERS } from '../data/monsters'
 import { QUESTS } from '../data/quests'
-import { SHOP_CATALOG } from '../data/shop'
+import { GENERAL_GOODS } from '../data/shop'
 import { SPELLS } from '../data/spells'
 import type { SkillId } from '../data/skills'
 import { componentBagId } from './spells'
@@ -79,7 +79,7 @@ function buildIndex(): ItemIndex {
     }
   }
 
-  for (const listing of SHOP_CATALOG) {
+  for (const listing of GENERAL_GOODS) {
     push(sources, listing.itemId, {
       kind: 'shop',
       itemId: listing.itemId,

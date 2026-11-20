@@ -1,4 +1,4 @@
-import { activity, drop } from './define'
+import { activity, drop, stack } from './define'
 
 export const sleightOfHandActivities = [
   activity({ skillId: 'sleightOfHand', id: 'trap-small', name: 'Trap Small Animals', description: 'Set snares for small game.', requiredLevel: 1, outputs: [drop('small-animal'), drop('animal-scraps')] }),
@@ -14,4 +14,22 @@ export const sleightOfHandActivities = [
   activity({ skillId: 'sleightOfHand', id: 'lockpick-bank', name: 'Pick a Bank Safe', description: 'Open a bank safe.', requiredLevel: 20, outputs: [drop('valuables', 1, 2)], gold: { min: 10, max: 22 } }),
   activity({ skillId: 'sleightOfHand', id: 'lockpick-noble', name: 'Pick a Noble Vault', description: 'Open a noble vault.', requiredLevel: 40, outputs: [drop('valuables', 1, 2)], gold: { min: 18, max: 36 } }),
   activity({ skillId: 'sleightOfHand', id: 'lockpick-royal', name: 'Pick the Royal Treasury', description: 'Open a treasury lock.', requiredLevel: 70, outputs: [drop('valuables', 2, 4)], gold: { min: 30, max: 60 } }),
+  activity({
+    skillId: 'sleightOfHand',
+    id: 'craft-ring',
+    name: 'Craft Ring',
+    description: 'Set a gem in a plain band.',
+    requiredLevel: 10,
+    inputs: [stack('gem')],
+    outputs: [drop('ring')],
+  }),
+  activity({
+    skillId: 'sleightOfHand',
+    id: 'craft-necklace',
+    name: 'Craft Necklace',
+    description: 'Set a gem on a cord.',
+    requiredLevel: 10,
+    inputs: [stack('gem')],
+    outputs: [drop('necklace')],
+  }),
 ]

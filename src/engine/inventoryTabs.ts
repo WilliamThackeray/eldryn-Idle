@@ -1,5 +1,5 @@
 import { isItemId, type ItemId } from '../data/items'
-import { MAX_INVENTORY_TABS } from './config'
+import { BASE_INVENTORY_TABS, MAX_INVENTORY_TABS } from './config'
 import type { Inventory } from './inventory'
 
 export interface InventoryTab {
@@ -8,8 +8,9 @@ export interface InventoryTab {
   itemIds: ItemId[]
 }
 
-export function defaultInventoryTabs(count = MAX_INVENTORY_TABS): InventoryTab[] {
-  return Array.from({ length: count }, (_, i) => ({
+export function defaultInventoryTabs(count = BASE_INVENTORY_TABS): InventoryTab[] {
+  const n = Math.min(MAX_INVENTORY_TABS, Math.max(1, count))
+  return Array.from({ length: n }, (_, i) => ({
     id: `tab-${i + 1}`,
     name: `Tab ${i + 1}`,
     itemIds: [],
@@ -84,12 +85,19 @@ export function placeIncoming(
   )
 }
 
-/** Pad/truncate to MAX_INVENTORY_TABS. Missing items from inventory go onto Tab 1. */
+export function appendInventoryTab(tabs: InventoryTab[]): InventoryTab[] {
+  if (tabs.length >= MAX_INVENTORY_TABS) return tabs
+  const n = tabs.length + 1
+  return [...tabs, { id: `tab-${n}`, name: `Tab ${n}`, itemIds: [] }]
+}
+
+/** Keep saved tabs up to MAX, pad to at least BASE, and up to `tabCount` when upgrades unlock more. */
 export function normalizeInventoryTabs(
   raw: unknown,
   inventory: Inventory,
+  tabCount = BASE_INVENTORY_TABS,
 ): InventoryTab[] {
-  const base = defaultInventoryTabs()
+  const target = Math.min(MAX_INVENTORY_TABS, Math.max(BASE_INVENTORY_TABS, tabCount))
   const parsed: InventoryTab[] = []
   if (Array.isArray(raw)) {
     for (const entry of raw) {
@@ -123,6 +131,7 @@ export function normalizeInventoryTabs(
     }
   }
 
+  const base = defaultInventoryTabs(target)
   const tabs = base.map((tab, i) => {
     const source = parsed[i]
     if (!source) return tab
@@ -141,6 +150,5 @@ export function normalizeInventoryTabs(
     }
   }
 
-  // Migration / heal: any owned item missing from every tab lands on Tab 1.
   return placeIncoming(tabs, {}, inventory)
 }
