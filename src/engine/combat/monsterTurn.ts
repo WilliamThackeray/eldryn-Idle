@@ -8,7 +8,7 @@ import { applyDamageModifiers } from '../damage'
 import { resolveRollMode, rollD20, rollDamageParts } from '../dice'
 import { emptyEquipment, totalItemStats, type Equipment } from '../equipment'
 import type { Rng } from '../rng'
-import { getSignatureHooks, tryWildShape } from '../signatures'
+import { forEachSignature, hasSignature, tryWildShape } from '../signatures'
 import { concentrationDc } from '../spells'
 import { addXp, applyXpModifiers, levelForXp, proficiency, tier } from '../xp'
 import { abilityModMap, type CombatFight, playerArmorClass, pushLog, savingThrow, tryRelentless } from './state'
@@ -32,25 +32,26 @@ export function applyPlayerDamage(input: {
   const cls = getClass(input.activeClassId)
   const mods = abilityModMap(skills)
   const classTier = tier(levelForXp(input.classXp))
-  const hooks = getSignatureHooks(fight.signature.id)
   const itemStats = totalItemStats(input.equipment ?? emptyEquipment())
 
   if (fight.concentration === 'protectionFromEnergyFire' && input.damageType === 'fire') {
     amount = Math.floor(amount / 2)
   }
 
-  hooks.onDamaged?.({
-    runtime: fight.signature,
-    tier: classTier,
-    abilityMod: (abbr) => mods[abbr],
-    rng,
-    trace,
-    log: (line) => pushLog(fight, line, trace),
-    damage: amount,
-    damageType: input.damageType,
-    setDamage: (next) => {
-      amount = next
-    },
+  forEachSignature(fight.signature.id, fight.secondarySignatureId, (hooks) => {
+    hooks.onDamaged?.({
+      runtime: fight.signature,
+      tier: classTier,
+      abilityMod: (abbr) => mods[abbr],
+      rng,
+      trace,
+      log: (line) => pushLog(fight, line, trace),
+      damage: amount,
+      damageType: input.damageType,
+      setDamage: (next) => {
+        amount = next
+      },
+    })
   })
 
   // Adamantine: crits become normal — handled at attack time if needed later.
@@ -94,30 +95,32 @@ export function applyPlayerDamage(input: {
   }
 
   if (fight.playerHp > 0) {
-    hooks.onLowHp?.({
-      runtime: fight.signature,
-      tier: classTier,
-      abilityMod: (abbr) => mods[abbr],
-      rng,
-      trace,
-      log: (line) => pushLog(fight, line, trace),
-      hp: fight.playerHp,
-      maxHp: fight.playerMaxHp,
-      heal: (healAmt) => {
-        if (healAmt <= 0) return
-        fight.playerHp = Math.min(fight.playerMaxHp, fight.playerHp + healAmt)
-        const vitalityXp = applyXpModifiers(healAmt, 'CON', input.modifiers, input.xpExtra ?? 0)
-        skills = {
-          ...skills,
-          vitality: { xp: addXp(skills.vitality.xp, vitalityXp) },
-        }
-      },
+    forEachSignature(fight.signature.id, fight.secondarySignatureId, (hooks) => {
+      hooks.onLowHp?.({
+        runtime: fight.signature,
+        tier: classTier,
+        abilityMod: (abbr) => mods[abbr],
+        rng,
+        trace,
+        log: (line) => pushLog(fight, line, trace),
+        hp: fight.playerHp,
+        maxHp: fight.playerMaxHp,
+        heal: (healAmt) => {
+          if (healAmt <= 0) return
+          fight.playerHp = Math.min(fight.playerMaxHp, fight.playerHp + healAmt)
+          const vitalityXp = applyXpModifiers(healAmt, 'CON', input.modifiers, input.xpExtra ?? 0)
+          skills = {
+            ...skills,
+            vitality: { xp: addXp(skills.vitality.xp, vitalityXp) },
+          }
+        },
+      })
     })
     return { skills, defeated: false }
   }
 
   // Wild Shape
-  if (fight.signature.id === 'wildShape') {
+  if (hasSignature(fight.signature.id, fight.secondarySignatureId, 'wildShape')) {
     const temp = tryWildShape(fight.signature.wildShapeUsed, classTier)
     if (temp != null) {
       fight.signature.wildShapeUsed = true

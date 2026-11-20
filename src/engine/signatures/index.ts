@@ -36,3 +36,29 @@ const REGISTRY: Record<string, SignatureHooks> = {
 export function getSignatureHooks(id: string): SignatureHooks {
   return REGISTRY[id] ?? {}
 }
+
+/** Primary plus optional secondary signature ids that are currently unlocked. */
+export function activeSignatureIds(
+  primaryId: string,
+  secondaryId: string | null | undefined,
+): string[] {
+  return secondaryId ? [primaryId, secondaryId] : [primaryId]
+}
+
+export function hasSignature(
+  primaryId: string,
+  secondaryId: string | null | undefined,
+  id: string,
+): boolean {
+  return activeSignatureIds(primaryId, secondaryId).includes(id)
+}
+
+export function forEachSignature(
+  primaryId: string,
+  secondaryId: string | null | undefined,
+  call: (hooks: SignatureHooks, id: string) => void,
+): void {
+  for (const id of activeSignatureIds(primaryId, secondaryId)) {
+    call(getSignatureHooks(id), id)
+  }
+}

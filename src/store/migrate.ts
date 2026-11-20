@@ -33,8 +33,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v17: Mile-Camp quests, notice board, drop legacy quest progress. */
-export const SAVE_VERSION = 17
+/** v18: secondary class + Echo rebirth prestige. */
+export const SAVE_VERSION = 18
 
 /** Old sell values for bags removed in the specific-components rework. */
 const LEGACY_BAG_SELL: Record<string, number> = {
@@ -57,6 +57,11 @@ export interface SaveData {
   /** Null until character creation. Locked after that. */
   classId: ClassId | null
   classXp: number
+  /** Multiclass secondary. Null when none. */
+  secondaryClassId: ClassId | null
+  secondaryClassXp: number
+  /** Permanent rebirth Echo count (+ECHO_XP_PCT% all XP each). */
+  echoes: number
   clericFocus: ClericFocus
   isInDungeonOrQuest: boolean
   equipment: Equipment
@@ -96,6 +101,9 @@ export function createInitialSave(): SaveData {
     activeAction: null,
     classId: null,
     classXp: 0,
+    secondaryClassId: null,
+    secondaryClassXp: 0,
+    echoes: 0,
     clericFocus: 'INT',
     isInDungeonOrQuest: false,
     equipment: emptyEquipment(),
@@ -190,6 +198,8 @@ export function normalizeSave(raw: unknown): SaveData {
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
     activeAction,
     ...readLockedClass(source),
+    ...readSecondaryClass(source),
+    echoes: readEchoes(source.echoes),
     clericFocus: source.clericFocus === 'STR' ? 'STR' : 'INT',
     isInDungeonOrQuest: source.isInDungeonOrQuest === true,
     equipment: readEquipment(source.equipment),
@@ -461,6 +471,24 @@ function readLockedClass(source: Record<string, unknown>): { classId: ClassId | 
   return { classId: bestId, classXp: Math.max(0, Math.floor(bestXp)) }
 }
 
+function readSecondaryClass(source: Record<string, unknown>): {
+  secondaryClassId: ClassId | null
+  secondaryClassXp: number
+} {
+  const id = readClassId(source.secondaryClassId)
+  const xp = finite(source.secondaryClassXp)
+  return {
+    secondaryClassId: id,
+    secondaryClassXp: id != null && xp != null && xp >= 0 ? Math.floor(xp) : 0,
+  }
+}
+
+function readEchoes(value: unknown): number {
+  const n = finite(value)
+  if (n == null || n < 0) return 0
+  return Math.floor(n)
+}
+
 function fromLegacy(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
   if (isRecord(raw.skills)) return raw
@@ -659,6 +687,10 @@ function readCombat(value: unknown): CombatFight | null {
       ...(isRecord(value.signature) ? (value.signature as object) : {}),
       id: signatureId,
     },
+    secondarySignatureId:
+      typeof value.secondarySignatureId === 'string' && value.secondarySignatureId
+        ? value.secondarySignatureId
+        : null,
     kills: Math.max(0, Math.floor(finite(value.kills) ?? 0)),
     sessionMs: Math.max(0, finite(value.sessionMs) ?? 0),
     lootGained: Array.isArray(value.lootGained)

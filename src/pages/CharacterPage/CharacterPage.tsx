@@ -14,13 +14,16 @@ import { deriveAbilities } from '../../engine/abilities'
 import { type EquipmentSlot } from '../../engine/equipment'
 import { sourcesOf, type ItemLink } from '../../engine/itemIndex'
 import type { Inventory } from '../../engine/inventory'
+import { ECHO_XP_PCT } from '../../engine/config'
 import {
   componentCostForCast,
   effectiveCasterType,
   hasComponents,
+  knownSpellsForClasses,
   missingComponentName,
   slotsFor,
   spellFitsSlot,
+  spellOwnerClass,
   unlockSkillFor,
   unlockSkillLevel,
 } from '../../engine/spells'
@@ -45,6 +48,9 @@ export function CharacterPage({
   const skills = useGameStore((state) => state.skills)
   const classId = useGameStore((state) => state.classId)
   const classXp = useGameStore((state) => state.classXp)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
+  const secondaryClassXp = useGameStore((state) => state.secondaryClassXp)
+  const echoes = useGameStore((state) => state.echoes)
   const clericFocus = useGameStore((state) => state.clericFocus)
   const isInDungeonOrQuest = useGameStore((state) => state.isInDungeonOrQuest)
   const equipment = useGameStore((state) => state.equipment)
@@ -78,19 +84,36 @@ export function CharacterPage({
 
   const abilities = deriveAbilities(skills)
   const active = classId ? getClass(classId) : null
+  const secondary = secondaryClassId ? getClass(secondaryClassId) : null
   const activeLevel = levelForXp(classXp)
+  const secondaryLevel = secondaryClassId ? levelForXp(secondaryClassXp) : null
   const activeProgress = progressToNext(classXp)
   const classTier = tier(activeLevel)
   const detailItemId = (detailSlot ? equipment[detailSlot] : null) as ItemId | null
 
   const unlockSkillId = classId ? unlockSkillFor(classId) : null
   const unlockLevel = unlockSkillId ? levelForXp(skills[unlockSkillId]?.xp ?? 0) : 0
+  const secondaryUnlockId = secondaryClassId ? unlockSkillFor(secondaryClassId) : null
+  const secondaryUnlockLevel = secondaryUnlockId
+    ? levelForXp(skills[secondaryUnlockId]?.xp ?? 0)
+    : 0
   const casterType = classId ? effectiveCasterType(classId) : null
   const slotStructure = useMemo(
     () => (casterType ? slotsFor(casterType, classTier) : []),
     [casterType, classTier],
   )
-  const classSpells = classId ? spellsForClass(classId) : []
+  const classSpells = useMemo(() => {
+    if (!classId) return []
+    const primary = spellsForClass(classId)
+    if (!secondaryClassId) return primary
+    const secondarySpells = spellsForClass(secondaryClassId)
+    const seen = new Set(primary.map((spell) => spell.id))
+    return [...primary, ...secondarySpells.filter((spell) => !seen.has(spell.id))]
+  }, [classId, secondaryClassId])
+  const knownIds = useMemo(() => {
+    if (!classId) return new Set<string>()
+    return new Set(knownSpellsForClasses(classId, secondaryClassId, skills).map((spell) => spell.id))
+  }, [classId, secondaryClassId, skills])
   const loadout = classId ? spellLoadouts[classId] : undefined
 
   function openLink(link: ItemLink) {
@@ -153,7 +176,11 @@ export function CharacterPage({
         <h2 className="mb-1 text-2xl font-bold text-gold">{characterName}</h2>
         {active ? (
           <p className="text-sm text-sage">
-            {active.name} · Class Level {activeLevel} · Tier {classTier} ·{' '}
+            {active.name} · Class Level {activeLevel} · Tier {classTier}
+            {secondary && secondaryLevel != null
+              ? ` · ${secondary.name} Level ${secondaryLevel}`
+              : ''}
+            {echoes > 0 ? ` · Echo ${echoes} (+${echoes * ECHO_XP_PCT}% XP)` : ''} ·{' '}
             {activeProgress.capped
               ? `${activeProgress.xp} XP`
               : `${activeProgress.xp} / ${activeProgress.xpToNextLevel} XP`}
@@ -398,60 +425,75 @@ export function CharacterPage({
       {tab === 'spellbook' && (
         <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
           <h3 className="mb-3 font-bold text-gold">Spellbook</h3>
-          {!classId || !casterType ? (
+          {!classId || (casterType == null && classSpells.length === 0) ? (
             <p className="text-sm text-parchment/70">This class has no spells.</p>
           ) : (
             <>
               <p className="mb-4 text-sm text-sage">
                 Unlock skill: {unlockSkillId ? getSkill(unlockSkillId).name : '—'} level {unlockLevel}
+                {secondaryUnlockId
+                  ? ` · Secondary: ${getSkill(secondaryUnlockId).name} level ${secondaryUnlockLevel}`
+                  : ''}
               </p>
 
-              <h4 className="mb-2 font-semibold text-sage">Slot loadout</h4>
-              <ul className="mb-6 space-y-2">
-                {slotStructure.map((slot, index) => {
-                  const selected = loadout?.slots[index] ?? null
-                  const options = classSpells.filter(
-                    (spell) =>
-                      spellFitsSlot(spell, slot.level) && unlockLevel >= unlockSkillLevel(spell.level),
-                  )
-                  const warning = slotWarning(selected, slot.level)
-                  return (
-                    <li
-                      key={`${slot.level}-${index}`}
-                      className="flex flex-col gap-1 rounded-md bg-ink/40 px-3 py-2 text-sm"
-                    >
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="w-28 text-sage">
-                          {slot.level === 0 ? 'Cantrip' : `Slot ${slot.level}`}
-                        </span>
-                        <select
-                          value={selected ?? ''}
-                          onChange={(event) => {
-                            const value = event.target.value
-                            setSpellSlot(classId, index, value ? (value as SpellId) : null)
-                          }}
-                          className="min-w-[12rem] rounded-lg border border-brown/40 bg-ink/50 px-2 py-1 text-parchment"
+              {casterType && (
+                <>
+                  <h4 className="mb-2 font-semibold text-sage">Slot loadout</h4>
+                  <ul className="mb-6 space-y-2">
+                    {slotStructure.map((slot, index) => {
+                      const selected = loadout?.slots[index] ?? null
+                      const options = classSpells.filter(
+                        (spell) => spellFitsSlot(spell, slot.level) && knownIds.has(spell.id),
+                      )
+                      const owner = selected
+                        ? spellOwnerClass(selected, classId, secondaryClassId)
+                        : classId
+                      const warning = slotWarning(selected, slot.level)
+                      return (
+                        <li
+                          key={`${slot.level}-${index}`}
+                          className="flex flex-col gap-1 rounded-md bg-ink/40 px-3 py-2 text-sm"
                         >
-                          <option value="">Empty</option>
-                          {options.map((spell) => (
-                            <option key={spell.id} value={spell.id}>
-                              {spell.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {warning && <p className="text-xs text-crimson">{warning}</p>}
-                    </li>
-                  )
-                })}
-              </ul>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="w-28 text-sage">
+                              {slot.level === 0 ? 'Cantrip' : `Slot ${slot.level}`}
+                            </span>
+                            <select
+                              value={selected ?? ''}
+                              onChange={(event) => {
+                                const value = event.target.value
+                                setSpellSlot(classId, index, value ? (value as SpellId) : null)
+                              }}
+                              className="min-w-[12rem] rounded-lg border border-brown/40 bg-ink/50 px-2 py-1 text-parchment"
+                            >
+                              <option value="">Empty</option>
+                              {options.map((spell) => (
+                                <option key={spell.id} value={spell.id}>
+                                  {spell.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {warning && <p className="text-xs text-crimson">{warning}</p>}
+                          {selected && owner !== classId && (
+                            <p className="text-xs text-parchment/50">From {getClass(owner).name}</p>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
 
               <h4 className="mb-2 font-semibold text-sage">Known & locked</h4>
               <ul className="space-y-2 text-sm">
                 {classSpells.map((spell) => {
+                  const owner = spellOwnerClass(spell.id, classId, secondaryClassId)
+                  const ownerUnlock = unlockSkillFor(owner)
+                  const ownerLevel = ownerUnlock ? levelForXp(skills[ownerUnlock]?.xp ?? 0) : 0
                   const need = unlockSkillLevel(spell.level)
-                  const known = unlockLevel >= need
-                  const cost = componentCostForCast({ spell, classId })
+                  const known = ownerLevel >= need
+                  const cost = componentCostForCast({ spell, classId: owner })
                   return (
                     <li
                       key={spell.id}
@@ -464,7 +506,8 @@ export function CharacterPage({
                         <span>
                           {spell.name}{' '}
                           <span className="text-sage">
-                            (L{spell.level === 0 ? '0 cantrip' : spell.level})
+                            (L{spell.level === 0 ? '0 cantrip' : spell.level}
+                            {owner !== classId ? ` · ${getClass(owner).name}` : ''})
                           </span>
                         </span>
                         <span className={known ? 'text-sage' : 'text-parchment/50'}>

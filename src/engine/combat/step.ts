@@ -3,7 +3,8 @@ import { QUICKENED_INTERVAL_FACTOR } from '../config'
 import { emptyEquipment } from '../equipment'
 import { bestiaryBonus, tomeXpPct } from '../history'
 import { damageVsTypePct } from '../social'
-import { flurryDieSides, shouldFlurry, tryQuicken } from '../signatures'
+import { echoXpFraction } from '../multiclass'
+import { flurryDieSides, hasSignature, shouldFlurry, tryQuicken } from '../signatures'
 import { usesSpellLoop } from '../spells'
 import { levelForXp, tier } from '../xp'
 import { resolvePlayerAttack } from './attack'
@@ -52,7 +53,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   }
   let skills = input.skills
   let inventory = input.inventory
-  const vitalityXpExtra = tomeXpPct(input.tomes, 'vitality')
+  const vitalityXpExtra = tomeXpPct(input.tomes, 'vitality') + echoXpFraction(input.echoes ?? 0)
   const monsterBestiary = () =>
     monster ? bestiaryBonus(input.bestiaries, monster.creatureType) : 0
   const monsterIntel = () =>
@@ -61,6 +62,9 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   let favor = input.favor ?? 0
   let bounty = input.bounty ?? null
   let classXp = input.classXp
+  let secondaryClassXp = input.secondaryClassXp ?? 0
+  const echoes = input.echoes ?? 0
+  const secondaryActive = input.hasSecondary === true
   let remaining = input.elapsedMs
   const modifiers = input.modifiers ?? {}
   const equipment = input.equipment ?? emptyEquipment()
@@ -80,6 +84,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     ...result,
     favor,
     bounty,
+    secondaryClassXp,
     killsThisTick: fight.killsThisTick,
     dungeonCleared: fight.dungeonClearedThisTick,
   })
@@ -94,6 +99,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       inventory,
       gold,
       classXp,
+      secondaryClassXp,
       stop: true,
       lastLog: fight.log,
       kills: fight.kills,
@@ -113,6 +119,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       inventory,
       gold,
       classXp,
+      secondaryClassXp,
       stop: true,
       lastLog: fight.log,
       kills: fight.kills,
@@ -308,7 +315,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         inventory = attack.inventory
         classXp = attack.classXp
         skills = attack.skills
-        if (casting && fight.signature.id === 'metamagicPactMagic') {
+        if (casting && hasSignature(fight.signature.id, fight.secondarySignatureId, 'metamagicPactMagic')) {
           tryQuicken(fight.signature)
         }
         if (attack.stopped) {
@@ -332,6 +339,9 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             inventory,
             equipment,
             classXp,
+            secondaryClassXp,
+            echoes,
+            hasSecondary: secondaryActive,
             skills,
             rng: input.rng,
             trace,
@@ -347,6 +357,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
           })
           inventory = killed.inventory
           classXp = killed.classXp
+          secondaryClassXp = killed.secondaryClassXp
           skills = killed.skills
           bounty = killed.bounty
           favor = killed.favor
@@ -358,7 +369,11 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         }
 
         // Flurry of Blows every 3rd interval
-        if (!casting && fight.signature.id === 'flurryOfBlows' && shouldFlurry(fight.playerIntervalCount)) {
+        if (
+          !casting &&
+          hasSignature(fight.signature.id, fight.secondarySignatureId, 'flurryOfBlows') &&
+          shouldFlurry(fight.playerIntervalCount)
+        ) {
           const sides = flurryDieSides(classTier())
           const flurry = resolvePlayerAttack({
             fight,
@@ -399,6 +414,9 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               inventory,
               equipment,
               classXp,
+              secondaryClassXp,
+              echoes,
+              hasSecondary: secondaryActive,
               skills,
               rng: input.rng,
               trace,
@@ -414,6 +432,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             })
             inventory = killed.inventory
             classXp = killed.classXp
+            secondaryClassXp = killed.secondaryClassXp
             skills = killed.skills
             bounty = killed.bounty
             favor = killed.favor

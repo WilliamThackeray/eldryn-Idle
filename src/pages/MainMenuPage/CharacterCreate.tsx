@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Star, Shuffle } from 'lucide-react'
+import { Shuffle } from 'lucide-react'
+import { ClassCard } from '../../components/ClassCard'
 import { CLASSES, TRADITION_LABEL, type ClassId, type ClericFocus } from '../../data/classes'
 import { getItem } from '../../data/items'
-import type { AbilityAbbr } from '../../types/game'
 
 const NAMES = [
   'Aelindra',
@@ -95,62 +95,19 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
 
       {step === 2 && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {CLASSES.map((entry) => {
-            const selected = entry.id === classId
-            return (
-              <div
-                key={entry.id}
-                className={`rounded-lg border p-4 ${
-                  selected ? 'border-gold bg-ink/60' : 'border-brown/40 bg-panel'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setClassId(entry.id)}
-                  aria-pressed={selected}
-                  className="w-full text-left"
-                >
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <h2 className="text-lg font-bold text-gold">{entry.name}</h2>
-                    <Stars n={entry.difficulty} />
-                  </div>
-                  <p className="text-sm text-parchment">{entry.role}</p>
-                  <p className="mt-1 text-sm text-parchment/70">{entry.playstyle}</p>
-                  <p className="mt-2 text-sm text-sage">
-                    Hit Die 1d{entry.hitDie} · {formatModifiers(entry.xpModifiers, entry.id === 'cleric' ? focus : null)}
-                  </p>
-                  {entry.spellcasting.casterType !== 'none' && (
-                    <p className="mt-1 text-sm text-sage">
-                      Tradition: {TRADITION_LABEL[entry.spellcasting.tradition]}
-                    </p>
-                  )}
-                  <p className="mt-2 text-sm font-semibold">{entry.signatureAbility.name}</p>
-                  <p className="mt-1 text-xs text-parchment/70">{entry.signatureAbility.description}</p>
-                </button>
-                {entry.id === 'cleric' && (
-                  <div className="mt-3 flex gap-2">
-                    {(['INT', 'STR'] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => {
-                          setClassId('cleric')
-                          setFocus(option)
-                        }}
-                        className={`rounded px-2 py-1 text-xs ${
-                          focus === option && classId === 'cleric'
-                            ? 'bg-crimson text-parchment'
-                            : 'bg-brown/60 text-parchment/80'
-                        }`}
-                      >
-                        +10% {option}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          {CLASSES.map((entry) => (
+            <ClassCard
+              key={entry.id}
+              entry={entry}
+              selected={entry.id === classId}
+              onSelect={() => setClassId(entry.id)}
+              clericFocus={focus}
+              onClericFocus={(next) => {
+                setClassId('cleric')
+                setFocus(next)
+              }}
+            />
+          ))}
         </div>
       )}
 
@@ -201,7 +158,7 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
             type="button"
             disabled={step === 1 ? trimmed.length === 0 : !classId}
             onClick={() => setStep((current) => (current === 1 ? 2 : 3))}
-            className="rounded-lg bg-sage px-4 py-2 text-ink hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-sage px-3 py-2 text-ink hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>
@@ -218,26 +175,4 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
       </div>
     </div>
   )
-}
-
-function Stars({ n }: { n: 1 | 2 | 3 }) {
-  return (
-    <span className="flex" aria-label={`Difficulty ${n} of 3`}>
-      {[1, 2, 3].map((star) => (
-        <Star key={star} size={14} className={star <= n ? 'fill-gold text-gold' : 'text-parchment/30'} />
-      ))}
-    </span>
-  )
-}
-
-function formatModifiers(mods: Partial<Record<AbilityAbbr, number>>, focus: ClericFocus | null): string {
-  const parts = Object.entries(mods).map(([ability, value]) => formatPercent(ability, value ?? 0))
-  if (focus) parts.push(formatPercent(focus, 0.1))
-  return parts.join(' · ')
-}
-
-function formatPercent(ability: string, value: number): string {
-  const pct = Math.round(value * 100)
-  const sign = pct > 0 ? '+' : ''
-  return `${sign}${pct}% ${ability}`
 }

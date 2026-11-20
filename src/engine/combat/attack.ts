@@ -11,7 +11,7 @@ import { resolveRollMode, roll, rollD20, rollDamageParts } from '../dice'
 import { totalItemStats, type Equipment } from '../equipment'
 import { addItems, removeItems, type Inventory } from '../inventory'
 import type { Rng } from '../rng'
-import { getSignatureHooks, tryBardicInspiration } from '../signatures'
+import { forEachSignature, hasSignature, tryBardicInspiration } from '../signatures'
 import { spendLowestSlot, usesSpellLoop } from '../spells'
 import { levelForXp, proficiency, tier } from '../xp'
 import { applyHitMasteries } from './masteries'
@@ -134,7 +134,6 @@ export function resolvePlayerAttack(input: {
   const mode = resolveRollMode(advSources)
   const hasAdvantage = mode === 'advantage'
 
-  const hooks = getSignatureHooks(fight.signature.id)
   const sigCtx = {
     runtime: fight.signature,
     tier: classTier,
@@ -143,13 +142,15 @@ export function resolvePlayerAttack(input: {
     trace,
     log: (line: string) => pushLog(fight, line, trace),
   }
-  hooks.onBeforeAttack?.({ ...sigCtx, hasAdvantage, intervalIndex: fight.playerIntervalCount })
+  forEachSignature(fight.signature.id, fight.secondarySignatureId, (hooks) => {
+    hooks.onBeforeAttack?.({ ...sigCtx, hasAdvantage, intervalIndex: fight.playerIntervalCount })
+  })
 
   const bestiary = Math.max(0, Math.floor(input.bestiaryBonus ?? 0))
   const natural = rollD20(rng, mode)
   let total = natural + abilityBonus + prof + itemToHit + bestiary
   let bardicNote = ''
-  if (fight.signature.id === 'bardicInspiration') {
+  if (hasSignature(fight.signature.id, fight.secondarySignatureId, 'bardicInspiration')) {
     const result = tryBardicInspiration(
       fight.signature.bardicUses,
       natural,
@@ -216,7 +217,9 @@ export function resolvePlayerAttack(input: {
       return true
     },
   }
-  hooks.onHit?.(hitCtx)
+  forEachSignature(fight.signature.id, fight.secondarySignatureId, (hooks) => {
+    hooks.onHit?.(hitCtx)
+  })
   if (fight.concentration === 'divineFavor') {
     const favor = roll('1d6', rng)
     hitCtx.bonusDice += favor

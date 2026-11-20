@@ -221,3 +221,31 @@ export const NOTICE_BOARD_KILL_GOLD_PER = 8
 export const NOTICE_BOARD_FAVOR = 2
 export const NOTICE_BOARD_REROLL_FAVOR = 1
 export const LEGACY_QUEST_GOLD = 50
+
+/** Multiclass: Ability Rank required on each ability the target class boosts by ≥ MULTICLASS_XP_MOD_MIN. */
+export const MULTICLASS_RANK_REQ = 10
+export const MULTICLASS_XP_MOD_MIN = 0.15
+export const MAX_SECONDARY_CLASSES = 1
+/** Share of each combat XP gain granted to the secondary class (on top of primary's full XP). */
+export const MULTICLASS_XP_SHARE = 0.25
+/** Secondary signature unlocks at this secondary Class Level. */
+export const SECONDARY_SIGNATURE_LEVEL = 5
+
+/** Rebirth: permanent +ECHO_XP_PCT% all XP per Echo. Cost multiplies by REBIRTH_COST_MULT each rebirth. */
+export const ECHO_XP_PCT = 2
+export const REBIRTH_COST_MULT = 2
+
+/** Placeholder Shop costs. TODO(design): tune. */
+export const MULTICLASS_GOLD = 5000
+export const MULTICLASS_ITEMS = [
+  { itemId: 'warding-chalk' as const, quantity: 5 },
+  { itemId: 'troll-blood-tonic' as const, quantity: 3 },
+  { itemId: 'fireball-reagent' as const, quantity: 5 },
+]
+export const REBIRTH_GOLD = 10000
+export const REBIRTH_ITEMS = [
+  { itemId: 'warding-chalk' as const, quantity: 10 },
+  { itemId: 'troll-blood-tonic' as const, quantity: 5 },
+  { itemId: 'ghoul-ichor' as const, quantity: 10 },
+  { itemId: 'spider-silk' as const, quantity: 10 },
+]

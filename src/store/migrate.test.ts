@@ -34,10 +34,27 @@ test('a broken save resets to a fresh character', () => {
   expect(next.skills.vitality).toEqual({ xp: 0 })
   expect(next.classId).toBe('fighter')
   expect(next.classXp).toBe(0)
+  expect(next.secondaryClassId).toBeNull()
+  expect(next.secondaryClassXp).toBe(0)
+  expect(next.echoes).toBe(0)
+})
+
+test('v18 fields normalize secondary class and echoes', () => {
+  const next = normalizeSave({
+    characterName: 'ada',
+    classId: 'barbarian',
+    classXp: 100,
+    secondaryClassId: 'bard',
+    secondaryClassXp: 50,
+    echoes: 2,
+  })
+  expect(next.secondaryClassId).toBe('bard')
+  expect(next.secondaryClassXp).toBe(50)
+  expect(next.echoes).toBe(2)
 })
 
 test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(17)
+  expect(SAVE_VERSION).toBe(18)
 
   const next = migrateSave(
     {

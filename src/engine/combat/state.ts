@@ -26,8 +26,19 @@ import {
 import { intervalMs } from '../interval'
 import type { Inventory } from '../inventory'
 import type { Rng } from '../rng'
-import { emptySignatureRuntime, getSignatureHooks, type SignatureRuntime } from '../signatures'
-import { buildFightSlots, unlockSkillFor, usesSpellLoop, type SpellLoadout, type SpellSlot } from '../spells'
+import {
+  emptySignatureRuntime,
+  forEachSignature,
+  type SignatureRuntime,
+} from '../signatures'
+import { secondarySignatureUnlocked } from '../multiclass'
+import {
+  buildFightSlots,
+  unlockSkillFor,
+  usesSpellLoop,
+  type SpellLoadout,
+  type SpellSlot,
+} from '../spells'
 import { levelForXp, tier } from '../xp'
 
 export interface CombatLootGain {
@@ -57,6 +68,8 @@ export interface CombatFight {
   cleaveOverflow: number
   ammoSpent: number
   signature: SignatureRuntime
+  /** Secondary class signature id when unlocked (Class Level ≥ 5); null otherwise. */
+  secondarySignatureId: string | null
   kills: number
   sessionMs: number
   lootGained: CombatLootGain[]
@@ -257,6 +270,8 @@ export function createFight(input: {
   trace?: boolean
   spellLoadout?: SpellLoadout
   activeBuffs?: ActiveBuff[]
+  secondaryClassId?: ClassId | null
+  secondaryClassXp?: number
 }): CombatFight | null {
   const monster = getMonster(input.monsterId)
   if (!monster) return null
@@ -268,12 +283,20 @@ export function createFight(input: {
   const casting = usesSpellLoop(input.activeClassId)
   const playerInterval = computePlayerIntervalMs(input.skills, input.equipment, casting)
   const signature = emptySignatureRuntime(cls.signatureAbility.id)
+  const secondaryClassId = input.secondaryClassId ?? null
+  const secondaryClassXp = input.secondaryClassXp ?? 0
+  const secondarySignatureId =
+    secondaryClassId && secondarySignatureUnlocked(secondaryClassXp)
+      ? getClass(secondaryClassId).signatureAbility.id
+      : null
   const unlockSkill = unlockSkillFor(input.activeClassId)
   const spellSlots = buildFightSlots({
     classId: input.activeClassId,
     classTier,
     skillLevel: skillLevel(input.skills, unlockSkill),
     loadout: input.spellLoadout,
+    secondaryClassId,
+    skills: input.skills,
   })
   const frightenAttacksLeft = rollFrightenAttacks(input.activeBuffs, input.rng)
   const fight: CombatFight = {
@@ -297,6 +320,7 @@ export function createFight(input: {
     cleaveOverflow: 0,
     ammoSpent: 0,
     signature,
+    secondarySignatureId,
     kills: 0,
     sessionMs: 0,
     lootGained: [],
@@ -323,7 +347,6 @@ export function createFight(input: {
     dungeonClearedThisTick: null,
   }
 
-  const hooks = getSignatureHooks(signature.id)
   const ctxBase = {
     runtime: signature,
     tier: classTier,
@@ -332,8 +355,12 @@ export function createFight(input: {
     trace: input.trace ?? false,
     log: (line: string) => pushLog(fight, line, input.trace ?? false),
   }
-  hooks.onFightStart?.(ctxBase)
-  if (signature.id === 'huntersMark') signature.markedType = monster.creatureType
+  forEachSignature(signature.id, secondarySignatureId, (hooks) => {
+    hooks.onFightStart?.(ctxBase)
+  })
+  if (signature.id === 'huntersMark' || secondarySignatureId === 'huntersMark') {
+    signature.markedType = monster.creatureType
+  }
   if (frightenAttacksLeft > 0) {
     pushLog(fight, `Frighten: the enemy deals less damage for ${frightenAttacksLeft} attacks.`, input.trace ?? false)
   }
@@ -353,6 +380,8 @@ export function beginDungeonFight(input: {
   spellLoadout?: SpellLoadout
   questId?: string | null
   activeBuffs?: ActiveBuff[]
+  secondaryClassId?: ClassId | null
+  secondaryClassXp?: number
 }): CombatFight | null {
   const dungeon = getDungeon(input.dungeonId)
   if (!dungeon) return null
@@ -369,6 +398,8 @@ export function beginDungeonFight(input: {
     trace: input.trace,
     spellLoadout: input.spellLoadout,
     activeBuffs: input.activeBuffs,
+    secondaryClassId: input.secondaryClassId,
+    secondaryClassXp: input.secondaryClassXp,
   })
   if (!fight) return null
   fight.dungeonId = dungeon.id
@@ -391,6 +422,10 @@ export interface CombatAdvanceInput {
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
+  secondaryClassXp?: number
+  echoes?: number
+  /** True when a secondary class is active (earns MULTICLASS_XP_SHARE). */
+  hasSecondary?: boolean
   elapsedMs: number
   rng: Rng
   trace: boolean
@@ -412,6 +447,7 @@ export interface CombatAdvanceResult {
   inventory: Inventory
   gold: number
   classXp: number
+  secondaryClassXp?: number
   stop: boolean
   /** Last fight snapshot for log lines when the hunt ends. */
   lastLog: string[]

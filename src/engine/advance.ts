@@ -38,6 +38,7 @@ import {
   renownGain,
   type Bounty,
 } from './social'
+import { echoXpFraction } from './multiclass'
 import { addXp, applyXpModifiers, levelForXp } from './xp'
 
 export type { CombatAction, CombatFight } from './combat'
@@ -67,6 +68,9 @@ export interface AdvanceState {
   upgrades?: Record<string, number>
   classId?: ClassId | null
   classXp?: number
+  secondaryClassXp?: number
+  echoes?: number
+  hasSecondary?: boolean
   combat?: CombatFight | null
   /** Set when a hunt ends in defeat during this advance call. */
   lastDefeat?: boolean
@@ -405,7 +409,7 @@ export function advance(
       acting.baseXp * check.xpMultiplier,
       skill.ability,
       modifiers,
-      tomeXpPct(tomes, skill.id),
+      tomeXpPct(tomes, skill.id) + echoXpFraction(state.echoes ?? 0),
     )
     const beforeLevel = levelForXp(skills[skill.id].xp)
     skills = { ...skills, [skill.id]: { xp: addXp(skills[skill.id].xp, xp) } }
@@ -496,6 +500,9 @@ function advanceCombatAction(
     equipment: state.equipment ?? emptyEquipment(),
     activeClassId: classId,
     classXp,
+    secondaryClassXp: state.secondaryClassXp,
+    echoes: state.echoes,
+    hasSecondary: state.hasSecondary,
     elapsedMs,
     rng,
     trace,
@@ -538,6 +545,7 @@ function advanceCombatAction(
       favor: result.favor ?? state.favor,
       bounty: result.bounty !== undefined ? result.bounty : state.bounty,
       classXp: result.classXp,
+      secondaryClassXp: result.secondaryClassXp ?? state.secondaryClassXp,
       activeBuffs,
       activeAction: null,
       combat: null,
@@ -565,6 +573,7 @@ function advanceCombatAction(
     favor: result.favor ?? state.favor,
     bounty: result.bounty !== undefined ? result.bounty : state.bounty,
     classXp: result.classXp,
+    secondaryClassXp: result.secondaryClassXp ?? state.secondaryClassXp,
     combat: result.fight,
     activeBuffs,
     activeAction: {

@@ -19,7 +19,7 @@ import { rollGold, rollLoot } from '../loot'
 import type { Rng } from '../rng'
 import { longRest, shortRest } from '../rest'
 import { progressBounty, rareSpawnBuff, type Bounty } from '../social'
-import { addXp } from '../xp'
+import { applyCombatXp } from '../multiclass'
 import { mergeLoot, recoverAmmo } from './attack'
 import {
   type CombatFight,
@@ -60,7 +60,7 @@ export function spawnDungeonMonster(
   fight.nextAttackAdvantage = false
   fight.monsterNextDisadvantage = false
   fight.frightenAttacksLeft = rng ? rollFrightenAttacks(activeBuffs, rng) : 0
-  if (fight.signature.id === 'huntersMark') {
+  if (fight.signature.id === 'huntersMark' || fight.secondarySignatureId === 'huntersMark') {
     fight.signature.markedType = monster.creatureType
   }
 
@@ -109,6 +109,9 @@ export function advanceDungeonNodes(input: {
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
+  secondaryClassXp?: number
+  echoes?: number
+  hasSecondary?: boolean
   classTier: number
   chaMod: number
   rng: Rng
@@ -122,6 +125,7 @@ export function advanceDungeonNodes(input: {
 }): {
   inventory: Inventory
   classXp: number
+  secondaryClassXp: number
   skills: Record<SkillId, SkillProgress>
   stop: boolean
   questStepComplete: string | null
@@ -132,12 +136,25 @@ export function advanceDungeonNodes(input: {
   const { fight, equipment, rng, trace, casting } = input
   let inventory = input.inventory
   let classXp = input.classXp
+  let secondaryClassXp = input.secondaryClassXp ?? 0
+  const echoes = input.echoes ?? 0
+  const hasSecondary = input.hasSecondary === true
   let skills = input.skills
   let bounty = input.bounty ?? null
   let favor = input.favor ?? 0
   const dungeon = getDungeon(fight.dungeonId ?? '')
   if (!dungeon) {
-    return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
+    return {
+      inventory,
+      classXp,
+      secondaryClassXp,
+      skills,
+      stop: true,
+      questStepComplete: null,
+      monster: null,
+      bounty,
+      favor,
+    }
   }
   const order = buildRunOrder(dungeon)
   const restCtx = {
@@ -160,7 +177,9 @@ export function advanceDungeonNodes(input: {
     const gold = rollGold(monster.gold, rng, 1)
     fight.goldGained += gold
     fight.classXpGained += monster.xp
-    classXp = addXp(classXp, monster.xp)
+    const gained = applyCombatXp(classXp, secondaryClassXp, monster.xp, echoes, hasSecondary)
+    classXp = gained.classXp
+    secondaryClassXp = gained.secondaryClassXp
     fight.kills += 1
     pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
     const progressed = progressBounty(bounty, monster.id, inventory, favor, fight.goldGained, rng)
@@ -191,6 +210,7 @@ export function advanceDungeonNodes(input: {
       return {
         inventory,
         classXp,
+        secondaryClassXp,
         skills,
         stop: rested.stopped,
         questStepComplete: null,
@@ -207,6 +227,7 @@ export function advanceDungeonNodes(input: {
         return {
           inventory,
           classXp,
+          secondaryClassXp,
           skills,
           stop: true,
           questStepComplete: fight.questId,
@@ -219,7 +240,17 @@ export function advanceDungeonNodes(input: {
       inventory = entry.inventory
       if (!entry.ok) {
         pushLog(fight, 'No entry item for another loop. Returning to town.', trace)
-        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
+        return {
+          inventory,
+          classXp,
+          secondaryClassXp,
+          skills,
+          stop: true,
+          questStepComplete: null,
+          monster: null,
+          bounty,
+          favor,
+        }
       }
       const rested = longRest(fight, { ...restCtx, inventory, skills })
       inventory = rested.inventory
@@ -235,6 +266,7 @@ export function advanceDungeonNodes(input: {
       return {
         inventory,
         classXp,
+        secondaryClassXp,
         skills,
         stop: rested.stopped,
         questStepComplete: null,
@@ -260,7 +292,17 @@ export function advanceDungeonNodes(input: {
         if (fight.playerHp <= 0) {
           fight.defeated = true
           pushLog(fight, 'You fall. Returning to town.', trace)
-          return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
+          return {
+            inventory,
+            classXp,
+            secondaryClassXp,
+            skills,
+            stop: true,
+            questStepComplete: null,
+            monster: null,
+            bounty,
+            favor,
+          }
         }
       }
       fight.nodeIndex += 1
@@ -300,7 +342,17 @@ export function advanceDungeonNodes(input: {
     if (node.kind === 'monster' || node.kind === 'boss') {
       const nextMonster = getMonster(node.monsterId)
       if (!nextMonster) {
-        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
+        return {
+          inventory,
+          classXp,
+          secondaryClassXp,
+          skills,
+          stop: true,
+          questStepComplete: null,
+          monster: null,
+          bounty,
+          favor,
+        }
       }
       const spawned = spawnDungeonMonster(
         fight,
@@ -321,6 +373,7 @@ export function advanceDungeonNodes(input: {
       return {
         inventory,
         classXp,
+        secondaryClassXp,
         skills,
         stop: false,
         questStepComplete: null,
@@ -331,7 +384,17 @@ export function advanceDungeonNodes(input: {
     }
   }
 
-  return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
+  return {
+    inventory,
+    classXp,
+    secondaryClassXp,
+    skills,
+    stop: true,
+    questStepComplete: null,
+    monster: null,
+    bounty,
+    favor,
+  }
 }
 
 export function onKill(input: {
@@ -340,6 +403,9 @@ export function onKill(input: {
   inventory: Inventory
   equipment: Equipment
   classXp: number
+  secondaryClassXp?: number
+  echoes?: number
+  hasSecondary?: boolean
   skills: Record<SkillId, SkillProgress>
   rng: Rng
   trace: boolean
@@ -355,6 +421,7 @@ export function onKill(input: {
 }): {
   inventory: Inventory
   classXp: number
+  secondaryClassXp: number
   skills: Record<SkillId, SkillProgress>
   stop: boolean
   questStepComplete: string | null
@@ -368,6 +435,8 @@ export function onKill(input: {
   let skills = input.skills
   let bounty = input.bounty ?? null
   let favor = input.favor ?? 0
+  const hasSecondary = input.hasSecondary === true
+  const echoes = input.echoes ?? 0
 
   const loot = rollLoot(monster.lootTable, rng, 1)
   inventory = addItems(inventory, loot)
@@ -375,7 +444,15 @@ export function onKill(input: {
   const gold = rollGold(monster.gold, rng, 1)
   fight.goldGained += gold
   fight.classXpGained += monster.xp
-  const classXp = addXp(input.classXp, monster.xp)
+  const gained = applyCombatXp(
+    input.classXp,
+    input.secondaryClassXp ?? 0,
+    monster.xp,
+    echoes,
+    hasSecondary,
+  )
+  const classXp = gained.classXp
+  const secondaryClassXp = gained.secondaryClassXp
   fight.kills += 1
   fight.slowActive = false
   fight.pushDelayMs = 0
@@ -399,6 +476,7 @@ export function onKill(input: {
       return {
         inventory,
         classXp,
+        secondaryClassXp,
         skills,
         stop: true,
         questStepComplete: fight.questId,
@@ -430,6 +508,7 @@ export function onKill(input: {
     return {
       inventory,
       classXp,
+      secondaryClassXp,
       skills,
       stop: rested.stopped,
       questStepComplete: null,
@@ -450,6 +529,9 @@ export function onKill(input: {
     equipment,
     activeClassId: input.activeClassId,
     classXp,
+    secondaryClassXp,
+    echoes,
+    hasSecondary,
     classTier: input.classTier,
     chaMod: input.chaMod,
     rng,

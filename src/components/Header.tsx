@@ -38,6 +38,8 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
   const characterName = useGameStore((state) => state.characterName)
   const classId = useGameStore((state) => state.classId)
   const classXp = useGameStore((state) => state.classXp)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
+  const secondaryClassXp = useGameStore((state) => state.secondaryClassXp)
   const skills = useGameStore((state) => state.skills)
   const equipment = useGameStore((state) => state.equipment)
   const inventory = useGameStore((state) => state.inventory)
@@ -77,7 +79,11 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
     : 'Idle'
   const tipHost = typeof document !== 'undefined' ? document.getElementById('tooltip-root') : null
   const classLevel = classId ? levelForXp(classXp) : null
-  const classLabel = classId ? `${getClass(classId).name} ${classLevel}` : 'No class'
+  const secondaryLabel =
+    secondaryClassId != null
+      ? ` / ${getClass(secondaryClassId).name} ${levelForXp(secondaryClassXp)}`
+      : ''
+  const classLabel = classId ? `${getClass(classId).name} ${classLevel}${secondaryLabel}` : 'No class'
   const summary = `${characterName} · ${classLabel}`
   const abilityTip = deriveAbilities(skills)
     .map((ability) => `${ability.abbr} ${ability.score} (R${ability.rank})`)

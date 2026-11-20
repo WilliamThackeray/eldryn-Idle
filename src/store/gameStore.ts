@@ -10,6 +10,10 @@ import {
   buyUpgrade as buyShopUpgrade,
   shopDiscountFromUpgrades,
 } from '../data/shop'
+import {
+  buyMulticlass as applyBuyMulticlass,
+  rebirth as applyRebirth,
+} from '../engine/multiclass'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
 import { beginDungeonFight, createFight } from '../engine/combat'
 import { maybeRareSwap } from '../engine/combat/dungeonRun'
@@ -99,6 +103,8 @@ interface GameStore extends SaveData {
   sellItem: (itemId: ItemId, quantity?: number) => void
   buyGood: (itemId: ItemId) => void
   buyUpgrade: (upgradeId: string) => void
+  buyMulticlass: (targetClassId: ClassId) => void
+  rebirth: (newClassId: ClassId, clericFocus?: ClericFocus) => void
   equipItem: (itemId: ItemId) => void
   unequipSlot: (slot: EquipmentSlot) => void
   saveEquipmentSet: (name: string) => void
@@ -211,6 +217,8 @@ export const useGameStore = create<GameStore>()(
             trace: true,
             spellLoadout: state.spellLoadouts[state.classId],
             activeBuffs: state.activeBuffs,
+            secondaryClassId: state.secondaryClassId,
+            secondaryClassXp: state.secondaryClassXp,
           })
           if (!fight) return state
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
@@ -250,6 +258,8 @@ export const useGameStore = create<GameStore>()(
             spellLoadout: state.spellLoadouts[state.classId],
             questId: null,
             activeBuffs: state.activeBuffs,
+            secondaryClassId: state.secondaryClassId,
+            secondaryClassXp: state.secondaryClassXp,
           })
           if (!fight) return state
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
@@ -295,6 +305,9 @@ export const useGameStore = create<GameStore>()(
               upgrades: state.upgrades,
               classId: state.classId,
               classXp: state.classXp,
+              secondaryClassXp: state.secondaryClassXp,
+              echoes: state.echoes,
+              hasSecondary: state.secondaryClassId != null,
               combat: state.combat,
               questProgress: state.questProgress,
               noticeBoard: state.noticeBoard,
@@ -328,6 +341,7 @@ export const useGameStore = create<GameStore>()(
             bounty: result.state.bounty !== undefined ? result.state.bounty : state.bounty,
             activeAction: result.state.activeAction,
             classXp: result.state.classXp ?? state.classXp,
+            secondaryClassXp: result.state.secondaryClassXp ?? state.secondaryClassXp,
             combat: result.state.combat ?? null,
             questProgress: result.state.questProgress ?? state.questProgress,
             noticeBoard,
@@ -457,6 +471,34 @@ export const useGameStore = create<GameStore>()(
             favor: bought.favor,
             upgrades: bought.upgrades,
             inventoryTabs,
+          }
+        }),
+      buyMulticlass: (targetClassId) =>
+        set((state) => {
+          const discount = shopDiscountTotal(activePerks(state), state.upgrades, shopDiscountFromUpgrades)
+          const next = applyBuyMulticlass(state, targetClassId, discount)
+          if (next === state) return state
+          return {
+            ...withPlacedInventory(state, next.inventory),
+            gold: next.gold,
+            secondaryClassId: next.secondaryClassId,
+            secondaryClassXp: next.secondaryClassXp,
+          }
+        }),
+      rebirth: (newClassId, clericFocus = 'INT') =>
+        set((state) => {
+          const discount = shopDiscountTotal(activePerks(state), state.upgrades, shopDiscountFromUpgrades)
+          const next = applyRebirth(state, newClassId, clericFocus, discount)
+          if (next === state) return state
+          return {
+            ...withPlacedInventory(state, next.inventory),
+            gold: next.gold,
+            classId: next.classId,
+            classXp: next.classXp,
+            secondaryClassId: next.secondaryClassId,
+            secondaryClassXp: next.secondaryClassXp,
+            echoes: next.echoes,
+            clericFocus: next.clericFocus,
           }
         }),
       equipItem: (itemId) =>
@@ -706,6 +748,9 @@ export const useGameStore = create<GameStore>()(
         activeAction: state.activeAction,
         classId: state.classId,
         classXp: state.classXp,
+        secondaryClassId: state.secondaryClassId,
+        secondaryClassXp: state.secondaryClassXp,
+        echoes: state.echoes,
         clericFocus: state.clericFocus,
         isInDungeonOrQuest: state.isInDungeonOrQuest,
         equipment: state.equipment ?? emptyEquipment(),

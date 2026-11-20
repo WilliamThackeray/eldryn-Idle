@@ -16,6 +16,7 @@ import {
   type SpellSlotModel,
 } from './config'
 import { hasItems, type Inventory } from './inventory'
+import { levelForXp } from './xp'
 
 export type { SpellSlotModel, CastingAbilitySource }
 
@@ -234,6 +235,36 @@ export function knownSpells(classId: ClassId, skillLevel: number): SpellDef[] {
   return spellsForClass(classId).filter((spell) => isSpellUnlocked(spell, skillLevel))
 }
 
+/** Union of known spells for primary and optional secondary caster. */
+export function knownSpellsForClasses(
+  primaryClassId: ClassId,
+  secondaryClassId: ClassId | null | undefined,
+  skills: Record<SkillId, { xp: number }>,
+): SpellDef[] {
+  const out = new Map<string, SpellDef>()
+  for (const classId of [primaryClassId, secondaryClassId].filter(Boolean) as ClassId[]) {
+    const unlock = unlockSkillFor(classId)
+    const level = unlock ? levelForXp(skills[unlock]?.xp ?? 0) : 0
+    for (const spell of knownSpells(classId, level)) {
+      out.set(spell.id, spell)
+    }
+  }
+  return [...out.values()]
+}
+
+/** Class that owns the spell for component costs. Primary wins when both have it. */
+export function spellOwnerClass(
+  spellId: SpellId,
+  primaryClassId: ClassId,
+  secondaryClassId: ClassId | null | undefined,
+): ClassId {
+  if (spellsForClass(primaryClassId).some((spell) => spell.id === spellId)) return primaryClassId
+  if (secondaryClassId && spellsForClass(secondaryClassId).some((spell) => spell.id === spellId)) {
+    return secondaryClassId
+  }
+  return primaryClassId
+}
+
 export function spellFitsSlot(spell: SpellDef, slotLevel: number): boolean {
   if (slotLevel === 0) return spell.level === 0
   return spell.level > 0 && spell.level <= slotLevel
@@ -287,12 +318,18 @@ export function buildFightSlots(input: {
   classTier: number
   skillLevel: number
   loadout: SpellLoadout | undefined
+  secondaryClassId?: ClassId | null
+  skills?: Record<SkillId, { xp: number }>
 }): SpellSlot[] {
   const casterType = effectiveCasterType(input.classId)
   if (casterType == null) return []
 
   const structure = slotsFor(casterType, input.classTier)
-  const known = new Set(knownSpells(input.classId, input.skillLevel).map((s) => s.id))
+  const knownList =
+    input.skills != null
+      ? knownSpellsForClasses(input.classId, input.secondaryClassId, input.skills)
+      : knownSpells(input.classId, input.skillLevel)
+  const known = new Set(knownList.map((s) => s.id))
   const prepared = input.loadout?.slots ?? []
 
   return structure.map((slot, index) => {
@@ -300,7 +337,7 @@ export function buildFightSlots(input: {
     if (id == null || !known.has(id)) {
       // Default cantrip slot to the first known cantrip.
       if (slot.level === 0) {
-        const cantrip = knownSpells(input.classId, input.skillLevel).find((s) => s.level === 0)
+        const cantrip = knownList.find((s) => s.level === 0)
         return { level: 0, spellId: (cantrip?.id as SpellId | undefined) ?? null, spent: false }
       }
       return { level: slot.level, spellId: null, spent: false }

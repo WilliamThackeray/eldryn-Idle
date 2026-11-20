@@ -7,7 +7,7 @@ import { levelForXp } from '../engine/xp'
 import type { ItemStack } from './activities/types'
 import type { SkillProgress } from '../types/game'
 
-export type ShopSection = 'general' | SkillId | 'combat'
+export type ShopSection = 'general' | SkillId | 'combat' | 'class'
 
 export type UpgradeEffect =
   | { kind: 'inventoryTabs' }

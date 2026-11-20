@@ -8,7 +8,7 @@ import { roll } from './dice'
 import type { Equipment } from './equipment'
 import type { Inventory } from './inventory'
 import type { Rng } from './rng'
-import { emptySignatureRuntime, getSignatureHooks } from './signatures'
+import { emptySignatureRuntime, forEachSignature, hasSignature } from './signatures'
 import { applyShortRest, refreshSlotsOnLongRest } from './spells'
 import { eatOneFood, equippedFoodCount } from './combat/food'
 import type { CombatFight } from './combat'
@@ -94,32 +94,35 @@ function rechargeShortRest(fight: CombatFight, ctx: RestContext): void {
 }
 
 function rechargeLongRest(fight: CombatFight, ctx: RestContext): void {
-  const hooks = getSignatureHooks(fight.signature.id)
   const runtime = emptySignatureRuntime(fight.signature.id)
   fight.signature = runtime
   fight.spellSlots = refreshSlotsOnLongRest(fight.spellSlots)
   fight.rotationIndex = 0
   fight.concentration = null
   fight.shieldBonus = 0
-  hooks.onFightStart?.({
+  const ctxBase = {
     runtime,
     tier: ctx.classTier,
-    abilityMod: (abbr) => (abbr === 'CHA' ? ctx.chaMod : 0),
+    abilityMod: (abbr: 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA') =>
+      abbr === 'CHA' ? ctx.chaMod : 0,
     rng: () => 0,
     trace: false,
     log: () => undefined,
+  }
+  forEachSignature(runtime.id, fight.secondarySignatureId, (hooks) => {
+    hooks.onFightStart?.(ctxBase)
   })
-  if (runtime.id === 'huntersMark') {
+  if (hasSignature(runtime.id, fight.secondarySignatureId, 'huntersMark')) {
     const monster = getMonster(fight.monsterId)
     runtime.markedType = monster?.creatureType ?? null
   }
-  if (runtime.id === 'bardicInspiration') {
+  if (hasSignature(runtime.id, fight.secondarySignatureId, 'bardicInspiration')) {
     runtime.bardicUses = Math.max(1, ctx.chaMod)
   }
-  if (runtime.id === 'rage') {
+  if (hasSignature(runtime.id, fight.secondarySignatureId, 'rage')) {
     runtime.rageUses = 2 + Math.floor((ctx.classTier - 1) / 4)
   }
-  if (runtime.id === 'metamagicPactMagic') {
+  if (hasSignature(runtime.id, fight.secondarySignatureId, 'metamagicPactMagic')) {
     runtime.sorceryPoints = ctx.classTier
   }
 }
