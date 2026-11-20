@@ -15,6 +15,7 @@ export type ItemLink =
   | { kind: 'quest'; questId: string; label: string }
   | { kind: 'shop'; itemId: ItemId; label: string }
   | { kind: 'spell'; spellId: string; label: string }
+  | { kind: 'combat'; label: string }
 
 interface ItemIndex {
   sources: Map<ItemId, ItemLink[]>
@@ -63,10 +64,13 @@ function buildIndex(): ItemIndex {
   for (const dungeon of DUNGEONS) {
     const link: ItemLink = { kind: 'dungeon', dungeonId: dungeon.id, label: dungeon.name }
     for (const entry of dungeon.chest) push(sources, entry.itemId, link)
-    if (dungeon.entryItemId) push(uses, dungeon.entryItemId, link)
+    if (dungeon.entry) push(uses, dungeon.entry.itemId, link)
     for (const room of dungeon.rooms ?? []) {
       if (room.kind === 'secret') {
         for (const entry of room.lootTable) push(sources, entry.itemId, link)
+      }
+      if (room.kind === 'trap' || room.kind === 'secret') {
+        push(uses, 'inspiration', link)
       }
     }
   }
@@ -86,6 +90,24 @@ function buildIndex(): ItemIndex {
       label: 'Shop',
     })
   }
+
+  push(uses, 'trade-contract', { kind: 'shop', itemId: 'trade-contract', label: 'Sell prices' })
+  push(uses, 'disguise-kit', {
+    kind: 'activity',
+    skillId: 'stealth',
+    activityId: 'merchant-warehouse',
+    label: 'Merchant Warehouse',
+  })
+  push(uses, 'disguise-kit', {
+    kind: 'activity',
+    skillId: 'sleightOfHand',
+    activityId: 'trap-small',
+    label: 'Trap Small Animals',
+  })
+  push(uses, 'bounty-contract', { kind: 'combat', label: 'Bounties' })
+  push(uses, 'menace-trophy', { kind: 'combat', label: 'Frighten' })
+  push(uses, 'rumor', { kind: 'combat', label: 'Rare spawns' })
+  push(uses, 'intel', { kind: 'combat', label: 'Damage by creature type' })
 
   for (const spell of SPELLS) {
     const link: ItemLink = { kind: 'spell', spellId: spell.id, label: spell.name }

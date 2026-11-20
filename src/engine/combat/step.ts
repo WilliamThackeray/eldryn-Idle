@@ -2,6 +2,7 @@ import { getMonster } from '../../data/monsters'
 import { QUICKENED_INTERVAL_FACTOR } from '../config'
 import { emptyEquipment } from '../equipment'
 import { bestiaryBonus, tomeXpPct } from '../history'
+import { damageVsTypePct } from '../social'
 import { flurryDieSides, shouldFlurry, tryQuicken } from '../signatures'
 import { usesSpellLoop } from '../spells'
 import { levelForXp, tier } from '../xp'
@@ -52,7 +53,11 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   const vitalityXpExtra = tomeXpPct(input.tomes, 'vitality')
   const monsterBestiary = () =>
     monster ? bestiaryBonus(input.bestiaries, monster.creatureType) : 0
+  const monsterIntel = () =>
+    monster ? damageVsTypePct(input.activeBuffs, monster.creatureType) : 0
   let gold = input.gold
+  let favor = input.favor ?? 0
+  let bounty = input.bounty ?? null
   let classXp = input.classXp
   let remaining = input.elapsedMs
   const modifiers = input.modifiers ?? {}
@@ -69,11 +74,17 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     }
   }
 
+  const withSocial = <T extends CombatAdvanceResult>(result: T): T => ({
+    ...result,
+    favor,
+    bounty,
+  })
+
   const finishDefeat = (): CombatAdvanceResult => {
     inventory = recoverAmmo(inventory, equipment, fight.ammoSpent)
     fight.ammoSpent = 0
     flushGold()
-    return {
+    return withSocial({
       fight: null,
       skills,
       inventory,
@@ -85,14 +96,14 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       defeated: fight.defeated,
       leftDungeonOrQuest: fight.dungeonId != null || fight.questId != null,
       questStepComplete: null,
-    }
+    })
   }
 
   const finishStop = (questId: string | null = null): CombatAdvanceResult => {
     inventory = recoverAmmo(inventory, equipment, fight.ammoSpent)
     fight.ammoSpent = 0
     flushGold()
-    return {
+    return withSocial({
       fight: null,
       skills,
       inventory,
@@ -104,7 +115,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       defeated: false,
       leftDungeonOrQuest: true,
       questStepComplete: questId,
-    }
+    })
   }
 
   while (remaining > 0 && !fight.defeated && !fight.outOfAmmo) {
@@ -125,12 +136,17 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         casting,
         modifiers,
         stopWhenOutOfFood: input.stopWhenOutOfFood,
+        bounty,
+        favor,
+        activeBuffs: input.activeBuffs,
       })
       remaining = rested.remaining
       monster = rested.monster
       inventory = rested.inventory
       classXp = rested.classXp
       skills = rested.skills
+      bounty = rested.bounty
+      favor = rested.favor
       if (rested.flush) flushGold()
       if (rested.action === 'break') break
       if (rested.action === 'stop') return finishStop(rested.questStepComplete)
@@ -159,14 +175,30 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         casting,
         stopWhenOutOfFood: input.stopWhenOutOfFood,
         bestiaryBonus: monsterBestiary(),
+        intelDamagePct: monsterIntel(),
+        bounty,
+        favor,
+        activeBuffs: input.activeBuffs,
       })
       inventory = opened.inventory
       classXp = opened.classXp
       skills = opened.skills
       monster = opened.monster
+      bounty = opened.bounty
+      favor = opened.favor
       if (opened.action === 'ammo') {
         flushGold()
-        return { fight: null, skills, inventory, gold, classXp, stop: true, lastLog: fight.log, kills: fight.kills, defeated: fight.defeated }
+        return withSocial({
+          fight: null,
+          skills,
+          inventory,
+          gold,
+          classXp,
+          stop: true,
+          lastLog: fight.log,
+          kills: fight.kills,
+          defeated: fight.defeated,
+        })
       }
       if (opened.action === 'quest') {
         flushGold()
@@ -253,6 +285,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               rng: input.rng,
               trace,
               bestiaryBonus: monsterBestiary(),
+              intelDamagePct: monsterIntel(),
             })
           : resolvePlayerAttack({
               fight,
@@ -266,6 +299,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               trace,
               labelPrefix: `Int${fight.playerIntervalCount}: `,
               bestiaryBonus: monsterBestiary(),
+              intelDamagePct: monsterIntel(),
             })
         inventory = attack.inventory
         classXp = attack.classXp
@@ -275,7 +309,17 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         }
         if (attack.stopped) {
           flushGold()
-          return { fight: null, skills, inventory, gold, classXp, stop: true, lastLog: fight.log, kills: fight.kills, defeated: fight.defeated }
+          return withSocial({
+            fight: null,
+            skills,
+            inventory,
+            gold,
+            classXp,
+            stop: true,
+            lastLog: fight.log,
+            kills: fight.kills,
+            defeated: fight.defeated,
+          })
         }
         if (attack.killed) {
           const killed = onKill({
@@ -293,10 +337,15 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             activeClassId: input.activeClassId,
             casting,
             stopWhenOutOfFood: input.stopWhenOutOfFood,
+            bounty,
+            favor,
+            activeBuffs: input.activeBuffs,
           })
           inventory = killed.inventory
           classXp = killed.classXp
           skills = killed.skills
+          bounty = killed.bounty
+          favor = killed.favor
           if (killed.monster) monster = killed.monster
           flushGold()
           if (killed.stop) return finishStop(killed.questStepComplete)
@@ -320,13 +369,24 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             labelPrefix: 'Flurry: ',
             unarmedOverride: { dice: `1d${sides}`, damageType: 'bludgeoning', mastery: null },
             bestiaryBonus: monsterBestiary(),
+            intelDamagePct: monsterIntel(),
           })
           inventory = flurry.inventory
           classXp = flurry.classXp
           skills = flurry.skills
           if (flurry.stopped) {
             flushGold()
-            return { fight: null, skills, inventory, gold, classXp, stop: true, lastLog: fight.log, kills: fight.kills, defeated: fight.defeated }
+            return withSocial({
+              fight: null,
+              skills,
+              inventory,
+              gold,
+              classXp,
+              stop: true,
+              lastLog: fight.log,
+              kills: fight.kills,
+              defeated: fight.defeated,
+            })
           }
           if (flurry.killed) {
             const killed = onKill({
@@ -344,10 +404,15 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               activeClassId: input.activeClassId,
               casting,
               stopWhenOutOfFood: input.stopWhenOutOfFood,
+              bounty,
+              favor,
+              activeBuffs: input.activeBuffs,
             })
             inventory = killed.inventory
             classXp = killed.classXp
             skills = killed.skills
+            bounty = killed.bounty
+            favor = killed.favor
             if (killed.monster) monster = killed.monster
             flushGold()
             if (killed.stop) return finishStop(killed.questStepComplete)
@@ -378,7 +443,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
 
   flushGold()
   if (fight.defeated || fight.outOfAmmo) {
-    return {
+    return withSocial({
       fight: null,
       skills,
       inventory,
@@ -389,9 +454,9 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       kills: fight.kills,
       defeated: fight.defeated,
       leftDungeonOrQuest: fight.dungeonId != null || fight.questId != null,
-    }
+    })
   }
-  return {
+  return withSocial({
     fight,
     skills,
     inventory,
@@ -401,5 +466,5 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     lastLog: fight.log,
     kills: fight.kills,
     defeated: fight.defeated,
-  }
+  })
 }

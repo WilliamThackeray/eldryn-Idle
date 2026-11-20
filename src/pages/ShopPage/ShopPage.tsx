@@ -4,11 +4,14 @@ import { getItem, type ItemId } from '../../data/items'
 import {
   GENERAL_GOODS,
   goodPrice,
+  shopDiscountFromUpgrades,
   upgradesForSection,
   type ShopSection,
   type ShopUpgrade,
 } from '../../data/shop'
 import { SKILLS, type SkillId } from '../../data/skills'
+import { activePerks } from '../../engine/abilities'
+import { shopDiscountTotal, shopGoldCost } from '../../engine/social'
 import { levelForXp } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
 
@@ -20,6 +23,7 @@ const SECTIONS: { id: ShopSection; label: string }[] = [
 
 export function ShopPage() {
   const gold = useGameStore((state) => state.gold)
+  const favor = useGameStore((state) => state.favor)
   const inventory = useGameStore((state) => state.inventory)
   const upgrades = useGameStore((state) => state.upgrades)
   const skills = useGameStore((state) => state.skills)
@@ -28,6 +32,7 @@ export function ShopPage() {
   const [section, setSection] = useState<ShopSection>('general')
 
   const sectionUpgrades = useMemo(() => upgradesForSection(section), [section])
+  const discount = shopDiscountTotal(activePerks({ skills }), upgrades, shopDiscountFromUpgrades)
 
   return (
     <div className="grid grid-cols-1 gap-6 text-parchment lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -54,7 +59,7 @@ export function ShopPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {GENERAL_GOODS.map((listing) => {
                 const def = getItem(listing.itemId)
-                const price = goodPrice(listing.itemId)
+                const price = goodPrice(listing.itemId, discount)
                 if (!def || price == null) return null
                 const affordable = gold >= price
                 return (
@@ -91,6 +96,8 @@ export function ShopPage() {
                   key={upgrade.id}
                   upgrade={upgrade}
                   gold={gold}
+                  favor={favor}
+                  discount={discount}
                   inventory={inventory}
                   ownedTier={upgrades[upgrade.id]}
                   skills={skills}
@@ -108,6 +115,8 @@ export function ShopPage() {
 function UpgradeCard({
   upgrade,
   gold,
+  favor,
+  discount,
   inventory,
   ownedTier,
   skills,
@@ -115,6 +124,8 @@ function UpgradeCard({
 }: {
   upgrade: ShopUpgrade
   gold: number
+  favor: number
+  discount: number
   inventory: Partial<Record<ItemId, number>>
   ownedTier: number | undefined
   skills: Record<SkillId, { xp: number }>
@@ -126,14 +137,16 @@ function UpgradeCard({
   const total = upgrade.tiers.length
   const maxed = next == null
   const soon = next?.effect.kind === 'soon'
-  const favorLocked = next?.cost.favor != null
   const requires = next?.requires
   const skillOk =
     !requires || levelForXp(skills[requires.skillId]?.xp ?? 0) >= requires.level
   const items = next?.cost.items ?? []
   const hasItems = items.every((stack) => (inventory[stack.itemId] ?? 0) >= stack.quantity)
-  const affordable = next != null && gold >= next.cost.gold && hasItems && skillOk
-  const disabled = maxed || soon || favorLocked || !affordable
+  const goldCost = next ? shopGoldCost(next.cost.gold, discount) : 0
+  const favorCost = next?.cost.favor ?? 0
+  const affordable =
+    next != null && gold >= goldCost && favor >= favorCost && hasItems && skillOk
+  const disabled = maxed || soon || !affordable
 
   return (
     <article className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-4">
@@ -145,11 +158,13 @@ function UpgradeCard({
       </div>
       <p className="text-sm text-parchment/80">{upgrade.description}</p>
       {soon && <p className="text-sm text-parchment/60">Coming soon</p>}
-      {favorLocked && <p className="text-sm text-parchment/60">Requires Guild Favor (locked)</p>}
       {maxed && !soon && <p className="text-sm text-sage">Maxed</p>}
-      {next && !soon && !favorLocked && (
+      {next && !soon && (
         <div className="space-y-1 text-sm">
-          <p className="text-sage">{next.cost.gold} gp</p>
+          <p className={gold >= goldCost ? 'text-sage' : 'text-red-300'}>{goldCost} gp</p>
+          {favorCost > 0 && (
+            <p className={favor >= favorCost ? 'text-sage' : 'text-red-300'}>{favorCost} Favor</p>
+          )}
           {items.map((stack) => {
             const def = getItem(stack.itemId)
             const have = inventory[stack.itemId] ?? 0

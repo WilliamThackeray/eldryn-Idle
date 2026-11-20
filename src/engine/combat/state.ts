@@ -6,7 +6,15 @@ import type { BuffEffectId } from '../../data/spells'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
 import { activePerks, deriveAbilities, effectTotal, hasPerkEffect } from '../abilities'
-import { COMBAT_LOG_LIMIT, MONSTER_INTERVAL_SEC, SLOW_INTERVAL_FACTOR, SPELL_INTERVAL_SEC } from '../config'
+import {
+  COMBAT_LOG_LIMIT,
+  FRIGHTEN_ATTACKS,
+  MONSTER_INTERVAL_SEC,
+  SLOW_INTERVAL_FACTOR,
+  SPELL_INTERVAL_SEC,
+} from '../config'
+import type { ActiveBuff } from '../history'
+import { frightenChance } from '../social'
 import { rollD20, type RollMode } from '../dice'
 import {
   armorClass,
@@ -76,6 +84,8 @@ export interface CombatFight {
   pendingCleave: number
   /** CON Rank 20: survive at 1 HP once per fight. */
   relentlessUsed: boolean
+  /** Menace Trophy: remaining Frighten attacks at −25% damage. */
+  frightenAttacksLeft: number
 }
 
 export interface CombatAction {
@@ -226,6 +236,12 @@ export function computeMonsterIntervalMs(monster: MonsterDef, slowActive: boolea
   return slowActive ? base * SLOW_INTERVAL_FACTOR : base
 }
 
+export function rollFrightenAttacks(buffs: ActiveBuff[] | undefined, rng: Rng): number {
+  const chance = frightenChance(buffs)
+  if (!(chance > 0) || rng() >= chance) return 0
+  return FRIGHTEN_ATTACKS
+}
+
 export function createFight(input: {
   monsterId: string
   biome: BiomeId
@@ -236,6 +252,7 @@ export function createFight(input: {
   rng: Rng
   trace?: boolean
   spellLoadout?: SpellLoadout
+  activeBuffs?: ActiveBuff[]
 }): CombatFight | null {
   const monster = getMonster(input.monsterId)
   if (!monster) return null
@@ -254,6 +271,7 @@ export function createFight(input: {
     skillLevel: skillLevel(input.skills, unlockSkill),
     loadout: input.spellLoadout,
   })
+  const frightenAttacksLeft = rollFrightenAttacks(input.activeBuffs, input.rng)
   const fight: CombatFight = {
     monsterId: monster.id,
     biome: input.biome,
@@ -296,6 +314,7 @@ export function createFight(input: {
     questId: null,
     pendingCleave: 0,
     relentlessUsed: false,
+    frightenAttacksLeft,
   }
 
   const hooks = getSignatureHooks(signature.id)
@@ -309,6 +328,9 @@ export function createFight(input: {
   }
   hooks.onFightStart?.(ctxBase)
   if (signature.id === 'huntersMark') signature.markedType = monster.creatureType
+  if (frightenAttacksLeft > 0) {
+    pushLog(fight, `Frighten: the enemy deals less damage for ${frightenAttacksLeft} attacks.`, input.trace ?? false)
+  }
 
   return fight
 }
@@ -324,6 +346,7 @@ export function beginDungeonFight(input: {
   trace?: boolean
   spellLoadout?: SpellLoadout
   questId?: string | null
+  activeBuffs?: ActiveBuff[]
 }): CombatFight | null {
   const dungeon = getDungeon(input.dungeonId)
   if (!dungeon) return null
@@ -339,6 +362,7 @@ export function beginDungeonFight(input: {
     rng: input.rng,
     trace: input.trace,
     spellLoadout: input.spellLoadout,
+    activeBuffs: input.activeBuffs,
   })
   if (!fight) return null
   fight.dungeonId = dungeon.id
@@ -356,6 +380,8 @@ export interface CombatAdvanceInput {
   skills: Record<SkillId, SkillProgress>
   inventory: Inventory
   gold: number
+  favor?: number
+  bounty?: import('../social').Bounty | null
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
@@ -369,9 +395,12 @@ export interface CombatAdvanceInput {
   bestiaries?: Partial<Record<import('../../data/monsters/types').CreatureType, number>>
   /** History tome volumes; Vitality XP uses the vitality entry. */
   tomes?: Partial<Record<SkillId, number>>
+  activeBuffs?: ActiveBuff[]
 }
 
 export interface CombatAdvanceResult {
+  favor?: number
+  bounty?: import('../social').Bounty | null
   fight: CombatFight | null
   skills: Record<SkillId, SkillProgress>
   inventory: Inventory

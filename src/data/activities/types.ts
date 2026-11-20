@@ -32,5 +32,9 @@ export interface ActivityDef {
   rareTable?: LootEntry[]
   byproducts?: LootEntry[]
   gold?: GoldDrop
+  /** Guild Favor grant, rolled like gold. */
+  favor?: GoldDrop
+  /** Performance venues that need Renown on top of level. */
+  renownRequired?: number
   kind: 'gather' | 'craft' | 'train'
 }

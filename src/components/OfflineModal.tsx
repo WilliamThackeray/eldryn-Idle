@@ -51,6 +51,12 @@ export function OfflineModal() {
             <p className="text-sm">+{report.gold} gp</p>
           </>
         )}
+        {report.favor > 0 && (
+          <>
+            <h3 className="mb-1 mt-4 font-bold">Guild Favor</h3>
+            <p className="text-sm">+{report.favor} Favor</p>
+          </>
+        )}
         <h3 className="mb-1 mt-4 font-bold">Items</h3>
         {report.items.length === 0 ? (
           <p className="text-sm">No items gained.</p>

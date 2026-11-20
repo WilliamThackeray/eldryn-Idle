@@ -26,8 +26,8 @@ export type PerkEffect =
   | { type: 'wisSaveBonus'; value: number } // TODO(Prompt 15) hook exists; not in this pass
   | { type: 'rareSpawnMultiplier'; value: number } // TODO(Prompt 15)
   | { type: 'extraQuestApproach'; value: number } // TODO(Prompt 19)
-  | { type: 'favorPct'; value: number } // TODO(Prompt 19)
-  | { type: 'shopDiscountPct'; value: number } // TODO(Prompt 14)
+  | { type: 'favorPct'; value: number }
+  | { type: 'shopDiscountPct'; value: number }
 
 export interface AbilityPerk {
   ability: AbilityAbbr

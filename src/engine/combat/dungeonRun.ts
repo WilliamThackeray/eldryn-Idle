@@ -1,6 +1,6 @@
 import { type ClassId } from '../../data/classes'
 import { getDungeon } from '../../data/dungeons'
-import { getMonster, type MonsterDef } from '../../data/monsters'
+import { getMonster, monstersForBiome, type MonsterDef } from '../../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
 import { COMBAT_LOG_LIMIT } from '../config'
@@ -13,16 +13,19 @@ import {
   type DungeonNode,
 } from '../dungeon'
 import type { Equipment } from '../equipment'
-import { addItems, type Inventory } from '../inventory'
+import type { ActiveBuff } from '../history'
+import { addItems, removeItems, type Inventory } from '../inventory'
 import { rollGold, rollLoot } from '../loot'
 import type { Rng } from '../rng'
 import { longRest, shortRest } from '../rest'
+import { progressBounty, rareSpawnBuff, type Bounty } from '../social'
 import { addXp } from '../xp'
 import { mergeLoot, recoverAmmo } from './attack'
 import {
   type CombatFight,
   computeMonsterIntervalMs,
   computePlayerIntervalMs,
+  rollFrightenAttacks,
   tryRelentless,
   pushLog,
 } from './state'
@@ -38,6 +41,8 @@ export function spawnDungeonMonster(
   equipment: Equipment,
   casting: boolean,
   trace: boolean,
+  rng?: Rng,
+  activeBuffs?: ActiveBuff[],
 ): { killedByCleave: boolean } {
   fight.monsterId = monster.id
   fight.phase = 'fight'
@@ -54,6 +59,7 @@ export function spawnDungeonMonster(
   fight.pushDelayMs = 0
   fight.nextAttackAdvantage = false
   fight.monsterNextDisadvantage = false
+  fight.frightenAttacksLeft = rng ? rollFrightenAttacks(activeBuffs, rng) : 0
   if (fight.signature.id === 'huntersMark') {
     fight.signature.markedType = monster.creatureType
   }
@@ -72,7 +78,24 @@ export function spawnDungeonMonster(
     }
   }
   pushLog(fight, `${monster.name} appears.`, trace)
+  if (fight.frightenAttacksLeft > 0) {
+    pushLog(fight, `Frighten: the enemy deals less damage for ${fight.frightenAttacksLeft} attacks.`, trace)
+  }
   return { killedByCleave: false }
+}
+
+export function maybeRareSwap(
+  monsterId: string,
+  biome: CombatFight['biome'],
+  buffs: ActiveBuff[] | undefined,
+  rng: Rng,
+): string {
+  const current = getMonster(monsterId)
+  if (current?.rare) return monsterId
+  const buff = rareSpawnBuff(buffs, biome)
+  if (!buff || rng() >= buff.chance) return monsterId
+  const rare = monstersForBiome(biome).find((entry) => entry.rare)
+  return rare?.id ?? monsterId
 }
 
 /**
@@ -93,6 +116,9 @@ export function advanceDungeonNodes(input: {
   casting: boolean
   modifiers?: Partial<Record<AbilityAbbr, number>>
   stopWhenOutOfFood?: boolean
+  bounty?: Bounty | null
+  favor?: number
+  activeBuffs?: ActiveBuff[]
 }): {
   inventory: Inventory
   classXp: number
@@ -100,14 +126,18 @@ export function advanceDungeonNodes(input: {
   stop: boolean
   questStepComplete: string | null
   monster: MonsterDef | null
+  bounty: Bounty | null
+  favor: number
 } {
   const { fight, equipment, rng, trace, casting } = input
   let inventory = input.inventory
   let classXp = input.classXp
   let skills = input.skills
+  let bounty = input.bounty ?? null
+  let favor = input.favor ?? 0
   const dungeon = getDungeon(fight.dungeonId ?? '')
   if (!dungeon) {
-    return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+    return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
   }
   const order = buildRunOrder(dungeon)
   const restCtx = {
@@ -133,6 +163,12 @@ export function advanceDungeonNodes(input: {
     classXp = addXp(classXp, monster.xp)
     fight.kills += 1
     pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
+    const progressed = progressBounty(bounty, monster.id, inventory, favor, fight.goldGained, rng)
+    bounty = progressed.bounty
+    inventory = progressed.inventory
+    favor = progressed.favor
+    fight.goldGained = progressed.goldGained
+    if (progressed.completed) pushLog(fight, 'Bounty complete.', trace)
   }
 
   // Guard against infinite cleave chains.
@@ -159,6 +195,8 @@ export function advanceDungeonNodes(input: {
         stop: rested.stopped,
         questStepComplete: null,
         monster: getMonster(fight.monsterId) ?? null,
+        bounty,
+        favor,
       }
     }
 
@@ -173,13 +211,15 @@ export function advanceDungeonNodes(input: {
           stop: true,
           questStepComplete: fight.questId,
           monster: null,
+          bounty,
+          favor,
         }
       }
       const entry = consumeEntryItem(inventory, dungeon)
       inventory = entry.inventory
       if (!entry.ok) {
         pushLog(fight, 'No entry item for another loop. Returning to town.', trace)
-        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
       }
       const rested = longRest(fight, { ...restCtx, inventory, skills })
       inventory = rested.inventory
@@ -199,11 +239,17 @@ export function advanceDungeonNodes(input: {
         stop: rested.stopped,
         questStepComplete: null,
         monster: getMonster(fight.monsterId) ?? null,
+        bounty,
+        favor,
       }
     }
 
     if (node.kind === 'trap') {
-      const result = resolveTrap(node.room, skills, rng)
+      const inspiration = inventory.inspiration ?? 0
+      const result = resolveTrap(node.room, skills, rng, inspiration)
+      if (result.inspirationSpent > 0) {
+        inventory = removeItems(inventory, [{ itemId: 'inspiration', quantity: result.inspirationSpent }])
+      }
       pushRoomLog(fight, result.line)
       pushLog(fight, result.line, trace)
       if (result.damage > 0) {
@@ -214,7 +260,7 @@ export function advanceDungeonNodes(input: {
         if (fight.playerHp <= 0) {
           fight.defeated = true
           pushLog(fight, 'You fall. Returning to town.', trace)
-          return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+          return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
         }
       }
       fight.nodeIndex += 1
@@ -222,7 +268,11 @@ export function advanceDungeonNodes(input: {
     }
 
     if (node.kind === 'secret') {
-      const result = resolveSecret(node.room, skills, rng)
+      const inspiration = inventory.inspiration ?? 0
+      const result = resolveSecret(node.room, skills, rng, inspiration)
+      if (result.inspirationSpent > 0) {
+        inventory = removeItems(inventory, [{ itemId: 'inspiration', quantity: result.inspirationSpent }])
+      }
       pushRoomLog(fight, result.line)
       pushLog(fight, result.line, trace)
       if (result.found && result.loot.length) {
@@ -249,20 +299,38 @@ export function advanceDungeonNodes(input: {
     if (node.kind === 'monster' || node.kind === 'boss') {
       const nextMonster = getMonster(node.monsterId)
       if (!nextMonster) {
-        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+        return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
       }
-      const spawned = spawnDungeonMonster(fight, nextMonster, skills, equipment, casting, trace)
+      const spawned = spawnDungeonMonster(
+        fight,
+        nextMonster,
+        skills,
+        equipment,
+        casting,
+        trace,
+        rng,
+        input.activeBuffs,
+      )
       if (spawned.killedByCleave) {
         applyKillRewards(nextMonster)
         fight.pendingCleave = fight.cleaveOverflow
         fight.nodeIndex += 1
         continue
       }
-      return { inventory, classXp, skills, stop: false, questStepComplete: null, monster: nextMonster }
+      return {
+        inventory,
+        classXp,
+        skills,
+        stop: false,
+        questStepComplete: null,
+        monster: nextMonster,
+        bounty,
+        favor,
+      }
     }
   }
 
-  return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null }
+  return { inventory, classXp, skills, stop: true, questStepComplete: null, monster: null, bounty, favor }
 }
 
 export function onKill(input: {
@@ -280,6 +348,9 @@ export function onKill(input: {
   activeClassId: ClassId
   casting: boolean
   stopWhenOutOfFood?: boolean
+  bounty?: Bounty | null
+  favor?: number
+  activeBuffs?: ActiveBuff[]
 }): {
   inventory: Inventory
   classXp: number
@@ -287,11 +358,15 @@ export function onKill(input: {
   stop: boolean
   questStepComplete: string | null
   monster: MonsterDef | null
+  bounty: Bounty | null
+  favor: number
 } {
   const { fight, monster, equipment, rng, trace } = input
   let inventory = recoverAmmo(input.inventory, equipment, fight.ammoSpent)
   fight.ammoSpent = 0
   let skills = input.skills
+  let bounty = input.bounty ?? null
+  let favor = input.favor ?? 0
 
   const loot = rollLoot(monster.lootTable, rng, 1)
   inventory = addItems(inventory, loot)
@@ -307,6 +382,12 @@ export function onKill(input: {
   fight.monsterNextDisadvantage = false
 
   pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
+  const progressed = progressBounty(bounty, monster.id, inventory, favor, fight.goldGained, rng)
+  bounty = progressed.bounty
+  inventory = progressed.inventory
+  favor = progressed.favor
+  fight.goldGained = progressed.goldGained
+  if (progressed.completed) pushLog(fight, 'Bounty complete.', trace)
 
   const inDungeon = fight.dungeonId != null
   if (!inDungeon) {
@@ -320,6 +401,8 @@ export function onKill(input: {
         stop: true,
         questStepComplete: fight.questId,
         monster,
+        bounty,
+        favor,
       }
     }
     fight.phase = 'rest'
@@ -349,6 +432,8 @@ export function onKill(input: {
       stop: rested.stopped,
       questStepComplete: null,
       monster,
+      bounty,
+      favor,
     }
   }
 
@@ -370,6 +455,9 @@ export function onKill(input: {
     casting: input.casting,
     modifiers: input.modifiers,
     stopWhenOutOfFood: input.stopWhenOutOfFood,
+    bounty,
+    favor,
+    activeBuffs: input.activeBuffs,
   })
 }
 
@@ -379,6 +467,8 @@ export function respawnMonster(
   skills: Record<SkillId, SkillProgress>,
   equipment: Equipment,
   casting: boolean,
+  rng?: Rng,
+  activeBuffs?: ActiveBuff[],
 ) {
   fight.phase = 'fight'
   fight.restProgressMs = 0
@@ -389,4 +479,5 @@ export function respawnMonster(
   fight.monsterIntervalMs = computeMonsterIntervalMs(monster, false)
   fight.playerProgressMs = 0
   fight.monsterProgressMs = 0
+  fight.frightenAttacksLeft = rng ? rollFrightenAttacks(activeBuffs, rng) : 0
 }

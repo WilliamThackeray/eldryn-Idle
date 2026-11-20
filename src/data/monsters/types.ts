@@ -58,4 +58,6 @@ export interface MonsterDef {
   lootTable: LootEntry[]
   gold?: GoldDrop
   biomes: readonly BiomeId[]
+  /** Rare spawn candidate for Rumor buffs. */
+  rare?: boolean
 }

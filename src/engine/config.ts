@@ -197,3 +197,19 @@ export const HISTORY_TOME_CHECK_BONUS = 1
 /** Study Notes: yield bonus and duration. */
 export const HISTORY_NOTE_YIELD_PCT = 0.1
 export const HISTORY_NOTE_DURATION_MS = 60 * 60 * 1000
+
+/** CHA consumable buffs. */
+export const TRADE_CONTRACT_SELL_PCT = 0.15
+export const TRADE_CONTRACT_DURATION_MS = 30 * 60 * 1000
+export const DISGUISE_DURATION_MS = 30 * 60 * 1000
+export const MENACE_DURATION_MS = 30 * 60 * 1000
+export const INTEL_DURATION_MS = 60 * 60 * 1000
+export const RUMOR_DURATION_MS = 60 * 60 * 1000
+export const INTEL_DAMAGE_PCT = 0.1
+export const RUMOR_RARE_CHANCE = 0.25
+export const FRIGHTEN_CHANCE = 0.5
+export const FRIGHTEN_ATTACKS = 3
+export const FRIGHTEN_DAMAGE_PCT = 0.75
+export const BOUNTY_KILLS = 5
+export const BOUNTY_GOLD = 25
+export const BOUNTY_FAVOR = 5

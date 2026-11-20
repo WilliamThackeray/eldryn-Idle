@@ -89,6 +89,7 @@ export function resolvePlayerAttack(input: {
   labelPrefix: string
   unarmedOverride?: { dice: string; damageType: DamageType; mastery: null }
   bestiaryBonus?: number
+  intelDamagePct?: number
 }): {
   inventory: Inventory
   classXp: number
@@ -235,7 +236,9 @@ export function resolvePlayerAttack(input: {
     monster.vulnerabilities,
     monster.immunities,
   )
-  const dealt = applyTriangle(resisted, style, monster.archetype)
+  let dealt = applyTriangle(resisted, style, monster.archetype)
+  const intelPct = Math.max(0, input.intelDamagePct ?? 0)
+  if (intelPct > 0) dealt = Math.floor(dealt * (1 + intelPct))
   const before = fight.monsterHp
   fight.monsterHp = Math.max(0, fight.monsterHp - dealt)
   line += ` [${diceNotation}] + ${abilityBonus + itemDamage + hitCtx.bonusFlat} damage${crit ? ' (crit)' : ''}${triangleNote(style, monster.archetype)}.`

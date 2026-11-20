@@ -12,6 +12,7 @@ import {
   type CombatFight,
 } from './combat'
 import { OFFLINE_CAP_MS, RESPAWN_MS } from './config'
+import { resolveRollMode } from './dice'
 import { emptyEquipment, gearRollMode, heavyArmorIntervalMultiplier, type Equipment } from './equipment'
 import {
   discountTomeInputs,
@@ -33,6 +34,12 @@ import {
   type QuestProgress,
 } from './quest'
 import { skillCheck, type SkillCheckOutcome, type SkillCheckResult } from './skillCheck'
+import {
+  activityHasAdvantage,
+  grantFavor,
+  renownGain,
+  type Bounty,
+} from './social'
 import { addXp, applyXpModifiers, levelForXp } from './xp'
 
 export type { CombatAction, CombatFight } from './combat'
@@ -77,6 +84,9 @@ export interface AdvanceState {
   tomes?: Tomes
   bestiaries?: Bestiaries
   activeBuffs?: ActiveBuff[]
+  favor?: number
+  renown?: number
+  bounty?: Bounty | null
 }
 
 export interface SkillEvent {
@@ -125,6 +135,7 @@ export interface OfflineReport {
   skills: SkillGain[]
   items: ItemGain[]
   gold: number
+  favor: number
   kills: number
   classXp: number
   defeated: boolean
@@ -147,7 +158,17 @@ export function summarizeGains(
   afterClassXp = 0,
   kills = 0,
   defeated = false,
-): { skills: SkillGain[]; items: ItemGain[]; gold: number; classXp: number; kills: number; defeated: boolean } {
+  beforeFavor = 0,
+  afterFavor = 0,
+): {
+  skills: SkillGain[]
+  items: ItemGain[]
+  gold: number
+  favor: number
+  classXp: number
+  kills: number
+  defeated: boolean
+} {
   const skills = SKILLS.flatMap((skill) => {
     const beforeXp = beforeSkills[skill.id]?.xp ?? 0
     const afterXp = afterSkills[skill.id]?.xp ?? 0
@@ -160,6 +181,7 @@ export function summarizeGains(
     skills,
     items: gainedItems(beforeItems, afterItems),
     gold: Math.max(0, afterGold - beforeGold),
+    favor: Math.max(0, afterFavor - beforeFavor),
     classXp: Math.max(0, afterClassXp - beforeClassXp),
     kills,
     defeated,
@@ -198,6 +220,7 @@ export function onActivityComplete(
     ...(check.byproduct ? rollLoot(activity.byproducts, rng, 1) : []),
   ]
   let goldGain = rollGold(activity.gold, rng, multiplier)
+  const favorGain = rollGold(activity.favor, rng, multiplier)
   const ability = getSkill(action.skillId).ability
   const perks = activePerks(state)
   const yieldPct =
@@ -216,8 +239,15 @@ export function onActivityComplete(
   if (goldPct > 0 && goldGain > 0) {
     goldGain = Math.floor(goldGain * (1 + goldPct))
   }
+  const favorPct = effectTotal(perks, 'favorPct')
   inventory = addItems(inventory, stacks)
-  return { ...state, inventory, gold: state.gold + goldGain }
+  const favor = grantFavor(state.favor ?? 0, favorGain, favorPct)
+  const isVenue =
+    action.skillId === 'performance' &&
+    !action.activityId.startsWith('craft-') &&
+    (check.outcome === 'success' || check.outcome === 'critical')
+  const renown = isVenue ? renownGain(state.renown ?? 0, 1) : (state.renown ?? 0)
+  return { ...state, inventory, gold: state.gold + goldGain, favor, renown }
 }
 
 export function activityIntervalMs(
@@ -270,6 +300,8 @@ export function advance(
   let skills = state.skills
   let inventory = state.inventory
   let gold = state.gold
+  let favor = state.favor ?? 0
+  let renown = state.renown ?? 0
   let activeBuffs = state.activeBuffs ?? []
   const equipment = state.equipment ?? emptyEquipment()
   const tomes = state.tomes
@@ -317,9 +349,14 @@ export function advance(
 
     remaining -= need
     progress = 0
+    const modeSources: Array<'advantage' | 'disadvantage'> = []
+    const gearMode = gearRollMode(skill.id, equipment)
+    if (gearMode === 'advantage') modeSources.push('advantage')
+    if (gearMode === 'disadvantage') modeSources.push('disadvantage')
+    if (activityHasAdvantage(activeBuffs, skill.id)) modeSources.push('advantage')
     const check = skillCheck({
       rng,
-      mode: gearRollMode(skill.id, equipment),
+      mode: resolveRollMode(modeSources),
       abilityModifier: deriveAbilities(skills).find((ability) => ability.abbr === skill.ability)?.modifier ?? 0,
       skillLevel: levelForXp(skills[skill.id].xp),
       requiredLevel: acting.requiredLevel,
@@ -339,6 +376,8 @@ export function advance(
         skills,
         inventory,
         gold,
+        favor,
+        renown,
         activeAction: { ...acting, progressMs: 0 },
         equipment,
         activeBuffs,
@@ -351,6 +390,8 @@ export function advance(
     skills = next.skills
     inventory = next.inventory
     gold = next.gold
+    favor = next.favor ?? favor
+    renown = next.renown ?? renown
     action = next.activeAction
     activeBuffs = tickBuffs(activeBuffs, need)
     log.push({
@@ -374,6 +415,8 @@ export function advance(
       skills,
       inventory,
       gold,
+      favor,
+      renown,
       activeBuffs,
       activeAction: action?.kind === 'skill' ? { ...action, progressMs: progress } : action,
     },
@@ -402,6 +445,8 @@ function advanceCombatAction(
     skills: state.skills,
     inventory: state.inventory,
     gold: state.gold,
+    favor: state.favor,
+    bounty: state.bounty,
     equipment: state.equipment ?? emptyEquipment(),
     activeClassId: classId,
     classXp,
@@ -412,6 +457,7 @@ function advanceCombatAction(
     stopWhenOutOfFood: state.stopWhenOutOfFood,
     bestiaries: state.bestiaries,
     tomes: state.tomes,
+    activeBuffs: state.activeBuffs,
   })
 
   const log: GameEvent[] = []
@@ -435,6 +481,8 @@ function advanceCombatAction(
         skills: result.skills,
         inventory: result.inventory,
         gold: result.gold,
+        favor: result.favor ?? state.favor,
+        bounty: result.bounty !== undefined ? result.bounty : state.bounty,
         classXp: result.classXp,
         activeBuffs,
         activeAction: null,
@@ -462,6 +510,8 @@ function advanceCombatAction(
       skills: result.skills,
       inventory: result.inventory,
       gold: result.gold,
+      favor: result.favor ?? state.favor,
+      bounty: result.bounty !== undefined ? result.bounty : state.bounty,
       classXp: result.classXp,
       combat: result.fight,
       questProgress,

@@ -8,7 +8,7 @@ import {
   type BestiaryType,
   type NoteGroupId,
 } from '../data/historyContent'
-import type { CreatureType } from '../data/monsters'
+import type { BiomeId, CreatureType } from '../data/monsters'
 import type { SkillId } from '../data/skills'
 import {
   HISTORY_MAX_XP_PCT,
@@ -21,9 +21,17 @@ import { hasItems, removeItems, type Inventory } from './inventory'
 
 export type { BestiaryType, NoteGroupId }
 
+export type BuffEffect =
+  | { type: 'noteYield'; groupId: NoteGroupId; value: number }
+  | { type: 'sellPricePct'; value: number }
+  | { type: 'activityAdvantage'; skills: SkillId[] }
+  | { type: 'frighten'; chance: number }
+  | { type: 'rareSpawn'; biome: BiomeId; chance: number }
+  | { type: 'damageVsType'; creatureType: CreatureType; value: number }
+
 export interface ActiveBuff {
   id: string
-  effect: { type: 'noteYield'; groupId: NoteGroupId; value: number }
+  effect: BuffEffect
   remainingMs: number
 }
 
@@ -85,10 +93,11 @@ export function noteYieldPct(buffs: ActiveBuff[] | undefined, activityId: string
   if (!buffs?.length) return 0
   let total = 0
   for (const buff of buffs) {
-    if (buff.effect.type !== 'noteYield' || buff.remainingMs <= 0) continue
-    const group = NOTE_GROUPS.find((entry) => entry.id === buff.effect.groupId)
+    if (buff.remainingMs <= 0 || buff.effect.type !== 'noteYield') continue
+    const effect = buff.effect
+    const group = NOTE_GROUPS.find((entry) => entry.id === effect.groupId)
     if (!group) continue
-    if (activityId.startsWith(group.prefix)) total += buff.effect.value
+    if (activityId.startsWith(group.prefix)) total += effect.value
   }
   return total
 }

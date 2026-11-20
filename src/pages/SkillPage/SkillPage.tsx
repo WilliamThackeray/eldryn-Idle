@@ -53,6 +53,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const readTome = useGameStore((state) => state.readTome)
   const readBestiary = useGameStore((state) => state.readBestiary)
   const activateNotes = useGameStore((state) => state.useNotes)
+  const renown = useGameStore((state) => state.renown)
   const progress = progressToNext(xp)
   const level = levelForXp(xp)
   const ability = SKILLS.find((skill) => skill.id === skillId)?.ability
@@ -124,7 +125,10 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
         xpMultiplierLabel={xpMultiplierLabel}
         requiredLevel={activity.requiredLevel}
         needsMaterials={lacksInputs(activity, inventory, pageDiscount)}
-        locked={level < activity.requiredLevel}
+        locked={
+          level < activity.requiredLevel ||
+          (activity.renownRequired != null && renown < activity.renownRequired)
+        }
         selected={selected?.id === activity.id}
         active={active}
         progress={active && activeInterval > 0 ? Math.min(100, (activeAction.progressMs / activeInterval) * 100) : 0}
@@ -146,6 +150,9 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
 
       {historyLine && skillId !== 'history' && (
         <p className="text-sm text-sage">{historyLine}</p>
+      )}
+      {skillId === 'performance' && (
+        <p className="text-sm text-sage">Renown: {renown}</p>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)]">
@@ -187,9 +194,12 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
             dc={checkDc(selected.requiredLevel)}
             successPercent={Math.round(successChance(bonus, selected.requiredLevel) * 100)}
             bonus={bonus}
-            details={activityDetails(selected, inventory, pageDiscount)}
+            details={activityDetails(selected, inventory, pageDiscount, renown)}
             needsMaterials={lacksInputs(selected, inventory, pageDiscount)}
-            locked={level < selected.requiredLevel}
+            locked={
+              level < selected.requiredLevel ||
+              (selected.renownRequired != null && renown < selected.renownRequired)
+            }
             active={
               activeAction?.kind === 'skill' &&
               activeAction.skillId === skillId &&
@@ -321,7 +331,12 @@ function lacksInputs(activity: ActivityDef, inventory: Inventory, pageDiscount: 
   return craftInputs(activity, pageDiscount).some((stack) => (inventory[stack.itemId] ?? 0) < stack.quantity)
 }
 
-function activityDetails(activity: ActivityDef, inventory: Inventory, pageDiscount: number): string[] {
+function activityDetails(
+  activity: ActivityDef,
+  inventory: Inventory,
+  pageDiscount: number,
+  renown: number,
+): string[] {
   const lines: string[] = []
   const inputs = craftInputs(activity, pageDiscount)
   if (inputs.length) {
@@ -331,11 +346,15 @@ function activityDetails(activity: ActivityDef, inventory: Inventory, pageDiscou
         .join(', ')}`,
     )
   }
+  if (activity.renownRequired != null) {
+    lines.push(`Requires Renown ${activity.renownRequired} (have ${renown})`)
+  }
   const yields = [
     ...activity.outputs.map(formatLoot),
     ...(activity.rareTable ?? []).map((entry) => `${formatLoot(entry)} rare`),
     ...(activity.byproducts ?? []).map((entry) => `${formatLoot(entry)} on a fumble`),
     ...(activity.gold ? [formatGold(activity.gold)] : []),
+    ...(activity.favor ? [`${formatGold(activity.favor).replace(' gp', '')} Favor`] : []),
   ]
   if (yields.length > 0) lines.push(`Yields ${yields.join(', ')}`)
   return lines

@@ -37,6 +37,7 @@ export function resolveSpellCast(input: {
   rng: Rng
   trace: boolean
   bestiaryBonus?: number
+  intelDamagePct?: number
 }): {
   inventory: Inventory
   classXp: number
@@ -55,6 +56,7 @@ export function resolveSpellCast(input: {
   const unlock = unlockSkillFor(input.activeClassId)
   const skillLvl = skillLevel(skills, unlock)
   const saveDc = 8 + prof + castMod + effectTotal(activePerks({ skills }), 'spellSaveDc')
+  const intelPct = Math.max(0, input.intelDamagePct ?? 0)
 
   const picked = pickSlotForCast({
     slots: fight.spellSlots,
@@ -162,8 +164,8 @@ export function resolveSpellCast(input: {
 
   const dtype = spell.damageType ?? 'force'
   const style = 'magic' as const
-  const finishDamage = (amount: number) =>
-    applyTriangle(
+  const finishDamage = (amount: number) => {
+    let dealt = applyTriangle(
       applyDamageModifiers(
         amount,
         dtype,
@@ -174,6 +176,9 @@ export function resolveSpellCast(input: {
       style,
       monster.archetype,
     )
+    if (intelPct > 0) dealt = Math.floor(dealt * (1 + intelPct))
+    return dealt
+  }
   const note = triangleNote(style, monster.archetype)
 
   if (spell.kind === 'attack') {

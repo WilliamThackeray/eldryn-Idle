@@ -3,12 +3,17 @@ import { persist, type PersistStorage, type StorageValue } from 'zustand/middlew
 import { getClass, modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
 import { getDungeon } from '../data/dungeons'
 import type { ItemId } from '../data/items'
-import { getMonster, type BiomeId } from '../data/monsters'
+import { getMonster, type BiomeId, type CreatureType } from '../data/monsters'
 import { getQuest } from '../data/quests'
 import { isSpellId, type SpellId } from '../data/spells'
-import { buyGood as buyShopGood, buyUpgrade as buyShopUpgrade } from '../data/shop'
+import {
+  buyGood as buyShopGood,
+  buyUpgrade as buyShopUpgrade,
+  shopDiscountFromUpgrades,
+} from '../data/shop'
 import { advance, type GameEvent, type OfflineReport, type SkillAction } from '../engine/advance'
 import { beginDungeonFight, createFight } from '../engine/combat'
+import { maybeRareSwap } from '../engine/combat/dungeonRun'
 import { SPELL_INTERVAL_SEC } from '../engine/config'
 import { consumeEntryItem } from '../engine/dungeon'
 import {
@@ -30,13 +35,23 @@ import {
   type EquipmentSlot,
 } from '../engine/equipment'
 import { getItem } from '../data/items'
-import { activePerks, effectTotal } from '../engine/abilities'
+import { activePerks } from '../engine/abilities'
 import {
   readBestiary as applyReadBestiary,
   readTome as applyReadTome,
   useNotes as applyUseNotes,
 } from '../engine/history'
 import { sellItems, type Inventory } from '../engine/inventory'
+import {
+  applyDisguiseKit,
+  applyIntel,
+  applyMenaceTrophy,
+  applyRumor,
+  applyTradeContract,
+  sellPriceMultiplier,
+  shopDiscountTotal,
+  startBounty,
+} from '../engine/social'
 import {
   appendInventoryTab,
   moveItemToTab,
@@ -106,6 +121,7 @@ interface GameStore extends SaveData {
   readTome: (itemId: ItemId) => void
   readBestiary: (itemId: ItemId) => void
   useNotes: (itemId: ItemId) => void
+  activateSocialItem: (itemId: ItemId, options?: { biome?: BiomeId; creatureType?: CreatureType }) => void
 }
 
 const liveRng: Rng = () => Math.random()
@@ -178,10 +194,11 @@ export const useGameStore = create<GameStore>()(
       startHunt: (monsterId, biome, questId) =>
         set((state) => {
           if (!state.classId) return state
-          const monster = getMonster(monsterId)
+          const swappedId = maybeRareSwap(monsterId, biome, state.activeBuffs, liveRng)
+          const monster = getMonster(swappedId)
           if (!monster) return state
           const fight = createFight({
-            monsterId,
+            monsterId: swappedId,
             biome,
             skills: state.skills,
             equipment: state.equipment,
@@ -190,6 +207,7 @@ export const useGameStore = create<GameStore>()(
             rng: liveRng,
             trace: true,
             spellLoadout: state.spellLoadouts[state.classId],
+            activeBuffs: state.activeBuffs,
           })
           if (!fight) return state
           if (questId) fight.questId = questId
@@ -203,7 +221,7 @@ export const useGameStore = create<GameStore>()(
             activeAction: {
               kind: 'combat' as const,
               label: `Hunting ${monster.name}`,
-              monsterId,
+              monsterId: swappedId,
               biome,
               baseIntervalMs: baseSec * 1000,
               progressMs: 0,
@@ -230,6 +248,7 @@ export const useGameStore = create<GameStore>()(
             trace: true,
             spellLoadout: state.spellLoadouts[state.classId],
             questId: questId ?? null,
+            activeBuffs: state.activeBuffs,
           })
           if (!fight) return state
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
@@ -268,6 +287,9 @@ export const useGameStore = create<GameStore>()(
               skills: state.skills,
               inventory: state.inventory,
               gold: state.gold,
+              favor: state.favor,
+              renown: state.renown,
+              bounty: state.bounty,
               activeAction: state.activeAction,
               equipment: state.equipment,
               upgrades: state.upgrades,
@@ -293,6 +315,9 @@ export const useGameStore = create<GameStore>()(
             skills: result.state.skills,
             ...withPlacedInventory(state, result.state.inventory),
             gold: result.state.gold,
+            favor: result.state.favor ?? state.favor,
+            renown: result.state.renown ?? state.renown,
+            bounty: result.state.bounty !== undefined ? result.state.bounty : state.bounty,
             activeAction: result.state.activeAction,
             classXp: result.state.classXp ?? state.classXp,
             combat: result.state.combat ?? null,
@@ -329,6 +354,42 @@ export const useGameStore = create<GameStore>()(
           if (!next) return state
           return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
         }),
+      activateSocialItem: (itemId, options) =>
+        set((state) => {
+          if (itemId === 'trade-contract') {
+            const next = applyTradeContract(state.inventory, state.activeBuffs)
+            if (!next) return state
+            return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
+          }
+          if (itemId === 'disguise-kit') {
+            const next = applyDisguiseKit(state.inventory, state.activeBuffs)
+            if (!next) return state
+            return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
+          }
+          if (itemId === 'menace-trophy') {
+            const next = applyMenaceTrophy(state.inventory, state.activeBuffs)
+            if (!next) return state
+            return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
+          }
+          if (itemId === 'rumor') {
+            if (!options?.biome) return state
+            const next = applyRumor(state.inventory, state.activeBuffs, options.biome)
+            if (!next) return state
+            return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
+          }
+          if (itemId === 'intel') {
+            if (!options?.creatureType) return state
+            const next = applyIntel(state.inventory, state.activeBuffs, options.creatureType)
+            if (!next) return state
+            return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
+          }
+          if (itemId === 'bounty-contract') {
+            const next = startBounty(state.inventory, state.bounty, liveRng)
+            if (!next) return state
+            return { ...withPlacedInventory(state, next.inventory), bounty: next.bounty }
+          }
+          return state
+        }),
       dismissOffline: () => set({ offlineReport: null }),
       saveGame: () => {
         set({ lastSaved: new Date().toISOString() })
@@ -341,28 +402,38 @@ export const useGameStore = create<GameStore>()(
             state.gold,
             itemId,
             quantity,
-            1 + effectTotal(activePerks(state), 'sellPricePct'),
+            sellPriceMultiplier(activePerks(state), state.activeBuffs),
           )
           return { ...withPlacedInventory(state, sold.inventory), gold: sold.gold }
         }),
       buyGood: (itemId) =>
         set((state) => {
-          const bought = buyShopGood(state.inventory, state.gold, itemId)
+          const discount = shopDiscountTotal(activePerks(state), state.upgrades, shopDiscountFromUpgrades)
+          const bought = buyShopGood(state.inventory, state.gold, itemId, discount)
           return { ...withPlacedInventory(state, bought.inventory), gold: bought.gold }
         }),
       buyUpgrade: (upgradeId) =>
         set((state) => {
           const before = state.upgrades[upgradeId]
+          const discount = shopDiscountTotal(activePerks(state), state.upgrades, shopDiscountFromUpgrades)
           const bought = buyShopUpgrade(
             {
               gold: state.gold,
+              favor: state.favor,
               inventory: state.inventory,
               upgrades: state.upgrades,
               skills: state.skills,
             },
             upgradeId,
+            discount,
           )
-          if (bought.upgrades === state.upgrades && bought.gold === state.gold) return state
+          if (
+            bought.upgrades === state.upgrades &&
+            bought.gold === state.gold &&
+            bought.favor === state.favor
+          ) {
+            return state
+          }
           let inventoryTabs = state.inventoryTabs
           if (
             upgradeId === 'inventory-tabs' &&
@@ -374,6 +445,7 @@ export const useGameStore = create<GameStore>()(
           return {
             ...withPlacedInventory(state, bought.inventory),
             gold: bought.gold,
+            favor: bought.favor,
             upgrades: bought.upgrades,
             inventoryTabs,
           }
@@ -556,6 +628,7 @@ export const useGameStore = create<GameStore>()(
             trace: true,
             spellLoadout: state.spellLoadouts[state.classId],
             questId,
+            activeBuffs: state.activeBuffs,
           })
           if (!fight) return state
           const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
@@ -610,6 +683,9 @@ export const useGameStore = create<GameStore>()(
         tomes: state.tomes,
         bestiaries: state.bestiaries,
         activeBuffs: state.activeBuffs,
+        favor: state.favor,
+        renown: state.renown,
+        bounty: state.bounty,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {

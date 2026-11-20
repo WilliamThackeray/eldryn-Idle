@@ -70,6 +70,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const equipment = useGameStore((state) => state.equipment)
   const inventory = useGameStore((state) => state.inventory)
   const bestiaries = useGameStore((state) => state.bestiaries)
+  const bounty = useGameStore((state) => state.bounty)
   const activeAction = useGameStore((state) => state.activeAction)
   const log = useGameStore((state) => state.log)
   const startHunt = useGameStore((state) => state.startHunt)
@@ -300,6 +301,13 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
       ) : tab === 'hunting' ? (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
           <div className="space-y-3">
+            {bounty && (
+              <div className="rounded-lg border border-gold/40 bg-panel p-3 text-sm">
+                <span className="font-bold text-gold">Bounty: </span>
+                Kill {bounty.need} {getMonster(bounty.monsterId)?.name ?? bounty.monsterId} (
+                {bounty.have}/{bounty.need})
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {BIOMES.map((id) => (
                 <button
@@ -357,8 +365,10 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
       ) : (
         <div className="space-y-3">
           {DUNGEONS.map((d) => {
-            const entry = d.entryItemId ? getItem(d.entryItemId) : null
-            const haveEntry = !d.entryItemId || (inventory[d.entryItemId] ?? 0) > 0
+            const entry = d.entry ? getItem(d.entry.itemId) : null
+            const need = d.entry?.quantity ?? 0
+            const have = d.entry ? (inventory[d.entry.itemId] ?? 0) : 0
+            const haveEntry = !d.entry || have >= need
             const encounterNames = [...d.encounters, d.boss]
               .map((id) => getMonster(id)?.name ?? id)
               .join(' → ')
@@ -377,9 +387,9 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-parchment/80">{encounterNames}</p>
-                  {entry && (
+                  {entry && d.entry && (
                     <p className="mt-1 text-xs text-parchment/70">
-                      Entry: {entry.name}
+                      Entry: {entry.name} ×{need} ({have}/{need})
                       {haveEntry ? '' : ' (missing)'}
                     </p>
                   )}

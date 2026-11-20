@@ -152,5 +152,6 @@ export const HILLS_MONSTERS = [
     ],
     gold: { min: 5, max: 15 },
     biomes: ['hills'],
+    rare: true,
   },
 ] as const satisfies readonly MonsterDef[]

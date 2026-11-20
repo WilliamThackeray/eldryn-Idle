@@ -14,7 +14,7 @@ import { getItem } from './items'
 test('buying pickaxe I spends gold and iron bars atomically', () => {
   const skills = initialSkillProgress()
   const bought = buyUpgrade(
-    { gold: 50, inventory: { 'iron-bar': 1 }, upgrades: {}, skills },
+    { gold: 50, favor: 0, inventory: { 'iron-bar': 1 }, upgrades: {}, skills },
     'pickaxe',
   )
   expect(bought.gold).toBe(0)
@@ -24,14 +24,14 @@ test('buying pickaxe I spends gold and iron bars atomically', () => {
 
 test('short gold leaves inventory and upgrades untouched', () => {
   const skills = initialSkillProgress()
-  const state = { gold: 49, inventory: { 'iron-bar': 1 }, upgrades: {}, skills }
+  const state = { gold: 49, favor: 0, inventory: { 'iron-bar': 1 }, upgrades: {}, skills }
   const bought = buyUpgrade(state, 'pickaxe')
   expect(bought).toEqual(state)
 })
 
 test('short items leaves gold untouched', () => {
   const skills = initialSkillProgress()
-  const state = { gold: 50, inventory: {}, upgrades: {}, skills }
+  const state = { gold: 50, favor: 0, inventory: {}, upgrades: {}, skills }
   const bought = buyUpgrade(state, 'pickaxe')
   expect(bought.gold).toBe(50)
   expect(bought.upgrades).toEqual({})
@@ -40,21 +40,29 @@ test('short items leaves gold untouched', () => {
 test('a soon tier does not buy', () => {
   const skills = initialSkillProgress()
   const bought = buyUpgrade(
-    { gold: 1000, inventory: {}, upgrades: {}, skills },
+    { gold: 1000, favor: 0, inventory: {}, upgrades: {}, skills },
     'bellows',
   )
   expect(bought.upgrades).toEqual({})
   expect(getShopUpgrade('bellows')?.tiers[0]?.effect.kind).toBe('soon')
 })
 
-test('a favor cost does not buy', () => {
+test('a favor cost spends favor when affordable', () => {
   const skills = initialSkillProgress()
-  const bought = buyUpgrade(
-    { gold: 100, inventory: {}, upgrades: {}, skills },
+  const short = buyUpgrade(
+    { gold: 200, favor: 0, inventory: {}, upgrades: {}, skills },
     'guild-discount',
   )
-  expect(bought.upgrades).toEqual({})
-  expect(bought.gold).toBe(100)
+  expect(short.upgrades).toEqual({})
+  expect(short.gold).toBe(200)
+
+  const bought = buyUpgrade(
+    { gold: 200, favor: 10, inventory: {}, upgrades: {}, skills },
+    'guild-discount',
+  )
+  expect(bought.favor).toBe(0)
+  expect(bought.gold).toBe(0)
+  expect(bought.upgrades['guild-discount']).toBe(0)
 })
 
 test('intervalBonus applies to mining and not smithing', () => {

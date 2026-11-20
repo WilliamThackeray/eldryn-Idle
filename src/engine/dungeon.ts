@@ -6,6 +6,7 @@ import { checkDc, skillCheck } from './skillCheck'
 import { addItems, hasItems, removeItems, type Inventory } from './inventory'
 import { rollLoot } from './loot'
 import type { Rng } from './rng'
+import { withInspirationReroll } from './social'
 import { levelForXp, proficiency, tier } from './xp'
 import type { CombatLootGain } from './combat'
 
@@ -42,13 +43,13 @@ export function consumeEntryItem(
   inventory: Inventory,
   dungeon: DungeonDef,
 ): { ok: true; inventory: Inventory } | { ok: false; inventory: Inventory } {
-  if (!dungeon.entryItemId) return { ok: true, inventory }
-  if (!hasItems(inventory, [{ itemId: dungeon.entryItemId, quantity: 1 }])) {
+  if (!dungeon.entry) return { ok: true, inventory }
+  if (!hasItems(inventory, [dungeon.entry])) {
     return { ok: false, inventory }
   }
   return {
     ok: true,
-    inventory: removeItems(inventory, [{ itemId: dungeon.entryItemId, quantity: 1 }]),
+    inventory: removeItems(inventory, [dungeon.entry]),
   }
 }
 
@@ -65,13 +66,15 @@ export interface TrapResult {
   disarmed: boolean
   damage: number
   line: string
+  inspirationSpent: number
 }
 
-/** Passive Perception vs DC, then Sleight of Hand to disarm. No XP. */
+/** Passive Perception vs DC, then Sleight of Hand to disarm. No XP. Inspiration rerolls the disarm only. */
 export function resolveTrap(
   room: Extract<DungeonRoom, { kind: 'trap' }>,
   skills: Record<SkillId, SkillProgress>,
   rng: Rng,
+  inspiration = 0,
 ): TrapResult {
   const perceptionLevel = skillLevel(skills, 'perception')
   const passive = 10 + abilityMod(skills, 'WIS') + proficiency(tier(perceptionLevel))
@@ -82,15 +85,24 @@ export function resolveTrap(
       disarmed: false,
       damage: room.damage,
       line: `Trap: failed to spot (passive ${passive} vs DC ${dc}). Took ${room.damage} damage.`,
+      inspirationSpent: 0,
     }
   }
 
-  const check = skillCheck({
+  const first = skillCheck({
     rng,
     abilityModifier: abilityMod(skills, 'DEX'),
     skillLevel: skillLevel(skills, 'sleightOfHand'),
     requiredLevel: room.requiredLevel,
   })
+  const { check, spent } = withInspirationReroll(inspiration, first, () =>
+    skillCheck({
+      rng,
+      abilityModifier: abilityMod(skills, 'DEX'),
+      skillLevel: skillLevel(skills, 'sleightOfHand'),
+      requiredLevel: room.requiredLevel,
+    }),
+  )
   const pass = check.outcome === 'success' || check.outcome === 'critical'
   if (pass) {
     return {
@@ -98,6 +110,7 @@ export function resolveTrap(
       disarmed: true,
       damage: 0,
       line: `Trap: spotted and disarmed (Sleight ${check.total} vs DC ${check.dc}).`,
+      inspirationSpent: spent,
     }
   }
   return {
@@ -105,6 +118,7 @@ export function resolveTrap(
     disarmed: false,
     damage: room.damage,
     line: `Trap: spotted but failed to disarm (Sleight ${check.total} vs DC ${check.dc}). Took ${room.damage} damage.`,
+    inspirationSpent: spent,
   }
 }
 
@@ -112,6 +126,7 @@ export interface SecretResult {
   found: boolean
   loot: { itemId: string; quantity: number }[]
   line: string
+  inspirationSpent: number
 }
 
 /** Investigation check → bonus chest loot. No XP. */
@@ -119,19 +134,29 @@ export function resolveSecret(
   room: Extract<DungeonRoom, { kind: 'secret' }>,
   skills: Record<SkillId, SkillProgress>,
   rng: Rng,
+  inspiration = 0,
 ): SecretResult {
-  const check = skillCheck({
+  const first = skillCheck({
     rng,
     abilityModifier: abilityMod(skills, 'INT'),
     skillLevel: skillLevel(skills, 'investigation'),
     requiredLevel: room.requiredLevel,
   })
+  const { check, spent } = withInspirationReroll(inspiration, first, () =>
+    skillCheck({
+      rng,
+      abilityModifier: abilityMod(skills, 'INT'),
+      skillLevel: skillLevel(skills, 'investigation'),
+      requiredLevel: room.requiredLevel,
+    }),
+  )
   const pass = check.outcome === 'success' || check.outcome === 'critical'
   if (!pass) {
     return {
       found: false,
       loot: [],
       line: `Secret door: failed Investigation (${check.total} vs DC ${check.dc}).`,
+      inspirationSpent: spent,
     }
   }
   const loot = rollLoot(room.lootTable, rng, 1)
@@ -139,6 +164,7 @@ export function resolveSecret(
     found: true,
     loot,
     line: `Secret door: found (Investigation ${check.total} vs DC ${check.dc}).`,
+    inspirationSpent: spent,
   }
 }
 

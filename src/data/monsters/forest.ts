@@ -131,5 +131,6 @@ export const FOREST_MONSTERS = [
     ],
     gold: { min: 1, max: 5 },
     biomes: ['forest'],
+    rare: true,
   },
 ] as const satisfies readonly MonsterDef[]

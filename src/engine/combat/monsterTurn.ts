@@ -3,6 +3,7 @@ import type { DamageType } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { SkillId } from '../../data/skills'
+import { FRIGHTEN_DAMAGE_PCT } from '../config'
 import { applyDamageModifiers } from '../damage'
 import { resolveRollMode, rollD20, rollDamageParts } from '../dice'
 import { emptyEquipment, totalItemStats, type Equipment } from '../equipment'
@@ -163,7 +164,12 @@ export function resolveMonsterAttacks(input: {
     let line = `${monster.name} ${attack.name}: to hit ${total} - ${hit ? 'hits' : 'misses'}.`
     if (hit) {
       const parts = rollDamageParts(attack.damage, input.rng, crit)
-      const dealt = parts.total
+      let dealt = parts.total
+      if (fight.frightenAttacksLeft > 0) {
+        dealt = Math.floor(dealt * FRIGHTEN_DAMAGE_PCT)
+        fight.frightenAttacksLeft -= 1
+        line += ` (frightened)`
+      }
       line += ` ${dealt} ${attack.damageType}.`
       pushLog(fight, line, trace)
       const result = applyPlayerDamage({

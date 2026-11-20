@@ -1,5 +1,4 @@
-import type { LootEntry } from './activities/types'
-import type { ItemId } from './items'
+import type { ItemStack, LootEntry } from './activities/types'
 import type { BiomeId } from './monsters'
 
 /** TODO(design): room placement (`after`) is not settled. */
@@ -15,7 +14,8 @@ export interface DungeonDef {
   encounters: string[]
   boss: string
   chest: LootEntry[]
-  entryItemId?: ItemId
+  /** Consumed once per run (including each loop after long rest). */
+  entry?: ItemStack
   rooms?: DungeonRoom[]
 }
 
@@ -49,7 +49,7 @@ export const DUNGEONS: DungeonDef[] = [
     encounters: ['ghoul', 'crocodile'],
     boss: 'green-hag',
     chest: [{ itemId: 'valuables', chance: 1, min: 1, max: 2 }],
-    entryItemId: 'guild-writ',
+    entry: { itemId: 'forged-writ', quantity: 1 },
   },
 ]
 

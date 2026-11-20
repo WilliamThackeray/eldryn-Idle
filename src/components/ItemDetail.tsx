@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Package, type LucideIcon } from 'lucide-react'
 import { RARITY_TEXT } from './rarity'
 import type { ClassId } from '../data/classes'
@@ -64,6 +65,10 @@ interface ItemDetailProps {
   onEquip?: () => void
   onUnequip?: () => void
   onOpenLink?: (link: ItemLink) => void
+  onUse?: () => void
+  useLabel?: string | null
+  useDisabled?: boolean
+  useExtra?: ReactNode
   emptyLabel?: string
 }
 
@@ -85,6 +90,10 @@ export function ItemDetail({
   onEquip,
   onUnequip,
   onOpenLink,
+  onUse,
+  useLabel = null,
+  useDisabled = false,
+  useExtra = null,
   emptyLabel = 'Select an item',
 }: ItemDetailProps) {
   const selected = itemId ? getItem(itemId) : undefined
@@ -170,6 +179,20 @@ export function ItemDetail({
       )}
 
       <StatLines itemId={itemId} />
+
+      {mode === 'inventory' && onUse && useLabel && (
+        <div className="space-y-2 rounded border border-brown/40 p-3">
+          {useExtra}
+          <button
+            type="button"
+            disabled={useDisabled}
+            onClick={onUse}
+            className="w-full rounded-lg bg-gold px-3 py-1.5 text-sm text-ink transition-colors hover:bg-sage disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {useLabel}
+          </button>
+        </div>
+      )}
 
       {mode === 'inventory' && equippable && (
         <div className="space-y-2 rounded border border-brown/40 p-3 text-sm">

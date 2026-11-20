@@ -130,5 +130,6 @@ export const SWAMP_MONSTERS = [
     ],
     gold: { min: 5, max: 12 },
     biomes: ['swamp'],
+    rare: true,
   },
 ] as const satisfies readonly MonsterDef[]

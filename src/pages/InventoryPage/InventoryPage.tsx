@@ -13,12 +13,22 @@ import {
 import { ItemDetail } from '../../components/ItemDetail'
 import { RARITY_TEXT } from '../../components/rarity'
 import { getItem, type ItemCategory, type ItemId } from '../../data/items'
-import { getMonster } from '../../data/monsters'
-import { activePerks, effectTotal } from '../../engine/abilities'
+import { BIOMES, CREATURE_TYPES, getMonster, type BiomeId, type CreatureType } from '../../data/monsters'
+import { activePerks } from '../../engine/abilities'
 import { sellItems } from '../../engine/inventory'
 import { type ItemLink } from '../../engine/itemIndex'
+import { sellPriceMultiplier } from '../../engine/social'
 import { useGameStore } from '../../store/gameStore'
 import type { PageFocus } from '../pageFocus'
+
+const SOCIAL_USE = new Set([
+  'trade-contract',
+  'disguise-kit',
+  'menace-trophy',
+  'bounty-contract',
+  'rumor',
+  'intel',
+])
 
 const CATEGORY_ICON: Record<ItemCategory, LucideIcon> = {
   material: Hammer,
@@ -45,6 +55,8 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const isInDungeonOrQuest = useGameStore((state) => state.isInDungeonOrQuest)
   const sellItem = useGameStore((state) => state.sellItem)
   const equipItem = useGameStore((state) => state.equipItem)
+  const activateSocialItem = useGameStore((state) => state.activateSocialItem)
+  const activeBuffs = useGameStore((state) => state.activeBuffs)
   const renameInventoryTab = useGameStore((state) => state.renameInventoryTab)
   const moveInventoryItem = useGameStore((state) => state.moveInventoryItem)
   const reorderInventoryItem = useGameStore((state) => state.reorderInventoryItem)
@@ -55,6 +67,8 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const [editName, setEditName] = useState('')
   const [sellQty, setSellQty] = useState(1)
   const [dragItemId, setDragItemId] = useState<ItemId | null>(null)
+  const [useBiome, setUseBiome] = useState<BiomeId>('forest')
+  const [useType, setUseType] = useState<CreatureType>('beast')
 
   const activeTab = inventoryTabs.find((tab) => tab.id === activeTabId) ?? inventoryTabs[0]
 
@@ -71,7 +85,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
 
   const selected = selectedId ? getItem(selectedId) : undefined
   const owned = selectedId ? (inventory[selectedId] ?? 0) : 0
-  const priceMultiplier = 1 + effectTotal(activePerks({ skills }), 'sellPricePct')
+  const priceMultiplier = sellPriceMultiplier(activePerks({ skills }), activeBuffs)
 
   useEffect(() => {
     if (!selectedId) return
@@ -123,6 +137,10 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
     }
     if (link.kind === 'quest') {
       onNavigate('quests', { kind: 'quest', questId: link.questId })
+      return
+    }
+    if (link.kind === 'combat') {
+      onNavigate('monsterHunting')
     }
   }
 
@@ -255,6 +273,47 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
             if (selectedId) equipItem(selectedId)
           }}
           onOpenLink={openLink}
+          useLabel={selectedId && SOCIAL_USE.has(selectedId) ? 'Use' : null}
+          useDisabled={!selectedId || owned <= 0}
+          useExtra={
+            selectedId === 'rumor' ? (
+              <label className="flex items-center gap-2 text-sm">
+                Biome
+                <select
+                  value={useBiome}
+                  onChange={(event) => setUseBiome(event.target.value as BiomeId)}
+                  className="rounded border border-brown/40 bg-ink/50 px-2 py-1"
+                >
+                  {BIOMES.map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : selectedId === 'intel' ? (
+              <label className="flex items-center gap-2 text-sm">
+                Creature type
+                <select
+                  value={useType}
+                  onChange={(event) => setUseType(event.target.value as CreatureType)}
+                  className="rounded border border-brown/40 bg-ink/50 px-2 py-1"
+                >
+                  {CREATURE_TYPES.map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null
+          }
+          onUse={() => {
+            if (!selectedId) return
+            if (selectedId === 'rumor') activateSocialItem(selectedId, { biome: useBiome })
+            else if (selectedId === 'intel') activateSocialItem(selectedId, { creatureType: useType })
+            else activateSocialItem(selectedId)
+          }}
         />
       </aside>
     </div>

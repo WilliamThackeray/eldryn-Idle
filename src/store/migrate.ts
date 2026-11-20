@@ -12,7 +12,8 @@ import { isQuestId } from '../data/quests'
 import { isSpellId } from '../data/spells'
 import { initialSkillProgress, isSkillId, SKILLS, type SkillId } from '../data/skills'
 import type { ActiveAction, CombatFight } from '../engine/advance'
-import type { ActiveBuff } from '../engine/history'
+import type { ActiveBuff, BuffEffect } from '../engine/history'
+import type { Bounty } from '../engine/social'
 import { emptyQuestProgress, type QuestProgress } from '../engine/quest'
 import { emptySignatureRuntime } from '../engine/signatures'
 import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
@@ -30,8 +31,8 @@ import {
 import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
-/** v15: History tomes, bestiaries, and timed study-note buffs. */
-export const SAVE_VERSION = 15
+/** v16: Guild Favor, renown, bounty, CHA buffs, forged-writ rename. */
+export const SAVE_VERSION = 16
 
 /** Old sell values for bags removed in the specific-components rework. */
 const LEGACY_BAG_SELL: Record<string, number> = {
@@ -69,8 +70,14 @@ export interface SaveData {
   tomes: Record<SkillId, number>
   /** Highest bestiary volume read per creature type. */
   bestiaries: Record<CreatureType, number>
-  /** Timed buffs (Study Notes). Tick during active actions, including offline. */
+  /** Timed buffs (Study Notes and CHA consumables). Tick during active actions, including offline. */
   activeBuffs: ActiveBuff[]
+  /** Guild Favor currency. */
+  favor: number
+  /** Performance renown. */
+  renown: number
+  /** Active bounty, if any. */
+  bounty: Bounty | null
 }
 
 export function createInitialSave(): SaveData {
@@ -97,6 +104,9 @@ export function createInitialSave(): SaveData {
     tomes: emptyTomes(),
     bestiaries: emptyBestiaries(),
     activeBuffs: [],
+    favor: 0,
+    renown: 0,
+    bounty: null,
   }
 }
 
@@ -141,7 +151,7 @@ export function normalizeSave(raw: unknown): SaveData {
   if (activeAction?.kind === 'combat' && !combat) activeAction = null
 
   const { inventory: bagFreeInventory, goldBonus } = convertLegacyComponentBags(source.inventory)
-  const inventory = readInventory(bagFreeInventory)
+  const inventory = migrateForgedWrit(readInventory(bagFreeInventory))
   const upgrades = readUpgrades(source.upgrades)
   const tabTiers = upgrades['inventory-tabs']
   const tabCount = 5 + (tabTiers == null ? 0 : tabTiers + 1)
@@ -167,7 +177,28 @@ export function normalizeSave(raw: unknown): SaveData {
     tomes: readTomes(source.tomes),
     bestiaries: readBestiaries(source.bestiaries),
     activeBuffs: readActiveBuffs(source.activeBuffs),
+    favor: readGold(source.favor),
+    renown: readGold(source.renown),
+    bounty: readBounty(source.bounty),
   }
+}
+
+function migrateForgedWrit(inventory: Inventory): Inventory {
+  const legacy = (inventory as Record<string, number>)['guild-writ']
+  if (!(legacy > 0)) return inventory
+  const next: Inventory = { ...inventory }
+  delete (next as Record<string, number>)['guild-writ']
+  next['forged-writ'] = (next['forged-writ'] ?? 0) + Math.floor(legacy)
+  return next
+}
+
+function readBounty(value: unknown): Bounty | null {
+  if (!isRecord(value)) return null
+  if (typeof value.monsterId !== 'string' || !getMonster(value.monsterId)) return null
+  const need = finite(value.need)
+  const have = finite(value.have)
+  if (need == null || need <= 0 || have == null || have < 0) return null
+  return { monsterId: value.monsterId, need: Math.floor(need), have: Math.floor(have) }
 }
 
 function readTomes(value: unknown): Record<SkillId, number> {
@@ -204,17 +235,51 @@ function readActiveBuffs(value: unknown): ActiveBuff[] {
     if (typeof entry.id !== 'string' || entry.id.length === 0) continue
     const remainingMs = finite(entry.remainingMs)
     if (remainingMs == null || remainingMs <= 0) continue
-    if (!isRecord(entry.effect) || entry.effect.type !== 'noteYield') continue
-    if (typeof entry.effect.groupId !== 'string' || !isNoteGroupId(entry.effect.groupId)) continue
-    const amount = finite(entry.effect.value)
-    if (amount == null || amount <= 0) continue
-    buffs.push({
-      id: entry.id,
-      effect: { type: 'noteYield', groupId: entry.effect.groupId, value: amount },
-      remainingMs,
-    })
+    const effect = readBuffEffect(entry.effect)
+    if (!effect) continue
+    buffs.push({ id: entry.id, effect, remainingMs })
   }
   return buffs
+}
+
+function readBuffEffect(value: unknown): BuffEffect | null {
+  if (!isRecord(value) || typeof value.type !== 'string') return null
+  if (value.type === 'noteYield') {
+    if (typeof value.groupId !== 'string' || !isNoteGroupId(value.groupId)) return null
+    const amount = finite(value.value)
+    if (amount == null || amount <= 0) return null
+    return { type: 'noteYield', groupId: value.groupId, value: amount }
+  }
+  if (value.type === 'sellPricePct') {
+    const amount = finite(value.value)
+    if (amount == null || amount <= 0) return null
+    return { type: 'sellPricePct', value: amount }
+  }
+  if (value.type === 'activityAdvantage') {
+    if (!Array.isArray(value.skills)) return null
+    const skills = value.skills.filter((id): id is SkillId => typeof id === 'string' && isSkillId(id))
+    if (!skills.length) return null
+    return { type: 'activityAdvantage', skills }
+  }
+  if (value.type === 'frighten') {
+    const chance = finite(value.chance)
+    if (chance == null || chance <= 0) return null
+    return { type: 'frighten', chance }
+  }
+  if (value.type === 'rareSpawn') {
+    if (typeof value.biome !== 'string' || !isBiomeId(value.biome)) return null
+    const chance = finite(value.chance)
+    if (chance == null || chance <= 0) return null
+    return { type: 'rareSpawn', biome: value.biome, chance }
+  }
+  if (value.type === 'damageVsType') {
+    if (typeof value.creatureType !== 'string') return null
+    if (!(CREATURE_TYPES as readonly string[]).includes(value.creatureType)) return null
+    const amount = finite(value.value)
+    if (amount == null || amount <= 0) return null
+    return { type: 'damageVsType', creatureType: value.creatureType as CreatureType, value: amount }
+  }
+  return null
 }
 
 function readUpgrades(value: unknown): Record<string, number> {
@@ -524,6 +589,7 @@ function readCombat(value: unknown): CombatFight | null {
     questId: typeof value.questId === 'string' && isQuestId(value.questId) ? value.questId : null,
     pendingCleave: Math.max(0, finite(value.pendingCleave) ?? 0),
     relentlessUsed: value.relentlessUsed === true,
+    frightenAttacksLeft: Math.max(0, Math.floor(finite(value.frightenAttacksLeft) ?? 0)),
   }
 }
 

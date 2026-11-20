@@ -120,6 +120,10 @@ export function CharacterPage({
     }
     if (link.kind === 'quest') {
       onNavigate('quests', { kind: 'quest', questId: link.questId })
+      return
+    }
+    if (link.kind === 'combat') {
+      onNavigate('monsterHunting')
     }
   }
 

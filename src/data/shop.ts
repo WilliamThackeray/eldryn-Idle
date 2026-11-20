@@ -2,6 +2,7 @@ import { getItem, type ItemId } from './items'
 import type { SkillId } from './skills'
 import { SKILLS } from './skills'
 import { addItems, hasItems, removeItems, type Inventory } from '../engine/inventory'
+import { shopGoldCost } from '../engine/social'
 import { levelForXp } from '../engine/xp'
 import type { ItemStack } from './activities/types'
 import type { SkillProgress } from '../types/game'
@@ -11,6 +12,7 @@ export type ShopSection = 'general' | SkillId | 'combat'
 export type UpgradeEffect =
   | { kind: 'inventoryTabs' }
   | { kind: 'interval'; match: 'mine' | 'chop' | 'fish' | 'herb-plot'; pct: number }
+  | { kind: 'shopDiscount'; pct: number }
   | { kind: 'soon' }
 
 export interface ShopUpgradeTier {
@@ -90,16 +92,23 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
     section: 'athletics',
     name: 'Pickaxe',
     description: 'Mining interval −5% per tier.',
-    tiers: toolTiers(
-      [50, 200, 800],
-      [
-        { itemId: 'iron-bar', quantity: 1 },
-        { itemId: 'iron-bar', quantity: 5 },
-        { itemId: 'steel-bar', quantity: 5 },
-      ],
-      'athletics',
-      'mine',
-    ),
+    tiers: [
+      {
+        cost: { gold: 50, items: [{ itemId: 'iron-bar', quantity: 1 }] },
+        effect: { kind: 'interval', match: 'mine', pct: 0.05 },
+        requires: { skillId: 'athletics', level: 1 },
+      },
+      {
+        cost: { gold: 200, items: [{ itemId: 'iron-bar', quantity: 5 }] },
+        effect: { kind: 'interval', match: 'mine', pct: 0.05 },
+        requires: { skillId: 'athletics', level: 15 },
+      },
+      {
+        cost: { gold: 800, items: [{ itemId: 'steel-bar', quantity: 5 }], favor: 15 },
+        effect: { kind: 'interval', match: 'mine', pct: 0.05 },
+        requires: { skillId: 'athletics', level: 30 },
+      },
+    ],
   },
   soon('athletics', 'bellows', 'Bellows', 'Smithing yield. Coming soon.'),
   {
@@ -141,7 +150,7 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
     description: 'Halve the herb plot interval (a second plot).',
     tiers: [
       {
-        cost: { gold: 100, items: [{ itemId: 'forest-herbs', quantity: 5 }] },
+        cost: { gold: 100, items: [{ itemId: 'forest-herbs', quantity: 5 }], favor: 8 },
         effect: { kind: 'interval', match: 'herb-plot', pct: 0.5 },
         requires: { skillId: 'nature', level: 1 },
       },
@@ -155,12 +164,11 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
     id: 'guild-discount',
     section: 'persuasion',
     name: 'Guild Discount',
-    description: 'Shop discounts. Costs Guild Favor (locked until Prompt 18).',
+    description: 'Shop gold prices −5%. Costs Guild Favor.',
     tiers: [
       {
-        // TODO(Prompt 18): Guild Favor
-        cost: { gold: 10, favor: 1 },
-        effect: { kind: 'inventoryTabs' },
+        cost: { gold: 200, favor: 10 },
+        effect: { kind: 'shopDiscount', pct: 0.05 },
       },
     ],
   },
@@ -187,19 +195,20 @@ export function upgradesForSection(section: ShopSection): ShopUpgrade[] {
   return SHOP_UPGRADES.filter((entry) => entry.section === section)
 }
 
-export function goodPrice(itemId: ItemId): number | null {
+export function goodPrice(itemId: ItemId, discount = 0): number | null {
   if (!GENERAL_GOODS.some((entry) => entry.itemId === itemId)) return null
   const def = getItem(itemId)
   if (!def) return null
-  return def.sellValue * 2
+  return shopGoldCost(def.sellValue * 2, discount)
 }
 
 export function buyGood(
   inventory: Inventory,
   gold: number,
   itemId: ItemId,
+  discount = 0,
 ): { inventory: Inventory; gold: number } {
-  const price = goodPrice(itemId)
+  const price = goodPrice(itemId, discount)
   if (price == null || gold < price) return { inventory, gold }
   return {
     inventory: addItems(inventory, [{ itemId, quantity: 1 }]),
@@ -209,15 +218,30 @@ export function buyGood(
 
 export type OwnedUpgrades = Record<string, number>
 
+export function shopDiscountFromUpgrades(upgrades: OwnedUpgrades): number {
+  let total = 0
+  for (const upgrade of SHOP_UPGRADES) {
+    const owned = upgrades[upgrade.id]
+    if (owned == null) continue
+    for (let i = 0; i <= owned; i++) {
+      const effect = upgrade.tiers[i]?.effect
+      if (effect?.kind === 'shopDiscount') total += effect.pct
+    }
+  }
+  return total
+}
+
 export function buyUpgrade(
   state: {
     gold: number
+    favor: number
     inventory: Inventory
     upgrades: OwnedUpgrades
     skills: Record<SkillId, SkillProgress>
   },
   id: string,
-): { gold: number; inventory: Inventory; upgrades: OwnedUpgrades } {
+  discount = 0,
+): { gold: number; favor: number; inventory: Inventory; upgrades: OwnedUpgrades } {
   const upgrade = getShopUpgrade(id)
   if (!upgrade) return state
   const owned = state.upgrades[id]
@@ -225,17 +249,19 @@ export function buyUpgrade(
   const tier = upgrade.tiers[nextIndex]
   if (!tier) return state
   if (tier.effect.kind === 'soon') return state
-  // TODO(Prompt 18): Guild Favor
-  if (tier.cost.favor != null) return state
   if (tier.requires) {
     const xp = state.skills[tier.requires.skillId]?.xp ?? 0
     if (levelForXp(xp) < tier.requires.level) return state
   }
-  if (state.gold < tier.cost.gold) return state
+  const goldCost = shopGoldCost(tier.cost.gold, discount)
+  const favorCost = tier.cost.favor ?? 0
+  if (state.gold < goldCost) return state
+  if (state.favor < favorCost) return state
   const items = tier.cost.items ?? []
   if (!hasItems(state.inventory, items)) return state
   return {
-    gold: state.gold - tier.cost.gold,
+    gold: state.gold - goldCost,
+    favor: state.favor - favorCost,
     inventory: removeItems(state.inventory, items),
     upgrades: { ...state.upgrades, [id]: nextIndex },
   }

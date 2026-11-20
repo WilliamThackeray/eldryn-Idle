@@ -32,12 +32,16 @@ interface Spec {
   rareTable?: LootEntry[]
   byproducts?: LootEntry[]
   gold?: GoldDrop
+  favor?: GoldDrop
+  renownRequired?: number
   baseIntervalMs?: number
 }
 
 export function activity(spec: Spec): ActivityDef {
   const outputs = spec.outputs ?? []
-  const kind = spec.kind ?? (spec.inputs?.length ? 'craft' : outputs.length > 0 || spec.gold ? 'gather' : 'train')
+  const kind =
+    spec.kind ??
+    (spec.inputs?.length ? 'craft' : outputs.length > 0 || spec.gold || spec.favor ? 'gather' : 'train')
   const base = xpFor(spec.requiredLevel)
   return {
     id: spec.id,
@@ -52,6 +56,8 @@ export function activity(spec: Spec): ActivityDef {
     rareTable: spec.rareTable,
     byproducts: spec.byproducts,
     gold: spec.gold,
+    favor: spec.favor,
+    renownRequired: spec.renownRequired,
     kind,
   }
 }

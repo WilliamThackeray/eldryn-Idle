@@ -51,6 +51,7 @@ async function catchUp(showReport: boolean) {
   const beforeSkills = state.skills
   const beforeItems = state.inventory
   const beforeGold = state.gold
+  const beforeFavor = state.favor
   const beforeClassXp = state.classXp
   useGameStore.getState().clearOfflineCombatFlags()
   if (elapsedMs > 0) await play(elapsedMs, false)
@@ -67,6 +68,8 @@ async function catchUp(showReport: boolean) {
     afterClassXp,
     after.offlineKills,
     after.lastDefeat,
+    beforeFavor,
+    after.favor,
   )
   useGameStore.setState({
     lastTick: Date.now(),
@@ -78,6 +81,7 @@ async function catchUp(showReport: boolean) {
             skills: gains.skills,
             items: gains.items,
             gold: gains.gold,
+            favor: gains.favor,
             kills: gains.kills,
             classXp: gains.classXp,
             defeated: gains.defeated,

@@ -29,6 +29,7 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
   const skills = useGameStore((state) => state.skills)
   const equipment = useGameStore((state) => state.equipment)
   const gold = useGameStore((state) => state.gold)
+  const favor = useGameStore((state) => state.favor)
   const activeAction = useGameStore((state) => state.activeAction)
   const activeBuffs = useGameStore((state) => state.activeBuffs)
   const combat = useGameStore((state) => state.combat)
@@ -101,7 +102,7 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
             {activeBuffs.map((buff) => (
               <span
                 key={buff.id}
-                title={`${buff.id.replace(/^notes-/, 'Notes: ')} · ${formatBuffTime(buff.remainingMs)} left`}
+                title={`${buffLabel(buff.id)} · ${formatBuffTime(buff.remainingMs)} left`}
                 className="inline-flex items-center gap-0.5 rounded bg-ink/60 px-1.5 py-0.5 text-[10px] text-sage"
               >
                 <BookOpen size={12} />
@@ -113,6 +114,10 @@ export function Header({ title, currentPage, setCurrentPage, onMainMenu }: Heade
         <div className="flex items-center gap-1 text-gold" aria-label="Gold">
           <Coins size={18} />
           <span>{gold.toLocaleString()} gp</span>
+        </div>
+        <div className="flex items-center gap-1 text-sage" aria-label="Guild Favor">
+          <ScrollText size={18} />
+          <span>{favor.toLocaleString()} Favor</span>
         </div>
 
         <Link
@@ -213,4 +218,9 @@ function formatBuffTime(ms: number): string {
   if (hours > 0) return `${hours}h${minutes > 0 ? `${minutes}m` : ''}`
   if (minutes > 0) return `${minutes}m`
   return `${totalSec}s`
+}
+
+function buffLabel(id: string): string {
+  if (id.startsWith('notes-')) return `Notes: ${id.slice(6)}`
+  return id.replace(/-/g, ' ')
 }
