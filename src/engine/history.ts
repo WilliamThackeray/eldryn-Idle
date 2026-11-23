@@ -9,7 +9,7 @@ import {
   type NoteGroupId,
 } from '../data/historyContent'
 import type { BiomeId, CreatureType } from '../data/monsters'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import {
   HISTORY_MAX_XP_PCT,
   HISTORY_NOTE_DURATION_MS,
@@ -24,7 +24,7 @@ export type { BestiaryType, NoteGroupId }
 export type BuffEffect =
   | { type: 'noteYield'; groupId: NoteGroupId; value: number }
   | { type: 'sellPricePct'; value: number }
-  | { type: 'activityAdvantage'; skills: SkillId[] }
+  | { type: 'activityAdvantage'; skills: TradeSkillId[] }
   | { type: 'frighten'; chance: number }
   | { type: 'rareSpawn'; biome: BiomeId; chance: number }
   | { type: 'damageVsType'; creatureType: CreatureType; value: number }
@@ -35,20 +35,20 @@ export interface ActiveBuff {
   remainingMs: number
 }
 
-export type Tomes = Partial<Record<SkillId, number>>
+export type Tomes = Partial<Record<TradeSkillId, number>>
 export type Bestiaries = Partial<Record<CreatureType, number>>
 
-export function tomeXpPct(tomes: Tomes | undefined, skillId: SkillId): number {
+export function tomeXpPct(tomes: Tomes | undefined, skillId: TradeSkillId): number {
   const volumes = Math.max(0, Math.floor(tomes?.[skillId] ?? 0))
   return Math.min(volumes, HISTORY_MAX_XP_PCT) / 100
 }
 
-export function tomeSpeedBonus(tomes: Tomes | undefined, skillId: SkillId): number {
+export function tomeSpeedBonus(tomes: Tomes | undefined, skillId: TradeSkillId): number {
   const volumes = Math.max(0, Math.floor(tomes?.[skillId] ?? 0))
   return volumes >= 5 ? HISTORY_TOME_SPEED_BONUS : 0
 }
 
-export function tomeCheckBonus(tomes: Tomes | undefined, skillId: SkillId): number {
+export function tomeCheckBonus(tomes: Tomes | undefined, skillId: TradeSkillId): number {
   const volumes = Math.max(0, Math.floor(tomes?.[skillId] ?? 0))
   return volumes >= 10 ? HISTORY_TOME_CHECK_BONUS : 0
 }

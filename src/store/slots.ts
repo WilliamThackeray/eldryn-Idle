@@ -5,7 +5,44 @@ import { SAVE_KEY, SAVE_VERSION, migrateSave, type SaveData } from './migrate'
 
 export const SLOT_COUNT = 3
 export const SLOT_INDEX_KEY = 'idle_game_slots'
+export const REALM_NOTICE_KEY = 'idle_game_realm_notice'
 export type SlotId = 1 | 2 | 3
+
+const ALL_SLOTS: SlotId[] = [1, 2, 3]
+
+function saveVersion(raw: string | null): number | null {
+  if (!raw) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed)) return 0
+    if (typeof parsed.version === 'number') return parsed.version
+    return 0
+  } catch {
+    return 0
+  }
+}
+
+/** Wipe pre-trade-skill saves. Returns true when the realm notice should show. */
+export function wipePreTradeSkillSaves(storage: KeyValueStore): boolean {
+  const versions = [
+    saveVersion(storage.getItem(SAVE_KEY)),
+    ...ALL_SLOTS.map((slot) => saveVersion(storage.getItem(slotStorageKey(slot)))),
+  ].filter((v): v is number => v != null)
+  if (!versions.length || versions.every((v) => v >= SAVE_VERSION)) return false
+
+  for (const slot of ALL_SLOTS) storage.removeItem(slotStorageKey(slot))
+  storage.removeItem(SAVE_KEY)
+  storage.removeItem(SLOT_INDEX_KEY)
+  storage.setItem(REALM_NOTICE_KEY, '1')
+  bindSlot(null)
+  return true
+}
+
+export function consumeRealmNotice(storage: KeyValueStore): boolean {
+  if (!storage.getItem(REALM_NOTICE_KEY)) return false
+  storage.removeItem(REALM_NOTICE_KEY)
+  return true
+}
 
 export interface KeyValueStore {
   getItem(key: string): string | null
@@ -64,6 +101,7 @@ export function writeSlotIndex(storage: KeyValueStore, index: SlotIndex): void {
 }
 
 export function readSlotSave(storage: KeyValueStore, slot: SlotId): SaveData | null {
+  wipePreTradeSkillSaves(storage)
   const raw = storage.getItem(slotStorageKey(slot))
   if (!raw) return null
   try {

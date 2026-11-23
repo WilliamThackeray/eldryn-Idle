@@ -1,5 +1,5 @@
 import { getItem, type ItemId } from './items'
-import type { SkillId } from './skills'
+import type { TradeSkillId } from './skills'
 import { SKILLS } from './skills'
 import { addItems, hasItems, removeItems, type Inventory } from '../engine/inventory'
 import { shopGoldCost } from '../engine/social'
@@ -7,7 +7,7 @@ import { levelForXp } from '../engine/xp'
 import type { ItemStack } from './activities/types'
 import type { SkillProgress } from '../types/game'
 
-export type ShopSection = 'general' | SkillId | 'combat' | 'class'
+export type ShopSection = 'general' | 'class' | TradeSkillId | 'combat'
 
 export type UpgradeEffect =
   | { kind: 'inventoryTabs' }
@@ -18,7 +18,7 @@ export type UpgradeEffect =
 export interface ShopUpgradeTier {
   cost: { gold: number; items?: ItemStack[]; favor?: number }
   effect: UpgradeEffect
-  requires?: { skillId: SkillId; level: number }
+  requires?: { skillId: TradeSkillId; level: number }
 }
 
 export interface ShopUpgrade {
@@ -45,7 +45,7 @@ export const GENERAL_GOODS: readonly ShopGood[] = [
 const toolTiers = (
   gold: [number, number, number],
   items: [ItemStack, ItemStack, ItemStack],
-  skillId: SkillId,
+  skillId: TradeSkillId,
   match: 'mine' | 'chop' | 'fish',
 ): ShopUpgradeTier[] => [
   {
@@ -87,33 +87,35 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
       { cost: { gold: 2000 }, effect: { kind: 'inventoryTabs' } },
     ],
   },
+  // TODO(Prompt 23): tool-tier upgrades move to crafting.
   {
     id: 'pickaxe',
-    section: 'athletics',
+    section: 'mining',
     name: 'Pickaxe',
     description: 'Mining interval −5% per tier.',
     tiers: [
       {
         cost: { gold: 50, items: [{ itemId: 'iron-bar', quantity: 1 }] },
         effect: { kind: 'interval', match: 'mine', pct: 0.05 },
-        requires: { skillId: 'athletics', level: 1 },
+        requires: { skillId: 'mining', level: 1 },
       },
       {
         cost: { gold: 200, items: [{ itemId: 'iron-bar', quantity: 5 }] },
         effect: { kind: 'interval', match: 'mine', pct: 0.05 },
-        requires: { skillId: 'athletics', level: 15 },
+        requires: { skillId: 'mining', level: 15 },
       },
       {
         cost: { gold: 800, items: [{ itemId: 'steel-bar', quantity: 5 }], favor: 15 },
         effect: { kind: 'interval', match: 'mine', pct: 0.05 },
-        requires: { skillId: 'athletics', level: 30 },
+        requires: { skillId: 'mining', level: 30 },
       },
     ],
   },
-  soon('athletics', 'bellows', 'Bellows', 'Smithing yield. Coming soon.'),
+  soon('smithing', 'bellows', 'Bellows', 'Smithing yield. Coming soon.'),
+  // TODO(Prompt 23): tool-tier upgrades move to crafting.
   {
     id: 'hatchet',
-    section: 'survival',
+    section: 'woodcutting',
     name: 'Hatchet',
     description: 'Woodcutting interval −5% per tier.',
     tiers: toolTiers(
@@ -123,13 +125,14 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
         { itemId: 'logs', quantity: 5 },
         { itemId: 'hardwood', quantity: 5 },
       ],
-      'survival',
+      'woodcutting',
       'chop',
     ),
   },
+  // TODO(Prompt 23): tool-tier upgrades move to crafting.
   {
     id: 'rod',
-    section: 'survival',
+    section: 'fishing',
     name: 'Rod',
     description: 'Fishing interval −5% per tier.',
     tiers: toolTiers(
@@ -139,30 +142,30 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
         { itemId: 'logs', quantity: 5 },
         { itemId: 'hardwood', quantity: 5 },
       ],
-      'survival',
+      'fishing',
       'fish',
     ),
   },
   {
     id: 'extra-farm-plot',
-    section: 'nature',
+    section: 'foraging',
     name: 'Extra Farm Plot',
     description: 'Halve the herb plot interval (a second plot).',
     tiers: [
       {
         cost: { gold: 100, items: [{ itemId: 'forest-herbs', quantity: 5 }], favor: 8 },
         effect: { kind: 'interval', match: 'herb-plot', pct: 0.5 },
-        requires: { skillId: 'nature', level: 1 },
+        requires: { skillId: 'foraging', level: 1 },
       },
     ],
   },
-  soon('sleightOfHand', 'lockpick-set', 'Lockpick Set', 'Lockpicking yield. Coming soon.'),
-  soon('arcana', 'scribes-desk', "Scribe's Desk", 'Component crafting yield. Coming soon.'),
+  soon('thievery', 'lockpick-set', 'Lockpick Set', 'Lockpicking yield. Coming soon.'),
+  soon('scribing', 'scribes-desk', "Scribe's Desk", 'Component crafting yield. Coming soon.'),
   soon('combat', 'auto-eat-threshold', 'Auto-eat Threshold', 'Combat food threshold. Coming soon.'),
   soon('combat', 'second-loadout', 'Second Loadout', 'A second equipment loadout. Coming soon.'),
   {
     id: 'guild-discount',
-    section: 'persuasion',
+    section: 'commerce',
     name: 'Guild Discount',
     description: 'Shop gold prices −5%. Costs Guild Favor.',
     tiers: [
@@ -174,12 +177,14 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
   },
   ...SKILLS.filter(
     (skill) =>
-      skill.id !== 'athletics' &&
-      skill.id !== 'survival' &&
-      skill.id !== 'nature' &&
-      skill.id !== 'sleightOfHand' &&
-      skill.id !== 'arcana' &&
-      skill.id !== 'persuasion',
+      skill.id !== 'mining' &&
+      skill.id !== 'smithing' &&
+      skill.id !== 'woodcutting' &&
+      skill.id !== 'fishing' &&
+      skill.id !== 'foraging' &&
+      skill.id !== 'thievery' &&
+      skill.id !== 'scribing' &&
+      skill.id !== 'commerce',
   ).map((skill) =>
     soon(skill.id, `coming-soon-${skill.id}`, 'Coming soon', `${skill.name} upgrades. Coming soon.`),
   ),
@@ -237,7 +242,7 @@ export function buyUpgrade(
     favor: number
     inventory: Inventory
     upgrades: OwnedUpgrades
-    skills: Record<SkillId, SkillProgress>
+    skills: Record<TradeSkillId, SkillProgress>
   },
   id: string,
   discount = 0,

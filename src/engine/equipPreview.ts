@@ -1,6 +1,6 @@
 import { isWeaponProficient, type ClassId } from '../data/classes'
 import { getItem, type ItemId } from '../data/items'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
 import { playerToHitBonus } from './combat/attack'
 import { computePlayerIntervalMs } from './combat/state'
@@ -35,7 +35,7 @@ export function equipPreview(
   equipment: Equipment,
   inventory: Inventory,
   itemId: ItemId,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   classXp: number,
   classId: ClassId | null = null,
 ): EquipPreview | null {

@@ -2,7 +2,7 @@ import { expect, test } from 'vitest'
 import { getDungeon } from '../data/dungeons'
 import { initialSkillProgress } from '../data/skills'
 import { buyUpgrade, getShopUpgrade } from '../data/shop'
-import { consumeEntryItem, resolveTrap } from './dungeon'
+import { consumeEntryItem, resolveTrap, type DungeonCheckContext } from './dungeon'
 import { grantFavor, progressBounty } from './social'
 import { xpForLevel } from './xp'
 
@@ -72,19 +72,28 @@ test('inspiration rerolls a failed trap disarm; unspotted traps spend none', () 
   const room = { kind: 'trap' as const, after: 0, requiredLevel: 10, damage: 6 }
   const low = initialSkillProgress()
   const hard = { ...room, requiredLevel: 99 }
-  const miss = resolveTrap(hard, low, () => 0, 5)
+  const miss = resolveTrap(
+    hard,
+    { skills: low, classId: 'fighter', classXp: 0 },
+    () => 0,
+    5,
+  )
   expect(miss.spotted).toBe(false)
   expect(miss.inspirationSpent).toBe(0)
 
   const spotSkills = initialSkillProgress()
-  spotSkills.perception = { xp: xpForLevel(99) }
+  spotSkills.foraging = { xp: xpForLevel(99) }
+  spotSkills.thievery = { xp: xpForLevel(99) }
+  const ctx: DungeonCheckContext = { skills: spotSkills, classId: 'fighter', classXp: xpForLevel(99) }
   // First roll nat 1, second roll nat 20 when inspiration spends.
   let rolls = 0
   const rng = () => {
     rolls += 1
-    return rolls === 1 ? 0 : 0.99
+    if (rolls === 1) return 0.99
+    if (rolls === 2) return 0
+    return 0.99
   }
-  const ok = resolveTrap(room, spotSkills, rng, 1)
+  const ok = resolveTrap(room, ctx, rng, 1)
   expect(ok.spotted).toBe(true)
   expect(ok.disarmed).toBe(true)
   expect(ok.damage).toBe(0)

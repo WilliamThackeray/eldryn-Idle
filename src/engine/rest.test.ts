@@ -173,8 +173,6 @@ test('CON rank 10 short-rest hit die keeps the higher roll', () => {
   // Rank 10 needs total XP for level 46 (tier = floor((level-1)/5)+1 → level 46 = tier 10)
   const rankXp = xpForLevel(46)
   skills.vitality = { xp: rankXp }
-  skills.animalHandling = { xp: 0 }
-  skills.medicine = { xp: 0 }
   // Only vitality contributes; need enough for CON rank 10. abilityTotalXp sums all CON skills.
   // Rank = tier(levelForXp(totalXp)). Level 46 → tier 10.
   skills.vitality = { xp: rankXp }
@@ -271,7 +269,7 @@ test('shortRest refreshes short-rest flags and leaves rage uses alone', () => {
 
 test('shortRest refills pact slots; Arcane Recovery once per long rest', () => {
   const skills = initialSkillProgress()
-  skills.arcana = { xp: xpForLevel(21) }
+  skills.enchanting = { xp: xpForLevel(21) }
   const classXp = xpForLevel(15)
   const wizardFight = createFight({
     monsterId: 'wolf',

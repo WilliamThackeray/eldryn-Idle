@@ -41,7 +41,7 @@ test('applyEvents counts craft successes and ignores fails', () => {
   const next = applyEvents(progress, [
     {
       kind: 'skill',
-      skillId: 'nature',
+      skillId: 'cooking',
       activityId: 'cook-meat',
       label: 'Cook Meat',
       roll: 15,
@@ -54,7 +54,7 @@ test('applyEvents counts craft successes and ignores fails', () => {
     },
     {
       kind: 'skill',
-      skillId: 'nature',
+      skillId: 'cooking',
       activityId: 'cook-meat',
       label: 'Cook Meat',
       roll: 1,
@@ -75,7 +75,7 @@ test('applyEvents records investigation level and dungeon clear', () => {
     'into-the-thicket': runWith({ counts: [0] }),
   }
   const next = applyEvents(progress, [
-    { kind: 'levelUp', skillId: 'investigation', level: 5 },
+    { kind: 'levelUp', skillId: 'mining', level: 5 },
     { kind: 'dungeonClear', dungeonId: 'shifting-thicket' },
   ]).progress
   expect(getRun(next, 'the-marker-that-wasnt')!.counts[0]).toBe(5)
@@ -83,7 +83,7 @@ test('applyEvents records investigation level and dungeon clear', () => {
 })
 
 test('advance offline skill actions bump craft objectives', () => {
-  const activity = getActivity('nature', 'cook-meat')!
+  const activity = getActivity('cooking', 'cook-meat')!
   const result = advance(
     {
       skills: initialSkillProgress(),
@@ -91,7 +91,7 @@ test('advance offline skill actions bump craft objectives', () => {
       gold: 0,
       activeAction: {
         kind: 'skill',
-        skillId: 'nature',
+        skillId: 'cooking',
         activityId: 'cook-meat',
         label: activity.name,
         baseIntervalMs: activity.baseIntervalMs,
@@ -156,6 +156,8 @@ test('marker check failure inserts bandit fight; check cannot be rolled twice', 
     0,
     0,
     () => 0,
+    'fighter',
+    0,
   )
   expect(fail.awaitInspiration).toBe(true)
   progress = fail.progress as typeof progress
@@ -169,6 +171,8 @@ test('marker check failure inserts bandit fight; check cannot be rolled twice', 
     0,
     () => 0,
     false,
+    'fighter',
+    0,
   )
   expect(applied.passed).toBe(false)
   const run = getRun(applied.progress, 'the-marker-that-wasnt')!
@@ -186,6 +190,8 @@ test('marker check failure inserts bandit fight; check cannot be rolled twice', 
     0,
     0,
     () => 0.99,
+    'fighter',
+    0,
   )
   expect(again.ok).toBe(false)
 })
@@ -200,7 +206,8 @@ test('false-papers autoPass succeeds and leaves the item', () => {
     0,
     0,
     () => 0,
-    undefined,
+    'fighter',
+    0,
     true,
   )
   expect(result.passed).toBe(true)
@@ -215,6 +222,7 @@ test('CHA Rank 10 reveals intimidate approach', () => {
     false,
   )
   const high = initialSkillProgress()
-  high.persuasion = { xp: xpForLevel(50) }
+  high.commerce = { xp: xpForLevel(50) }
+  high.performance = { xp: xpForLevel(50) }
   expect(visibleApproaches(stage, high).some((a) => a.id === 'intimidate')).toBe(true)
 })

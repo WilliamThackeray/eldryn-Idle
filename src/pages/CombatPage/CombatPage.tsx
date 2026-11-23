@@ -12,7 +12,7 @@ import {
   type MonsterDef,
 } from '../../data/monsters'
 import { dungeonUnlocked } from '../../engine/quest'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { deriveAbilities } from '../../engine/abilities'
 import {
   averageDamage,
@@ -429,7 +429,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
 function estimatePlayerHp(
   classId: ClassId | null,
   classXp: number,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Parameters<typeof playerMaxHp>[4],
 ): number {
   if (!classId) return 10
@@ -614,7 +614,7 @@ function MatchupPanel({
 }: {
   monster: MonsterDef | null
   classId: ClassId | null
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   classXp: number
   inventory: Inventory

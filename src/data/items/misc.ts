@@ -75,7 +75,7 @@ export const MISC = [
   {
     id: 'disguise-kit',
     name: 'Disguise Kit',
-    description: 'Use for advantage on Stealth and Sleight of Hand checks for 30 minutes.',
+    description: 'Use for advantage on Thievery activity checks for 30 minutes.',
     category: 'misc',
     rarity: 'uncommon',
     stackable: true,

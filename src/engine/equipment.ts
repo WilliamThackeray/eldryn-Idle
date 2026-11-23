@@ -7,7 +7,7 @@ import {
   type ItemId,
   type ItemStats,
 } from '../data/items'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import {
   ARMOR_SLOT_SHARE,
   ATTUNEMENT_LIMIT,
@@ -173,8 +173,8 @@ export interface TotalItemStats {
   critRange: number
   attackSpeedPct: number
   resistances: DamageType[]
-  skillXpPct: Partial<Record<SkillId, number>>
-  skillSpeedPct: Partial<Record<SkillId, number>>
+  skillXpPct: Partial<Record<TradeSkillId, number>>
+  skillSpeedPct: Partial<Record<TradeSkillId, number>>
 }
 
 function emptyTotalStats(): TotalItemStats {
@@ -193,13 +193,13 @@ function emptyTotalStats(): TotalItemStats {
 }
 
 function addSkillMap(
-  into: Partial<Record<SkillId, number>>,
+  into: Partial<Record<TradeSkillId, number>>,
   from: ItemStats['skillXpPct'] | ItemStats['skillSpeedPct'],
 ) {
   if (!from) return
   for (const [key, value] of Object.entries(from)) {
     if (value == null) continue
-    const skill = key as SkillId
+    const skill = key as TradeSkillId
     into[skill] = (into[skill] ?? 0) + value
   }
 }
@@ -410,8 +410,8 @@ export function heavyArmorIntervalMultiplier(equipment: Equipment, strScore: num
   return 1
 }
 
-export function gearRollMode(skillId: SkillId, equipment: Equipment): RollMode {
-  if (skillId !== 'stealth' && skillId !== 'acrobatics') return 'normal'
+export function gearRollMode(skillId: TradeSkillId, equipment: Equipment): RollMode {
+  if (skillId !== 'thievery') return 'normal'
   const sources: Array<'advantage' | 'disadvantage'> = []
   for (const slot of Object.keys(equipment) as EquipmentSlot[]) {
     const gear = gearOf(equipment[slot])

@@ -1,7 +1,7 @@
 import { getItem, type WeaponMastery } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
 import type { SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { activePerks, nickCeiling } from '../abilities'
 import { PUSH_DELAY_FRACTION } from '../config'
 import { applyDamageModifiers } from '../damage'
@@ -26,7 +26,7 @@ export function applyHitMasteries(input: {
   weapon: ReturnType<typeof playerWeapon>
   before: number
   dealt: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
 }): string {
   const { fight, mastery, monster, abilityBonus, prof, rng, equipment, weapon, before, dealt } = input
   let line = ''

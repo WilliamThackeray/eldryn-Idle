@@ -6,7 +6,7 @@ import {
   type ClassId,
 } from '../data/classes'
 import { getItem, type ItemId } from '../data/items'
-import { getSkill, type SkillId } from '../data/skills'
+import { getSkill, type TradeSkillId } from '../data/skills'
 import { getSpell, spellsForClass, type SpellDef, type SpellId } from '../data/spells'
 import type { AbilityAbbr } from '../types/game'
 import {
@@ -221,7 +221,7 @@ export function castingAbilityFor(classId: ClassId): AbilityAbbr {
   return cls.spellcasting.castingAbility
 }
 
-export function unlockSkillFor(classId: ClassId): SkillId | null {
+export function unlockSkillFor(classId: ClassId): TradeSkillId | null {
   const cls = getClass(classId)
   if (cls.spellcasting.casterType === 'none') return null
   return cls.spellcasting.unlockSkill
@@ -239,7 +239,7 @@ export function knownSpells(classId: ClassId, skillLevel: number): SpellDef[] {
 export function knownSpellsForClasses(
   primaryClassId: ClassId,
   secondaryClassId: ClassId | null | undefined,
-  skills: Record<SkillId, { xp: number }>,
+  skills: Record<TradeSkillId, { xp: number }>,
 ): SpellDef[] {
   const out = new Map<string, SpellDef>()
   for (const classId of [primaryClassId, secondaryClassId].filter(Boolean) as ClassId[]) {
@@ -319,7 +319,7 @@ export function buildFightSlots(input: {
   skillLevel: number
   loadout: SpellLoadout | undefined
   secondaryClassId?: ClassId | null
-  skills?: Record<SkillId, { xp: number }>
+  skills?: Record<TradeSkillId, { xp: number }>
 }): SpellSlot[] {
   const casterType = effectiveCasterType(input.classId)
   if (casterType == null) return []

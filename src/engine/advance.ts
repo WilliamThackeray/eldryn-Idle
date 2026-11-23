@@ -3,7 +3,7 @@ import type { ClassId } from '../data/classes'
 import { getItem } from '../data/items'
 import { getMonster } from '../data/monsters'
 import { intervalBonus } from '../data/shop'
-import { getSkill, SKILLS, type SkillId } from '../data/skills'
+import { getSkill, SKILLS, type TradeSkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { activePerks, deriveAbilities, effectTotal } from './abilities'
 import {
@@ -45,7 +45,7 @@ export type { CombatAction, CombatFight } from './combat'
 
 export interface SkillAction {
   kind: 'skill'
-  skillId: SkillId
+  skillId: TradeSkillId
   activityId: string
   label: string
   baseIntervalMs: number
@@ -58,7 +58,7 @@ export interface SkillAction {
 export type ActiveAction = SkillAction | CombatAction
 
 export interface AdvanceState {
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   inventory: Inventory
   gold: number
   activeAction: ActiveAction | null
@@ -94,7 +94,7 @@ export interface AdvanceState {
 
 export interface SkillEvent {
   kind: 'skill'
-  skillId: SkillId
+  skillId: TradeSkillId
   activityId: string
   label: string
   roll: number
@@ -108,7 +108,7 @@ export interface SkillEvent {
 
 export interface MaterialsEvent {
   kind: 'materials'
-  skillId: SkillId
+  skillId: TradeSkillId
   activityId: string
   label: string
 }
@@ -126,7 +126,7 @@ export interface KillEvent {
 
 export interface LevelUpEvent {
   kind: 'levelUp'
-  skillId: SkillId | 'class'
+  skillId: TradeSkillId | 'class'
   level: number
 }
 
@@ -161,7 +161,7 @@ function applyQuestSideEffects(
 }
 
 export interface SkillGain {
-  skillId: SkillId
+  skillId: TradeSkillId
   xp: number
   levels: number
 }
@@ -191,8 +191,8 @@ export function cappedAway(awayMs: number): { elapsedMs: number; cappedMs: numbe
 }
 
 export function summarizeGains(
-  beforeSkills: Record<SkillId, SkillProgress>,
-  afterSkills: Record<SkillId, SkillProgress>,
+  beforeSkills: Record<TradeSkillId, SkillProgress>,
+  afterSkills: Record<TradeSkillId, SkillProgress>,
   beforeItems: Inventory,
   afterItems: Inventory,
   beforeGold = 0,
@@ -294,9 +294,9 @@ export function onActivityComplete(
 }
 
 export function activityIntervalMs(
-  skillId: SkillId,
+  skillId: TradeSkillId,
   baseIntervalMs: number,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Equipment = emptyEquipment(),
   otherSpeedBonus = 0,
 ): number {
@@ -310,7 +310,7 @@ export function activityIntervalMs(
 
 export function actionIntervalMs(
   action: ActiveAction,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Equipment = emptyEquipment(),
   combat?: CombatFight | null,
   otherSpeedBonus = 0,

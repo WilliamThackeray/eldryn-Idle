@@ -1,7 +1,7 @@
 import type { ClassId } from '../../data/classes'
 import { getMonster, type MonsterDef } from '../../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { RESPAWN_MS } from '../config'
 import type { Equipment } from '../equipment'
 import type { ActiveBuff } from '../history'
@@ -16,7 +16,7 @@ export function tickRest(input: {
   remaining: number
   monster: MonsterDef | undefined
   inventory: Inventory
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
@@ -35,7 +35,7 @@ export function tickRest(input: {
   monster: MonsterDef | undefined
   inventory: Inventory
   classXp: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   action: 'break' | 'stop' | 'defeat' | 'loop'
   questStepComplete: string | null
   flush: boolean

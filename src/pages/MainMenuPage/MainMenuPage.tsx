@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { resetLoadCatchup } from '../../hooks/useGameLoop'
 import { Button } from '../../components/ui/Button'
@@ -6,9 +6,11 @@ import { Card } from '../../components/ui/Card'
 import { flushSave, useGameStore } from '../../store/gameStore'
 import {
   bindSlot,
+  consumeRealmNotice,
   deleteSlot,
   readSlotSave,
   slotSummary,
+  wipePreTradeSkillSaves,
   writeSlotIndex,
   type SlotId,
 } from '../../store/slots'
@@ -24,10 +26,18 @@ export function MainMenuPage({ onStart }: MainMenuPageProps) {
   const [creating, setCreating] = useState<SlotId | null>(null)
   const [confirming, setConfirming] = useState<SlotId | null>(null)
   const [tick, setTick] = useState(0)
-  const summaries = SLOTS.map((slot) => {
-    const save = readSlotSave(localStorage, slot)
-    return save ? slotSummary(slot, save) : null
+  const [realmNotice, setRealmNotice] = useState(() => {
+    wipePreTradeSkillSaves(localStorage)
+    return consumeRealmNotice(localStorage)
   })
+  const summaries = useMemo(
+    () =>
+      SLOTS.map((slot) => {
+        const save = readSlotSave(localStorage, slot)
+        return save ? slotSummary(slot, save) : null
+      }),
+    [tick],
+  )
 
   if (creating != null) {
     return (
@@ -49,6 +59,16 @@ export function MainMenuPage({ onStart }: MainMenuPageProps) {
       <div className="mx-auto max-w-5xl">
         <h1 className="text-4xl font-bold text-gold">Eldryn Idle</h1>
         <p className="mt-2 text-sm text-parchment/70">Three characters. A class, once chosen, stays chosen.</p>
+        {realmNotice && (
+          <Card className="mt-4 border-gold/50">
+            <p className="text-body text-parchment">
+              The realm has shifted. Old characters couldn&apos;t make the journey. Create a new one.
+            </p>
+            <Button size="sm" className="mt-3" onClick={() => setRealmNotice(false)}>
+              Understood
+            </Button>
+          </Card>
+        )}
         <div key={tick} className="mt-8 grid gap-4 md:grid-cols-3">
           {SLOTS.map((slot) => {
             const summary = summaries[slot - 1]

@@ -4,7 +4,9 @@ import { BESTIARY_TYPES } from '../../data/historyContent'
 import { getItem, type ItemId } from '../../data/items'
 import { getMonster } from '../../data/monsters'
 import { getShopUpgrade, type OwnedUpgrades } from '../../data/shop'
-import { getSkill, SKILLS, type SkillId } from '../../data/skills'
+import { CHECK_SKILLS } from '../../data/checkSkills'
+import { getSkill, SKILLS, type TradeSkillId } from '../../data/skills'
+import { checkModifier, formatCheck } from '../../engine/checks'
 import { getSpell, spellsForClass, type SpellId } from '../../data/spells'
 import { ladderPerksFor, perRankPerkFor } from '../../data/abilityPerks'
 import { ProgressBar } from '../../components/ProgressBar'
@@ -307,6 +309,27 @@ export function CharacterPage({
                   </div>
                 ))}
               </div>
+              <div className="space-y-2 border-t border-line pt-3">
+                <SubHeading title="Checks" />
+                <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                  {CHECK_SKILLS.map((check) => {
+                    const mod = checkModifier(
+                      { skills, classId, classXp },
+                      check.id,
+                    )
+                    return (
+                      <li key={check.id} className="flex items-center justify-between gap-2 text-meta">
+                        <span className="text-parchment">{formatCheck(mod)}</span>
+                        {mod.proficient && (
+                          <span className="rounded bg-sage/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-sage">
+                            Proficient
+                          </span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
               {active && (
                 <div className="space-y-2 border-t border-line pt-3">
                   <div className="grid grid-cols-2 gap-2">
@@ -600,13 +623,13 @@ function Bonuses({
   upgrades,
   echoes,
 }: {
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   tomes: Tomes
   bestiaries: Bestiaries
   upgrades: OwnedUpgrades
   echoes: number
 }) {
-  const tomeRows = SKILLS.filter((skill) => skill.id !== 'history' && (tomes[skill.id] ?? 0) > 0)
+  const tomeRows = SKILLS.filter((skill) => skill.id !== 'scribing' && (tomes[skill.id] ?? 0) > 0)
   const books = BESTIARY_TYPES.filter((type) => (bestiaries[type] ?? 0) > 0)
   const perks = activePerks({ skills })
   const bought = Object.entries(upgrades).flatMap(([id, index]) => {

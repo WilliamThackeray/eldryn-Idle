@@ -24,27 +24,27 @@ import { HISTORY_NOTE_DURATION_MS, HISTORY_NOTE_YIELD_PCT } from './config'
 
 test('tome XP stacks with class modifiers and caps at HISTORY_MAX_XP_PCT', () => {
   const barbarian = modifiersFor('barbarian')
-  expect(applyXpModifiers(100, 'STR', barbarian, tomeXpPct({ athletics: 3 }, 'athletics'))).toBeCloseTo(133)
-  expect(applyXpModifiers(100, 'STR', {}, tomeXpPct({ athletics: 10 }, 'athletics'))).toBeCloseTo(110)
-  expect(applyXpModifiers(100, 'STR', {}, tomeXpPct({ athletics: 99 }, 'athletics'))).toBeCloseTo(110)
+  expect(applyXpModifiers(100, 'STR', barbarian, tomeXpPct({ mining: 3 }, 'mining'))).toBeCloseTo(133)
+  expect(applyXpModifiers(100, 'STR', {}, tomeXpPct({ mining: 10 }, 'mining'))).toBeCloseTo(110)
+  expect(applyXpModifiers(100, 'STR', {}, tomeXpPct({ mining: 99 }, 'mining'))).toBeCloseTo(110)
 })
 
 test('Vol. V cuts the skill interval by 5% before the floor', () => {
   const skills = initialSkillProgress()
-  const base = activityIntervalMs('athletics', 6000, skills, emptyEquipment(), 0)
+  const base = activityIntervalMs('mining', 6000, skills, emptyEquipment(), 0)
   const faster = activityIntervalMs(
-    'athletics',
+    'mining',
     6000,
     skills,
     emptyEquipment(),
-    tomeSpeedBonus({ athletics: 5 }, 'athletics'),
+    tomeSpeedBonus({ mining: 5 }, 'mining'),
   )
   expect(faster).toBeCloseTo(base * 0.95, 5)
-  expect(tomeSpeedBonus({ athletics: 4 }, 'athletics')).toBe(0)
+  expect(tomeSpeedBonus({ mining: 4 }, 'mining')).toBe(0)
 })
 
 test('Vol. X adds +1 to the skill-check total', () => {
-  expect(tomeCheckBonus({ athletics: 10 }, 'athletics')).toBe(1)
+  expect(tomeCheckBonus({ mining: 10 }, 'mining')).toBe(1)
   const without = skillCheck({
     rng: () => 0.45,
     abilityModifier: 0,
@@ -56,7 +56,7 @@ test('Vol. X adds +1 to the skill-check total', () => {
     abilityModifier: 0,
     skillLevel: 1,
     requiredLevel: 1,
-    checkBonus: tomeCheckBonus({ athletics: 10 }, 'athletics'),
+    checkBonus: tomeCheckBonus({ mining: 10 }, 'mining'),
   })
   expect(withTome.total).toBe(without.total + 1)
 })
@@ -74,7 +74,7 @@ test('buffs tick with action time, expire offline, and idle does not tick', () =
     gold: 0,
     activeAction: {
       kind: 'skill',
-      skillId: 'athletics',
+      skillId: 'mining',
       activityId: 'mine-iron',
       label: 'Mine Iron',
       baseIntervalMs: 6000,
@@ -120,7 +120,7 @@ test('mining notes boost mine yield and leave smithing alone', () => {
     gold: 0,
     activeAction: {
       kind: 'skill',
-      skillId: 'athletics',
+      skillId: 'mining',
       activityId: 'mine-iron',
       label: 'Mine Iron',
       baseIntervalMs: 6000,
@@ -140,17 +140,17 @@ test('mining notes boost mine yield and leave smithing alone', () => {
 test('INT R10 removes one Ancient Page from tome costs', () => {
   expect(tomePageCost(1, 1)).toBe(0)
   expect(tomePageCost(3, 1)).toBe(2)
-  const activity = getActivity('history', 'craft-tome-athletics-1')
+  const activity = getActivity('scribing', 'craft-tome-mining-1')
   expect(activity).toBeTruthy()
   const discounted = discountTomeInputs(activity!.id, activity!.inputs ?? [], 1)
   expect(discounted.find((stack) => stack.itemId === 'ancient-page')?.quantity).toBe(0)
-  const vol3 = getActivity('history', 'craft-tome-athletics-3')!
+  const vol3 = getActivity('scribing', 'craft-tome-mining-3')!
   expect(discountTomeInputs(vol3.id, vol3.inputs ?? [], 1).find((s) => s.itemId === 'ancient-page')?.quantity).toBe(2)
 })
 
 test('bestiary volumes add to-hit in combatStats against that creature type', () => {
   const skills = initialSkillProgress()
-  skills.athletics = { xp: xpForLevel(20) }
+  skills.mining = { xp: xpForLevel(20) }
   const equipment = emptyEquipment()
   const monster = getMonster('wolf')!
   const bestiaries = { beast: 2 }

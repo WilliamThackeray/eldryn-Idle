@@ -1,7 +1,7 @@
 import { getClass, type ClassId, type ClericFocus } from '../data/classes'
 import type { ItemStack } from '../data/activities/types'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import {
   ECHO_XP_PCT,
   MAX_SECONDARY_CLASSES,
@@ -36,7 +36,7 @@ export interface MulticlassGap {
 
 export function multiclassGaps(
   classId: ClassId,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
 ): MulticlassGap[] {
   const ranks = Object.fromEntries(
     deriveAbilities(skills).map((ability) => [ability.abbr, ability.rank]),
@@ -58,7 +58,7 @@ export function canMulticlass(input: {
   primaryClassId: ClassId | null
   secondaryClassId: ClassId | null
   targetClassId: ClassId
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   isInDungeonOrQuest: boolean
 }): boolean {
   if (input.isInDungeonOrQuest) return false
@@ -111,7 +111,7 @@ export function secondarySignatureUnlocked(secondaryClassXp: number): boolean {
 export type MulticlassState = {
   gold: number
   inventory: Inventory
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   classId: ClassId | null
   classXp: number
   secondaryClassId: ClassId | null

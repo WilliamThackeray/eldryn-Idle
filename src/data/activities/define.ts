@@ -1,4 +1,4 @@
-import type { SkillId } from '../skills'
+import type { TradeSkillId } from '../skills'
 import type { ItemId } from '../items'
 import type { ActivityDef, GoldDrop, ItemStack, LootEntry } from './types'
 
@@ -21,7 +21,7 @@ export function drop(itemId: ItemId, min = 1, max = min, chance = 1): LootEntry 
 }
 
 interface Spec {
-  skillId: SkillId
+  skillId: TradeSkillId
   id: string
   name: string
   description: string

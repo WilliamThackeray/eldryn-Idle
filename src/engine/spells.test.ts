@@ -124,7 +124,7 @@ test('Scorching Ray needs coal and desert spices', () => {
 
 test('cantrip spends Arcane Dust; out of dust falls back to a weapon attack', () => {
   const skills = initialSkillProgress()
-  skills.arcana = { xp: xpForLevel(1) }
+  skills.enchanting = { xp: xpForLevel(1) }
   const classXp = xpForLevel(1)
   const equipment = { ...emptyEquipment(), mainHand: 'quarterstaff' as const }
   const fight = createFight({
@@ -181,7 +181,7 @@ test('Magic Missile spends 3 Arcane Dust', () => {
   ])
 
   const skills = initialSkillProgress()
-  skills.arcana = { xp: xpForLevel(1) }
+  skills.enchanting = { xp: xpForLevel(1) }
   const classXp = xpForLevel(1)
   const fight = createFight({
     monsterId: 'wolf',
@@ -227,7 +227,7 @@ test('Pact Magic halves each component stack rounded up', () => {
 
 test('seeded Arcane Recovery can save components', () => {
   const skills = initialSkillProgress()
-  skills.arcana = { xp: xpForLevel(1) }
+  skills.enchanting = { xp: xpForLevel(1) }
   const classXp = xpForLevel(1)
   const makeFight = () => {
     const fight = createFight({
@@ -281,7 +281,9 @@ test('seeded Arcane Recovery can save components', () => {
 
 test('Scorching Ray spends coal and spices then falls back without spending the slot', () => {
   const skills = initialSkillProgress()
-  skills.arcana = { xp: xpForLevel(21) }
+  for (const id of ['alchemy', 'scribing', 'enchanting', 'weaving'] as const) {
+    skills[id] = { xp: xpForLevel(50) }
+  }
   const classXp = xpForLevel(15)
   const fight = createFight({
     monsterId: 'wolf',

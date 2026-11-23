@@ -16,6 +16,7 @@ interface SidebarProps {
 const ABILITY_TEXT = {
   STR: 'text-ability-str',
   DEX: 'text-ability-dex',
+  CON: 'text-ability-con',
   INT: 'text-ability-int',
   WIS: 'text-ability-wis',
   CHA: 'text-ability-cha',
@@ -61,8 +62,12 @@ export function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
                 label={skill.name}
                 level={levelForXp(skills[skill.id].xp)}
                 running={runningId === skill.id}
-                active={currentPage === skill.id}
-                onClick={() => setCurrentPage(skill.id)}
+                active={
+                  skill.id === 'vitality' ? currentPage === 'character' : currentPage === skill.id
+                }
+                onClick={() =>
+                  setCurrentPage(skill.id === 'vitality' ? 'character' : skill.id)
+                }
                 icon={<SkillIcon id={skill.id} />}
               />
             ))}

@@ -4,7 +4,7 @@ import { getItem, type DamageType, type WeaponMastery } from '../../data/items'
 import { getMonster, type BiomeId, type CreatureSize, type MonsterDef } from '../../data/monsters'
 import type { BuffEffectId } from '../../data/spells'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { activePerks, deriveAbilities, effectTotal, hasPerkEffect } from '../abilities'
 import {
   COMBAT_LOG_LIMIT,
@@ -128,7 +128,7 @@ export function playerMaxHp(
   hitDie: number,
   classTier: number,
   conMod: number,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Equipment,
 ): number {
   const maxHpPct = effectTotal(activePerks({ skills }), 'maxHpPct')
@@ -139,7 +139,7 @@ export function playerMaxHp(
 /** CON Rank 20: if a hit would drop HP to 0 and Relentless is unused, stay at 1 HP once. */
 export function tryRelentless(
   fight: CombatFight,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
 ): boolean {
   if (fight.playerHp > 0 || fight.relentlessUsed) return false
   if (!hasPerkEffect(activePerks({ skills }), 'surviveAt1')) return false
@@ -167,13 +167,13 @@ export function savingThrow(input: {
   return { natural, total, success: total >= input.dc }
 }
 
-export function abilityModMap(skills: Record<SkillId, SkillProgress>): Record<AbilityAbbr, number> {
+export function abilityModMap(skills: Record<TradeSkillId, SkillProgress>): Record<AbilityAbbr, number> {
   const mods = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 }
   for (const ability of deriveAbilities(skills)) mods[ability.abbr] = ability.modifier
   return mods
 }
 
-export function abilityScoreMap(skills: Record<SkillId, SkillProgress>): Record<AbilityAbbr, number> {
+export function abilityScoreMap(skills: Record<TradeSkillId, SkillProgress>): Record<AbilityAbbr, number> {
   const scores = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 }
   for (const ability of deriveAbilities(skills)) scores[ability.abbr] = ability.score
   return scores
@@ -224,7 +224,7 @@ export function masteryOf(equipment: Equipment): WeaponMastery | null {
 }
 
 export function computePlayerIntervalMs(
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Equipment,
   spellcasting = false,
 ): number {
@@ -243,7 +243,7 @@ export function playerArmorClass(fight: CombatFight, equipment: Equipment, dexMo
   return ac
 }
 
-export function skillLevel(skills: Record<SkillId, SkillProgress>, skillId: SkillId | null): number {
+export function skillLevel(skills: Record<TradeSkillId, SkillProgress>, skillId: TradeSkillId | null): number {
   if (!skillId) return 1
   return levelForXp(skills[skillId]?.xp ?? 0)
 }
@@ -262,7 +262,7 @@ export function rollFrightenAttacks(buffs: ActiveBuff[] | undefined, rng: Rng): 
 export function createFight(input: {
   monsterId: string
   biome: BiomeId
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
@@ -371,7 +371,7 @@ export function createFight(input: {
 /** Start a dungeon at encounter 0. Caller must have already consumed the entry item. */
 export function beginDungeonFight(input: {
   dungeonId: string
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
@@ -414,7 +414,7 @@ export function beginDungeonFight(input: {
 
 export interface CombatAdvanceInput {
   fight: CombatFight
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   inventory: Inventory
   gold: number
   favor?: number
@@ -435,7 +435,7 @@ export interface CombatAdvanceInput {
   /** History bestiary volumes by creature type. */
   bestiaries?: Partial<Record<import('../../data/monsters/types').CreatureType, number>>
   /** History tome volumes; Vitality XP uses the vitality entry. */
-  tomes?: Partial<Record<SkillId, number>>
+  tomes?: Partial<Record<TradeSkillId, number>>
   activeBuffs?: ActiveBuff[]
 }
 
@@ -443,7 +443,7 @@ export interface CombatAdvanceResult {
   favor?: number
   bounty?: import('../social').Bounty | null
   fight: CombatFight | null
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   inventory: Inventory
   gold: number
   classXp: number

@@ -1,6 +1,6 @@
 import type { MonsterDef } from '../data/monsters'
 import type { ClassId } from '../data/classes'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
 import type { Equipment } from '../engine/equipment'
 import type { Bestiaries } from '../engine/history'
@@ -14,7 +14,7 @@ import {
 } from '../engine/combatStats'
 
 interface CombatStatsPanelProps {
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   classId: ClassId | null
   classXp: number

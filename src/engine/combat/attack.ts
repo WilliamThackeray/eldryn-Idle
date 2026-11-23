@@ -3,7 +3,7 @@ import { getItem } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
 import { isWeaponProficient, type ClassId } from '../../data/classes'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { activePerks, effectTotal } from '../abilities'
 import { MATERIAL_FLAGS, AMMO_RECOVERY } from '../config'
 import { applyDamageModifiers, applyTriangle, attackStyleOf, triangleNote } from '../damage'
@@ -79,7 +79,7 @@ export function spendAmmo(
 export function resolvePlayerAttack(input: {
   fight: CombatFight
   monster: MonsterDef
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   inventory: Inventory
   activeClassId: ClassId
@@ -93,7 +93,7 @@ export function resolvePlayerAttack(input: {
 }): {
   inventory: Inventory
   classXp: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   killed: boolean
   stopped: boolean
 } {
@@ -274,7 +274,7 @@ export function resolvePlayerAttack(input: {
 export function doOpeningAttacks(input: {
   fight: CombatFight
   monster: MonsterDef
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   inventory: Inventory
   activeClassId: ClassId
@@ -343,7 +343,7 @@ export function averageDamage(notation: string): number {
 }
 
 export function playerToHitBonus(
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Equipment,
   classXp: number,
   classId: ClassId | null = null,

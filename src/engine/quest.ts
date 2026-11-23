@@ -9,15 +9,16 @@ import {
   type QuestDef,
   type QuestStage,
 } from '../data/quests'
-import { SKILLS, type SkillId } from '../data/skills'
+import type { ClassId } from '../data/classes'
+import { SKILLS, type TradeSkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
-import { activePerks, deriveAbilities, hasPerkEffect } from './abilities'
+import { activePerks, hasPerkEffect } from './abilities'
 import type { GameEvent } from './advance'
+import { checkModifier, formatCheck } from './checks'
 import { rollD20, type RollMode } from './dice'
-import { tomeCheckBonus, type Tomes } from './history'
 import { hasItems, removeItems, addItems, type Inventory } from './inventory'
 import type { Rng } from './rng'
-import { proficiency, tier, levelForXp } from './xp'
+import { levelForXp } from './xp'
 
 export interface QuestRun {
   stage: number
@@ -89,7 +90,7 @@ export function prerequisitesMet(
   quest: QuestDef,
   input: {
     questProgress: QuestProgress
-    skills: Record<SkillId, SkillProgress>
+    skills: Record<TradeSkillId, SkillProgress>
     classXp: number
     inventory: Inventory
   },
@@ -113,7 +114,7 @@ export function acceptQuest(
   progress: QuestProgress,
   questId: string,
   input: {
-    skills: Record<SkillId, SkillProgress>
+    skills: Record<TradeSkillId, SkillProgress>
     classXp: number
     inventory: Inventory
   },
@@ -143,7 +144,7 @@ export function objectiveProgress(
   obj: Objective,
   count: number,
   inventory: Inventory,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   classXp: number,
 ): { have: number; need: number; met: boolean } {
   const need = objectiveNeed(obj)
@@ -163,7 +164,7 @@ export function stageObjectivesMet(
   stage: QuestStage,
   counts: number[],
   inventory: Inventory,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   classXp: number,
 ): boolean {
   if (!('objectives' in stage)) return false
@@ -176,7 +177,7 @@ export function canTurnIn(
   questId: string,
   progress: QuestProgress,
   inventory: Inventory,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   classXp: number,
 ): boolean {
   const quest = getQuest(questId)
@@ -208,7 +209,7 @@ export function turnInQuest(
   questId: string,
   progress: QuestProgress,
   inventory: Inventory,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   classXp: number,
   gold: number,
   favor: number,
@@ -275,20 +276,15 @@ export function turnInQuest(
   }
 }
 
-function skillAbility(skillId: SkillId): 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA' {
-  return SKILLS.find((s) => s.id === skillId)?.ability ?? 'INT'
-}
-
 export function approachBonus(
   approach: CheckApproach,
-  skills: Record<SkillId, SkillProgress>,
-  tomes: Tomes | undefined,
+  skills: Record<TradeSkillId, SkillProgress>,
+  classId: ClassId | null,
+  classXp: number,
   prepOn: boolean,
-): { bonus: number; mode: RollMode; autoPass: boolean } {
-  const ability = skillAbility(approach.skillId)
-  const mod = deriveAbilities(skills).find((a) => a.abbr === ability)?.modifier ?? 0
-  const level = levelForXp(skills[approach.skillId]?.xp ?? 0)
-  let bonus = mod + proficiency(tier(level)) + tomeCheckBonus(tomes, approach.skillId)
+): { bonus: number; mode: RollMode; autoPass: boolean; label: string } {
+  const mod = checkModifier({ skills, classId, classXp }, approach.checkSkillId)
+  let bonus = mod.total
   let mode: RollMode = 'normal'
   let autoPass = false
   if (prepOn && approach.prep) {
@@ -296,7 +292,7 @@ export function approachBonus(
     if (approach.prep.effect === 'advantage') mode = 'advantage'
     if (approach.prep.effect === 'plus') bonus += approach.prep.value ?? 1
   }
-  return { bonus, mode, autoPass }
+  return { bonus, mode, autoPass, label: formatCheck(mod) }
 }
 
 /** Share of d20 faces that beat a fixed DC (nat 1 never, nat 20 always). */
@@ -313,7 +309,7 @@ export function fixedDcSuccessChance(bonus: number, dc: number, mode: RollMode =
 
 export function visibleApproaches(
   stage: Extract<QuestStage, { check: unknown }>,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
 ): CheckApproach[] {
   const extra = hasPerkEffect(activePerks({ skills }), 'extraQuestApproach')
   return stage.check.approaches.filter((a) => !a.extra || extra)
@@ -378,12 +374,13 @@ export function rollCheck(
   questId: string,
   approachId: string,
   progress: QuestProgress,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   inventory: Inventory,
   gold: number,
   favor: number,
   rng: Rng,
-  tomes?: Tomes,
+  classId: ClassId | null,
+  classXp: number,
   prepOn = true,
 ): {
   progress: QuestProgress
@@ -496,7 +493,7 @@ export function rollCheck(
     prepOn &&
     Boolean(approach.prep) &&
     hasItems(inventory, [{ itemId: approach.prep!.itemId, quantity: 1 }])
-  const { bonus, mode, autoPass } = approachBonus(approach, skills, tomes, usePrep)
+  const { bonus, mode, autoPass } = approachBonus(approach, skills, classId, classXp, usePrep)
 
   if (autoPass) {
     const applied = applyOutcome(quest, run, stage.check.success, true, inventory, gold, favor)
@@ -565,13 +562,14 @@ export function rollCheck(
 export function resolvePendingCheck(
   questId: string,
   progress: QuestProgress,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   inventory: Inventory,
   gold: number,
   favor: number,
   rng: Rng,
   useInspiration: boolean,
-  tomes?: Tomes,
+  classId: ClassId | null,
+  classXp: number,
 ): {
   progress: QuestProgress
   inventory: Inventory
@@ -602,7 +600,7 @@ export function resolvePendingCheck(
     }
     nextInv = removeItems(nextInv, [{ itemId: 'inspiration', quantity: 1 }])
     const usePrep = run.pendingCheck.usedPrep
-    const { bonus, mode } = approachBonus(approach, skills, tomes, usePrep)
+    const { bonus, mode } = approachBonus(approach, skills, classId, classXp, usePrep)
     const natural = rollD20(rng, mode)
     const total = natural + bonus
     const dc = approach.dc
@@ -749,7 +747,7 @@ export function applyEvents(
 
 export function syncLevels(
   progress: QuestProgress,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   classXp: number,
 ): QuestProgress {
   let next = progress

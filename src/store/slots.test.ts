@@ -29,10 +29,9 @@ test('a legacy save becomes slot 1 and keeps the highest-XP class', () => {
     JSON.stringify({
       state: {
         characterName: 'Ada',
-        activeClassId: 'wizard',
         classes: { barbarian: { xp: 500 }, wizard: { xp: 80 } },
       },
-      version: 9,
+      version: 19,
     }),
   )
 

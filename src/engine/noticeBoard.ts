@@ -2,7 +2,7 @@ import { ACTIVITIES } from '../data/activities'
 import { getItem, type ItemId } from '../data/items'
 import { HUNT_BIOMES, MONSTERS, getMonster } from '../data/monsters'
 import type { Objective } from '../data/quests'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
 import type { GameEvent } from './advance'
 import {
@@ -44,7 +44,7 @@ function shuffle<T>(list: T[], rng: Rng): T[] {
 }
 
 export function deliverPool(
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   questProgress: QuestProgress,
 ): { itemId: string; sellValue: number }[] {
   const seen = new Map<string, number>()
@@ -70,7 +70,7 @@ export function killPool(): { monsterId: string }[] {
 
 function makeOffers(
   rng: Rng,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   questProgress: QuestProgress,
 ): NoticeOffer[] {
   const delivers = shuffle(deliverPool(skills, questProgress), rng)
@@ -116,7 +116,7 @@ export function refreshIfDue(
   board: NoticeBoard,
   now: number,
   rng: Rng,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   questProgress: QuestProgress,
 ): NoticeBoard {
   if (board.offers.length > 0 && now - board.refreshedAt < NOTICE_BOARD_MS) return board
@@ -130,7 +130,7 @@ export function rerollBoard(
   board: NoticeBoard,
   favor: number,
   rng: Rng,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   questProgress: QuestProgress,
 ): { board: NoticeBoard; favor: number; ok: boolean } {
   if (favor < NOTICE_BOARD_REROLL_FAVOR) return { board, favor, ok: false }

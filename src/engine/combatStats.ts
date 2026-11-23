@@ -1,7 +1,7 @@
 import { getClass, isWeaponProficient, type ClassId } from '../data/classes'
 import { getItem, type DamageType, type GearMaterial } from '../data/items'
 import type { MonsterDef } from '../data/monsters'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import { getSpell, type SpellId } from '../data/spells'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { activePerks, nickCeiling } from './abilities'
@@ -84,7 +84,7 @@ export interface StatBreakdown {
 }
 
 export interface CombatStatsInput {
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   classId: ClassId
   classXp: number
@@ -211,7 +211,7 @@ function armorBreakdown(equipment: Equipment, dexMod: number): StatBreakdown {
 }
 
 function expectedWeaponSwing(input: {
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   classXp: number
   classId: ClassId
@@ -277,7 +277,7 @@ function expectedWeaponSwing(input: {
 function expectedSpellDamage(input: {
   spellId: SpellId
   slotLevel: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   classId: ClassId
   classXp: number
   monster: MonsterDef

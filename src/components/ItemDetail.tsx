@@ -12,7 +12,7 @@ import { levelForXp } from '../engine/xp'
 import { itemStatLines } from './itemStatLines'
 import { Button } from './ui/Button'
 import { SubHeading } from './ui/SectionHeading'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
 
 const CATEGORY_LABEL: Record<ItemCategory, string> = {
@@ -54,7 +54,7 @@ interface ItemDetailProps {
   owned: number
   equipment: Equipment
   inventory: Inventory
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   classXp: number
   classId?: ClassId | null
   isInDungeonOrQuest: boolean

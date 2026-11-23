@@ -31,12 +31,12 @@ function ranksAt(rank: number) {
   const skills = initialSkillProgress()
   const level = (rank - 1) * 5 + 1
   const xp = xpForLevel(level)
-  skills.athletics = { xp }
-  skills.acrobatics = { xp }
+  skills.mining = { xp }
+  skills.thievery = { xp }
   skills.vitality = { xp }
-  skills.arcana = { xp }
-  skills.insight = { xp }
-  skills.persuasion = { xp }
+  skills.enchanting = { xp }
+  skills.foraging = { xp }
+  skills.commerce = { xp }
   return skills
 }
 
@@ -159,7 +159,7 @@ test('rebirth resets class level, clears secondary, adds Echo, and scales cost',
     inventory,
     skills,
     upgrades: { pickaxe: 0 },
-    tomes: { ...createInitialSave().tomes, athletics: 3 },
+    tomes: { ...createInitialSave().tomes, mining: 3 },
     questProgress: createInitialSave().questProgress,
   }
 
@@ -175,7 +175,7 @@ test('rebirth resets class level, clears secondary, adds Echo, and scales cost',
   expect(next.echoes).toBe(1)
   expect(next.skills).toEqual(skills)
   expect(next.upgrades).toEqual(base.upgrades)
-  expect(next.tomes.athletics).toBe(3)
+  expect(next.tomes.mining).toBe(3)
   expect(next.questProgress).toEqual(base.questProgress)
   expect(next.gold).toBeLessThan(base.gold)
 

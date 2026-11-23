@@ -2,7 +2,7 @@ import type { ClassId } from '../../data/classes'
 import type { MonsterDef } from '../../data/monsters'
 import { getSpell, type SpellId } from '../../data/spells'
 import type { SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { activePerks, effectTotal } from '../abilities'
 import { ARCANE_RECOVERY_SAVE_CHANCE, SPELL_SLOT_MODEL } from '../config'
 import { applyDamageModifiers, applyTriangle, triangleNote } from '../damage'
@@ -29,7 +29,7 @@ import { abilityModMap, type CombatFight, pushLog, savingThrow, skillLevel } fro
 export function resolveSpellCast(input: {
   fight: CombatFight
   monster: MonsterDef
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   inventory: Inventory
   equipment: Equipment
   activeClassId: ClassId
@@ -41,7 +41,7 @@ export function resolveSpellCast(input: {
 }): {
   inventory: Inventory
   classXp: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   killed: boolean
   stopped: boolean
 } {

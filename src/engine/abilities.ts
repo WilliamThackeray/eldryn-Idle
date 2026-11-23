@@ -1,6 +1,6 @@
 import { ABILITIES, type AbilityId } from '../data/abilities'
 import { ABILITY_PERKS, type AbilityPerk, type PerkEffect } from '../data/abilityPerks'
-import { SKILLS, type SkillId } from '../data/skills'
+import { SKILLS, type TradeSkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import {
   ABILITY_AGGREGATION,
@@ -27,7 +27,7 @@ export interface DerivedAbility {
   rankProgress: number
 }
 
-export function abilityTotalXp(skills: Record<SkillId, SkillProgress>, abbr: AbilityAbbr): number {
+export function abilityTotalXp(skills: Record<TradeSkillId, SkillProgress>, abbr: AbilityAbbr): number {
   return SKILLS.filter((skill) => skill.ability === abbr).reduce(
     (sum, skill) => sum + (skills[skill.id]?.xp ?? 0),
     0,
@@ -70,7 +70,7 @@ export function abilityModifier(score: number): number {
 
 /** `itemBonuses` are flat score bonuses, such as a Belt of Giant Strength, and can exceed 20. */
 export function deriveAbilities(
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   itemBonuses: Partial<Record<AbilityAbbr, number>> = {},
   source: AbilityScoreSource = ABILITY_SCORE_SOURCE,
 ): DerivedAbility[] {
@@ -101,7 +101,7 @@ export interface ActivePerk extends AbilityPerk {
   amount: number
 }
 
-export function activePerks(state: { skills: Record<SkillId, SkillProgress> }): ActivePerk[] {
+export function activePerks(state: { skills: Record<TradeSkillId, SkillProgress> }): ActivePerk[] {
   const ranks = Object.fromEntries(
     deriveAbilities(state.skills).map((ability) => [ability.abbr, ability.rank]),
   ) as Record<AbilityAbbr, number>

@@ -1,5 +1,5 @@
 import { getMonster, MONSTERS, type BiomeId, type CreatureType } from '../data/monsters'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import type { ActivePerk } from './abilities'
 import {
   BOUNTY_FAVOR,
@@ -94,7 +94,7 @@ export function applyDisguiseKit(
     inventory: removeItems(inventory, [{ itemId: 'disguise-kit', quantity: 1 }]),
     activeBuffs: upsertBuff(buffs, {
       id: 'disguise-kit',
-      effect: { type: 'activityAdvantage', skills: ['stealth', 'sleightOfHand'] },
+      effect: { type: 'activityAdvantage', skills: ['thievery'] },
       remainingMs: DISGUISE_DURATION_MS,
     }),
   }
@@ -188,7 +188,7 @@ export function progressBounty(
   }
 }
 
-export function activityHasAdvantage(buffs: ActiveBuff[] | undefined, skillId: SkillId): boolean {
+export function activityHasAdvantage(buffs: ActiveBuff[] | undefined, skillId: TradeSkillId): boolean {
   for (const buff of buffs ?? []) {
     if (buff.effect.type !== 'activityAdvantage' || buff.remainingMs <= 0) continue
     if (buff.effect.skills.includes(skillId)) return true

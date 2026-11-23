@@ -1,11 +1,13 @@
 import type { CreatureType } from '../monsters/types'
-import { SKILLS, type SkillId } from '../skills'
+import { SKILLS, type TradeSkillId } from '../skills'
 import type { ItemDef } from './types'
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const
 
-/** Skills that receive Art-of tomes (all except History). */
-export const TOME_SKILLS = SKILLS.filter((skill) => skill.id !== 'history').map((skill) => skill.id)
+/** Skills that receive Art-of tomes (all trade skills except Scribing and Vitality). */
+export const TOME_SKILLS = SKILLS.filter(
+  (skill) => skill.id !== 'scribing' && skill.id !== 'vitality',
+).map((skill) => skill.id)
 
 export const TOME_VOLUME_LEVELS = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90] as const
 
@@ -25,7 +27,7 @@ export const NOTE_GROUPS = [
 
 export type NoteGroupId = (typeof NOTE_GROUPS)[number]['id']
 
-export function tomeItemId(skillId: SkillId, volume: number): string {
+export function tomeItemId(skillId: TradeSkillId, volume: number): string {
   return `tome-${skillId}-vol-${volume}`
 }
 

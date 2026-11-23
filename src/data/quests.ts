@@ -1,6 +1,7 @@
+import type { CheckSkillId } from './checkSkills'
 import type { ItemId } from './items'
 import type { CreatureType } from './monsters'
-import type { SkillId } from './skills'
+import type { TradeSkillId } from './skills'
 
 export interface NpcDef {
   id: string
@@ -15,7 +16,7 @@ export type Objective =
   | { type: 'kill'; monsterId: string; qty: number }
   | { type: 'kill'; creatureType: CreatureType; qty: number }
   | { type: 'gather' | 'craft'; activityId: string; qty: number }
-  | { type: 'reachLevel'; skillId: SkillId | 'class'; level: number }
+  | { type: 'reachLevel'; skillId: TradeSkillId | 'class'; level: number }
   | { type: 'clearDungeon'; dungeonId: string }
 
 export type PrepEffect = 'advantage' | 'autoPass' | 'plus'
@@ -23,7 +24,7 @@ export type PrepEffect = 'advantage' | 'autoPass' | 'plus'
 export interface CheckApproach {
   id: string
   label: string
-  skillId: SkillId
+  checkSkillId: CheckSkillId
   dc: number
   prep?: { itemId: ItemId; effect: PrepEffect; value?: number }
   goldCost?: number
@@ -57,7 +58,7 @@ export interface QuestRewards {
 
 export interface QuestPrerequisites {
   quests?: string[]
-  level?: { skillId: SkillId | 'class'; level: number }
+  level?: { skillId: TradeSkillId | 'class'; level: number }
   items?: { itemId: ItemId; quantity: number }[]
 }
 
@@ -152,7 +153,7 @@ export const QUESTS: QuestDef[] = [
     stages: [
       {
         objectives: [
-          { type: 'reachLevel', skillId: 'investigation', level: 5 },
+          { type: 'reachLevel', skillId: 'mining', level: 5 },
           { type: 'have', itemId: 'ancient-page', qty: 1 },
         ],
       },
@@ -161,23 +162,23 @@ export const QUESTS: QuestDef[] = [
           prompt:
             'A surveyor claims the marker has always been here. Convince them, read them, or buy their silence before the flux moves again.',
           approaches: [
-            { id: 'persuade', label: 'Persuade', skillId: 'persuasion', dc: 12 },
+            { id: 'persuade', label: 'Persuade', checkSkillId: 'persuasion', dc: 12 },
             {
               id: 'insight',
               label: 'Insight',
-              skillId: 'insight',
+              checkSkillId: 'insight',
               dc: 12,
               prep: { itemId: 'rumor', effect: 'advantage' },
             },
             {
               id: 'deceive',
               label: 'Deceive',
-              skillId: 'deception',
+              checkSkillId: 'deception',
               dc: 12,
               prep: { itemId: 'false-papers', effect: 'autoPass' },
             },
-            { id: 'intimidate', label: 'Intimidate', skillId: 'intimidation', dc: 14, extra: true },
-            { id: 'bribe', label: 'Bribe (50 gp)', skillId: 'persuasion', dc: 0, goldCost: 50 },
+            { id: 'intimidate', label: 'Intimidate', checkSkillId: 'intimidation', dc: 14, extra: true },
+            { id: 'bribe', label: 'Bribe (50 gp)', checkSkillId: 'persuasion', dc: 0, goldCost: 50 },
           ],
           success: {
             text: 'The surveyor nods and the marker steadies for a breath. The road remembers itself.',

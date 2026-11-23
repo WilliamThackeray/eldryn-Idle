@@ -11,7 +11,7 @@ import {
   type ShopSection,
   type ShopUpgrade,
 } from '../../data/shop'
-import { SKILLS, type SkillId } from '../../data/skills'
+import { SKILLS, type TradeSkillId } from '../../data/skills'
 import { activePerks } from '../../engine/abilities'
 import { ECHO_XP_PCT } from '../../engine/config'
 import {
@@ -433,7 +433,7 @@ function UpgradeCard({
   discount: number
   inventory: Partial<Record<ItemId, number>>
   ownedTier: number | undefined
-  skills: Record<SkillId, { xp: number }>
+  skills: Record<TradeSkillId, { xp: number }>
   onBuy: () => void
 }) {
   const nextIndex = ownedTier == null ? 0 : ownedTier + 1

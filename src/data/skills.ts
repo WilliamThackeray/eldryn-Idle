@@ -1,158 +1,253 @@
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 
+export type TradeSkillId =
+  | 'mining'
+  | 'smithing'
+  | 'woodcutting'
+  | 'woodcraft'
+  | 'leatherworking'
+  | 'jewelcrafting'
+  | 'thievery'
+  | 'cooking'
+  | 'vitality'
+  | 'alchemy'
+  | 'scribing'
+  | 'enchanting'
+  | 'weaving'
+  | 'foraging'
+  | 'fishing'
+  | 'hunting'
+  | 'commerce'
+  | 'performance'
+  | 'binding'
+
+export type TradeSkillRole = 'gather' | 'craft' | 'combat'
+export type TradeSkillFeed = TradeSkillId | 'combat' | 'economy'
+
 export interface SkillDefinition {
-  id: string
+  id: TradeSkillId
   name: string
   ability: AbilityAbbr
+  role: TradeSkillRole
+  toolName?: string
   description: string
+  feeds: TradeSkillFeed[]
 }
 
 export const SKILLS = [
   {
-    id: 'athletics',
-    name: 'Athletics',
+    id: 'mining',
+    name: 'Mining',
     ability: 'STR',
-    description: 'Perform physical feats of strength and endurance.',
+    role: 'gather',
+    description: 'Makes ore, coal, stone, raw gems. Excavation dig sites give relics and Ancient Pages.',
+    feeds: ['smithing', 'jewelcrafting', 'scribing'],
+  },
+  {
+    id: 'smithing',
+    name: 'Smithing',
+    ability: 'STR',
+    role: 'craft',
+    toolName: "Smith's Tools",
+    description:
+      'Makes bars, metal weapons, medium/heavy armor, shields, arrowheads, and skilling gear.',
+    feeds: ['combat'],
+  },
+  {
+    id: 'woodcutting',
+    name: 'Woodcutting',
+    ability: 'STR',
+    role: 'gather',
+    description: 'Makes logs by tier, bark, sap.',
+    feeds: ['woodcraft', 'cooking', 'alchemy'],
+  },
+  {
+    id: 'woodcraft',
+    name: 'Woodcraft',
+    ability: 'DEX',
+    role: 'craft',
+    toolName: "Woodcarver's Tools",
+    description: 'Makes bows, crossbows, ammo, staves, wands, clubs, holy symbols, druidic focuses.',
+    feeds: ['combat'],
+  },
+  {
+    id: 'leatherworking',
+    name: 'Leatherworking',
+    ability: 'DEX',
+    role: 'craft',
+    toolName: "Leatherworker's Tools",
+    description: 'Makes light armor, belts, cloaks, slings, whips, minstrel attire.',
+    feeds: ['combat'],
+  },
+  {
+    id: 'jewelcrafting',
+    name: 'Jewelcrafting',
+    ability: 'DEX',
+    role: 'craft',
+    toolName: "Jeweler's Tools",
+    description: 'Makes cut gems, rings, amulets, crystal orbs.',
+    feeds: ['enchanting', 'combat'],
+  },
+  {
+    id: 'thievery',
+    name: 'Thievery',
+    ability: 'DEX',
+    role: 'gather',
+    toolName: "Thieves' Tools",
+    description:
+      'Makes pickpocketing and lockpicking loot, infiltration, strongboxes, Forged Writs, Disguise Kits, False Papers.',
+    feeds: ['economy'],
+  },
+  {
+    id: 'cooking',
+    name: 'Cooking',
+    ability: 'CON',
+    role: 'craft',
+    toolName: "Cook's Utensils / Brewer's Supplies",
+    description: 'Makes food (HP), feasts and ales (timed buffs).',
+    feeds: ['combat'],
   },
   {
     id: 'vitality',
     name: 'Vitality',
     ability: 'CON',
-    description: 'Constitution. Rises when you take or heal damage.',
+    role: 'combat',
+    description: 'Makes HP. Trained in combat by taking and healing damage.',
+    feeds: ['combat'],
   },
   {
-    id: 'acrobatics',
-    name: 'Acrobatics',
-    ability: 'DEX',
-    description: 'Demonstrate agility, balance, and coordination.',
-  },
-  {
-    id: 'sleightOfHand',
-    name: 'Sleight of Hand',
-    ability: 'DEX',
-    description: 'Master the art of dexterity and finesse.',
-  },
-  {
-    id: 'stealth',
-    name: 'Stealth',
-    ability: 'DEX',
-    description:
-      'Conceal yourself from enemies, sneaking past guards, slipping away without being noticed, or hiding during combat.',
-  },
-  {
-    id: 'arcana',
-    name: 'Arcana',
+    id: 'alchemy',
+    name: 'Alchemy',
     ability: 'INT',
-    description:
-      'Recall lore about spells, magic items, eldritch symbols, magical traditions, planes of existence, and the inhabitants of those planes.',
+    role: 'craft',
+    toolName: "Alchemist's Supplies",
+    description: 'Makes potions, spell reagents, weapon oils, Holy Water, antitoxins.',
+    feeds: ['combat'],
   },
   {
-    id: 'history',
-    name: 'History',
+    id: 'scribing',
+    name: 'Scribing',
     ability: 'INT',
+    role: 'craft',
+    toolName: "Calligrapher's Supplies",
     description:
-      'Recall lore about historical events, legendary people, ancient kingdoms, past wars, and lost civilizations.',
+      'Makes ink, parchment, spell scrolls, Tomes, Study Notes, Bestiaries, Field Notes.',
+    feeds: [
+      'mining',
+      'smithing',
+      'woodcutting',
+      'woodcraft',
+      'leatherworking',
+      'jewelcrafting',
+      'thievery',
+      'cooking',
+      'alchemy',
+      'enchanting',
+      'weaving',
+      'foraging',
+      'fishing',
+      'hunting',
+      'commerce',
+      'performance',
+      'binding',
+      'combat',
+    ],
   },
   {
-    id: 'investigation',
-    name: 'Investigation',
+    id: 'enchanting',
+    name: 'Enchanting',
     ability: 'INT',
-    description: 'Make deductions based on clues and find hidden information.',
+    role: 'craft',
+    toolName: 'Arcane focus',
+    description: 'Makes Arcane Dust and enchantments.',
+    feeds: ['combat'],
   },
   {
-    id: 'nature',
-    name: 'Nature',
+    id: 'weaving',
+    name: 'Weaving',
     ability: 'INT',
-    description: 'Recall lore about terrain, plants, animals, weather, and natural cycles.',
+    role: 'craft',
+    toolName: "Weaver's Tools",
+    description: 'Makes linen, wool, silk cloth; caster armor; vestments; wildweave.',
+    feeds: ['combat'],
   },
   {
-    id: 'religion',
-    name: 'Religion',
-    ability: 'INT',
-    description:
-      'Recall lore about deities, rites and prayers, religious hierarchies, holy symbols, and the practices of secret cults.',
-  },
-  {
-    id: 'animalHandling',
-    name: 'Animal Handling',
+    id: 'foraging',
+    name: 'Foraging',
     ability: 'WIS',
-    description: 'Calm domestic animals and understand their intentions.',
+    role: 'gather',
+    toolName: 'Herbalism Kit',
+    description: 'Makes herbs, mushrooms, flax, reagent plants, Mistletoe, seeds.',
+    feeds: ['alchemy', 'cooking', 'weaving'],
   },
   {
-    id: 'insight',
-    name: 'Insight',
+    id: 'fishing',
+    name: 'Fishing',
     ability: 'WIS',
-    description:
-      'Determine the true intentions of a creature, such as when searching out a lie or predicting someone’s next move.',
+    role: 'gather',
+    toolName: 'Fishing Tackle',
+    description: 'Makes fish by biome, pearls (rare).',
+    feeds: ['cooking', 'alchemy', 'jewelcrafting'],
   },
   {
-    id: 'medicine',
-    name: 'Medicine',
+    id: 'hunting',
+    name: 'Hunting',
     ability: 'WIS',
-    description: 'Stabilize a dying companion or diagnose an illness.',
+    role: 'gather',
+    toolName: 'Hunting Trap',
+    description: 'Makes meat, hides, bones, feathers, wool, eggs, live animals.',
+    feeds: ['cooking', 'leatherworking', 'weaving', 'woodcraft', 'binding'],
   },
   {
-    id: 'perception',
-    name: 'Perception',
-    ability: 'WIS',
-    description: 'Notice details in your environment and detect hidden threats.',
-  },
-  {
-    id: 'survival',
-    name: 'Survival',
-    ability: 'WIS',
-    description:
-      'Follow tracks, hunt wild game, guide your group through frozen wastelands, identify signs that bear weather is near, and avoid quicksand and other natural hazards.',
-  },
-  {
-    id: 'deception',
-    name: 'Deception',
+    id: 'commerce',
+    name: 'Commerce',
     ability: 'CHA',
-    description: 'Conceal the truth, either verbally or through actions.',
-  },
-  {
-    id: 'intimidation',
-    name: 'Intimidation',
-    ability: 'CHA',
-    description: 'Influence someone through threats, hostile actions, and physical violence.',
+    role: 'gather',
+    description: 'Makes Guild Favor, Trade Contracts, Letters of Introduction, Rumors.',
+    feeds: ['economy'],
   },
   {
     id: 'performance',
     name: 'Performance',
     ability: 'CHA',
-    description:
-      'Entertain an audience through acting, singing, dancing, playing a musical instrument, or other forms of entertainment.',
+    role: 'gather',
+    toolName: 'musical instrument',
+    description: 'Makes Inspiration, Renown, Rosin, gold.',
+    feeds: ['combat', 'economy'],
   },
   {
-    id: 'persuasion',
-    name: 'Persuasion',
+    id: 'binding',
+    name: 'Binding',
     ability: 'CHA',
-    description: 'Influence someone with tact, social graces, or good nature.',
+    role: 'craft',
+    description: 'Makes pacts and summons for the two summon slots.',
+    feeds: ['combat'],
   },
 ] as const satisfies readonly SkillDefinition[]
 
-export type SkillId = (typeof SKILLS)[number]['id']
+/** @deprecated Use TradeSkillId. */
+export type SkillId = TradeSkillId
 
-/** Sidebar groups. Vitality is CON and stays off this list. */
-export const SKILL_ABILITY_GROUPS = ['STR', 'DEX', 'INT', 'WIS', 'CHA'] as const
+/** Sidebar groups, including CON (Vitality). */
+export const SKILL_ABILITY_GROUPS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const
 
 const SKILL_IDS = new Set<string>(SKILLS.map((skill) => skill.id))
 
-export function isSkillId(id: string): id is SkillId {
+export function isSkillId(id: string): id is TradeSkillId {
   return SKILL_IDS.has(id)
 }
 
 const SKILL_BY_ID = Object.fromEntries(SKILLS.map((skill) => [skill.id, skill])) as Record<
-  SkillId,
+  TradeSkillId,
   (typeof SKILLS)[number]
 >
 
-export function getSkill(id: SkillId): (typeof SKILLS)[number] {
+export function getSkill(id: TradeSkillId): (typeof SKILLS)[number] {
   return SKILL_BY_ID[id]
 }
 
-export function initialSkillProgress(): Record<SkillId, SkillProgress> {
-  const skills = {} as Record<SkillId, SkillProgress>
+export function initialSkillProgress(): Record<TradeSkillId, SkillProgress> {
+  const skills = {} as Record<TradeSkillId, SkillProgress>
   for (const skill of SKILLS) skills[skill.id] = { xp: 0 }
   return skills
 }

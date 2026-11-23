@@ -1,28 +1,8 @@
-import { ARMOR } from '../items/armor'
-import type { ItemId } from '../items'
-import { activity, drop, stack } from './define'
-import { fillDisplay } from './display'
-
-function minstrelGear() {
-  return ARMOR.filter((item) => item.id.startsWith('minstrel-')).map((item, index) => {
-    const isChest = item.id.endsWith('-chest')
-    return activity({
-      skillId: 'performance',
-      id: `craft-${item.id}`,
-      name: `Craft ${item.name}`,
-      description: `Stitch ${item.name.toLowerCase()}.`,
-      requiredLevel: 1,
-      inputs: [stack('animal-scraps', isChest ? 2 : 1)],
-      outputs: [drop(item.id as ItemId)],
-      category: 'Attire',
-      sortOrder: index,
-    })
-  })
-}
+import { activity, drop } from './define'
 
 const venueOutputs = [drop('rosin', 5, 10), drop('inspiration', 1, 1, 0.35)]
 
-export const performanceActivities = fillDisplay([
+export const performanceActivities = [
   activity({
     skillId: 'performance',
     id: 'local-music',
@@ -31,6 +11,7 @@ export const performanceActivities = fillDisplay([
     requiredLevel: 1,
     outputs: venueOutputs,
     gold: { min: 1, max: 3 },
+    category: 'Venues',
   }),
   activity({
     skillId: 'performance',
@@ -41,6 +22,7 @@ export const performanceActivities = fillDisplay([
     renownRequired: 5,
     outputs: venueOutputs,
     gold: { min: 2, max: 5 },
+    category: 'Venues',
   }),
   activity({
     skillId: 'performance',
@@ -51,6 +33,7 @@ export const performanceActivities = fillDisplay([
     renownRequired: 15,
     outputs: venueOutputs,
     gold: { min: 3, max: 6 },
+    category: 'Venues',
   }),
   activity({
     skillId: 'performance',
@@ -61,6 +44,7 @@ export const performanceActivities = fillDisplay([
     renownRequired: 30,
     outputs: venueOutputs,
     gold: { min: 4, max: 8 },
+    category: 'Venues',
   }),
   activity({
     skillId: 'performance',
@@ -71,6 +55,7 @@ export const performanceActivities = fillDisplay([
     renownRequired: 50,
     outputs: venueOutputs,
     gold: { min: 6, max: 12 },
+    category: 'Venues',
   }),
   activity({
     skillId: 'performance',
@@ -81,9 +66,6 @@ export const performanceActivities = fillDisplay([
     renownRequired: 80,
     outputs: venueOutputs,
     gold: { min: 8, max: 16 },
+    category: 'Venues',
   }),
-  ...minstrelGear(),
-], (def, index) => ({
-  category: def.id.startsWith('craft-minstrel') ? 'Attire' : 'Venues',
-  sortOrder: index,
-}))
+]

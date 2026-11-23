@@ -20,7 +20,7 @@ export function itemStatLines(itemId: string): string[] {
     if (gear.armor) {
       lines.push(
         `Armor ${gear.armor.weightClass} · value ${gear.armor.armorValue}${
-          gear.armor.stealthDisadvantage ? ' · stealth disadvantage' : ''
+          gear.armor.stealthDisadvantage ? ' · Thievery disadvantage' : ''
         }`,
       )
       if (gear.armor.strRequirement != null) lines.push(`Requires STR ${gear.armor.strRequirement}`)

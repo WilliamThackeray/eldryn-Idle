@@ -643,7 +643,8 @@ export const useGameStore = create<GameStore>()(
             state.gold,
             state.favor,
             liveRng,
-            state.tomes,
+            state.classId,
+            state.classXp,
             prepOn,
           )
           line = result.line
@@ -674,7 +675,8 @@ export const useGameStore = create<GameStore>()(
             state.favor,
             liveRng,
             useInspiration,
-            state.tomes,
+            state.classId,
+            state.classXp,
           )
           line = result.line
           if (!result.ok) return { questMessage: result.line }

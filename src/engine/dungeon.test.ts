@@ -12,6 +12,14 @@ import { emptyEquipment } from './equipment'
 import { mulberry32 } from './rng'
 import { xpForLevel } from './xp'
 
+function dungeonCtx(
+  skills: ReturnType<typeof initialSkillProgress>,
+  classId: 'fighter' | 'rogue' | 'wizard' = 'fighter',
+  classXp = xpForLevel(99),
+) {
+  return { skills, classId, classXp }
+}
+
 test('buildRunOrder for shifting-thicket matches fight → short → rooms → boss → chest → long', () => {
   const dungeon = getDungeon('shifting-thicket')!
   const order = buildRunOrder(dungeon)
@@ -36,20 +44,24 @@ test('trap: passive under DC deals damage; spotted+fail damages; spotted+success
   const lowSkills = initialSkillProgress()
   // Passive 10 + 0 + 2 = 12; DC for level 10 = 11. Raise DC by using requiredLevel 99.
   const hard = { ...room, requiredLevel: 99 }
-  const miss = resolveTrap(hard, lowSkills, mulberry32(1))
+  const miss = resolveTrap(hard, dungeonCtx(lowSkills, 'fighter', 0), mulberry32(1))
   expect(miss.spotted).toBe(false)
   expect(miss.damage).toBe(6)
 
-  // High perception for spot, low sleight for fail — force fail with rng that rolls 1.
+  // Fighter Perception + high WIS (foraging); low thievery fails disarm on nat 1.
   const spotSkills = initialSkillProgress()
-  spotSkills.perception = { xp: xpForLevel(99) }
-  const failDisarm = resolveTrap(room, spotSkills, () => 0) // nat 1
+  spotSkills.foraging = { xp: xpForLevel(99) }
+  let trapRolls = 0
+  const failDisarm = resolveTrap(room, dungeonCtx(spotSkills, 'fighter'), () => {
+    trapRolls += 1
+    return trapRolls === 1 ? 0.99 : 0
+  })
   expect(failDisarm.spotted).toBe(true)
   expect(failDisarm.disarmed).toBe(false)
   expect(failDisarm.damage).toBe(6)
 
-  spotSkills.sleightOfHand = { xp: xpForLevel(99) }
-  const ok = resolveTrap(room, spotSkills, () => 0.99) // nat 20
+  spotSkills.thievery = { xp: xpForLevel(99) }
+  const ok = resolveTrap(room, dungeonCtx(spotSkills, 'fighter'), () => 0.99) // nat 20
   expect(ok.spotted).toBe(true)
   expect(ok.disarmed).toBe(true)
   expect(ok.damage).toBe(0)
@@ -63,12 +75,14 @@ test('secret door: success adds loot, fail adds none', () => {
     lootTable: [{ itemId: 'valuables' as const, chance: 1, min: 1, max: 1 }],
   }
   const skills = initialSkillProgress()
-  skills.investigation = { xp: xpForLevel(99) }
-  const found = resolveSecret(room, skills, () => 0.99)
+  for (const id of ['alchemy', 'scribing', 'enchanting'] as const) {
+    skills[id] = { xp: xpForLevel(99) }
+  }
+  const found = resolveSecret(room, dungeonCtx(skills, 'wizard'), () => 0.99)
   expect(found.found).toBe(true)
   expect(found.loot).toEqual([{ itemId: 'valuables', quantity: 1 }])
 
-  const miss = resolveSecret(room, initialSkillProgress(), () => 0)
+  const miss = resolveSecret(room, dungeonCtx(initialSkillProgress(), 'fighter', 0), () => 0)
   expect(miss.found).toBe(false)
   expect(miss.loot).toEqual([])
 })

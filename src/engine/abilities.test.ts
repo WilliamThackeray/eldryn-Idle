@@ -47,25 +47,25 @@ test('ability scores come from skill levels, and wisdom is spelled wisdom', () =
   expect(ranked.find((ability) => ability.abbr === 'STR')).toMatchObject({ score: 24, rank: 20 })
 })
 
-test('Athletics 99 alone → STR Rank 20 Score 20', () => {
+test('Mining 99 alone → STR Rank 20 Score 20', () => {
   const skills = initialSkillProgress()
-  skills.athletics = { xp: xpForLevel(99) }
+  skills.mining = { xp: xpForLevel(99) }
   const derived = deriveAbilities(skills, {}, 'rank')
   expect(derived.find((a) => a.abbr === 'STR')).toMatchObject({ rank: 20, score: 20 })
   expect(derived.filter((a) => a.abbr !== 'STR').every((a) => a.rank === 1 && a.score === 10)).toBe(true)
 })
 
-test('Arcana 50 alone → INT Rank 10 Score 15', () => {
+test('Enchanting 50 alone → INT Rank 10 Score 15', () => {
   const skills = initialSkillProgress()
-  skills.arcana = { xp: xpForLevel(50) }
+  skills.enchanting = { xp: xpForLevel(50) }
   const derived = deriveAbilities(skills, {}, 'rank')
   expect(derived.find((a) => a.abbr === 'INT')).toMatchObject({ rank: 10, score: 15 })
 })
 
 test('INT reaches Rank 20 from a mix of 5 skills at level 80', () => {
   const skills = initialSkillProgress()
-  for (const id of ['arcana', 'history', 'investigation', 'nature', 'religion'] as const) {
-    skills[id] = { xp: xpForLevel(80) }
+  for (const id of ['alchemy', 'scribing', 'enchanting', 'weaving'] as const) {
+    skills[id] = { xp: xpForLevel(99) }
   }
   const derived = deriveAbilities(skills, {}, 'rank')
   expect(derived.find((a) => a.abbr === 'INT')).toMatchObject({ rank: 20, score: 20 })
@@ -74,8 +74,8 @@ test('INT reaches Rank 20 from a mix of 5 skills at level 80', () => {
 test('mastery perks activate at the right ranks', () => {
   const at = (level: number) => {
     const skills = initialSkillProgress()
-    skills.athletics = { xp: xpForLevel(level) }
-    skills.acrobatics = { xp: xpForLevel(level) }
+    skills.mining = { xp: xpForLevel(level) }
+    skills.thievery = { xp: xpForLevel(level) }
     skills.vitality = { xp: xpForLevel(level) }
     return activePerks({ skills })
   }

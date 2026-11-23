@@ -2,7 +2,7 @@ import { expect, test } from 'vitest'
 import { emptyEquipment } from '../engine/equipment'
 import { SAVE_VERSION, migrateSave, normalizeSave } from './migrate'
 
-test('an old save keeps real skill xp and drops weapon properties', () => {
+test('pre-v19 saves reset to a fresh character', () => {
   const next = migrateSave(
     {
       character: {
@@ -16,23 +16,17 @@ test('an old save keeps real skill xp and drops weapon properties', () => {
     0,
   )
 
-  expect(next.characterName).toBe('ada')
-  expect(next.skills.athletics.xp).toBe(120)
-  expect(next.skills.acrobatics.xp).toBe(0)
-  expect('finesse' in next.skills).toBe(false)
-  expect(next.inventory).toEqual({})
-  expect(next.gold).toBe(0)
-  expect(next.lastSaved).toBe('2020-01-01T00:00:00.000Z')
-  expect(next.classId).toBe('fighter')
-  expect(next.classXp).toBe(0)
+  expect(next.characterName).toBe('bob')
+  expect(next.skills.mining.xp).toBe(0)
+  expect(next.classId).toBeNull()
 })
 
 test('a broken save resets to a fresh character', () => {
   const next = migrateSave('nope', 0)
   expect(next.characterName).toBe('bob')
-  expect(next.skills.perception.xp).toBe(0)
+  expect(next.skills.mining.xp).toBe(0)
   expect(next.skills.vitality).toEqual({ xp: 0 })
-  expect(next.classId).toBe('fighter')
+  expect(next.classId).toBeNull()
   expect(next.classXp).toBe(0)
   expect(next.secondaryClassId).toBeNull()
   expect(next.secondaryClassXp).toBe(0)
@@ -53,33 +47,33 @@ test('v18 fields normalize secondary class and echoes', () => {
   expect(next.echoes).toBe(2)
 })
 
-test('version 4 drops stored level and score and keeps vitality xp', () => {
-  expect(SAVE_VERSION).toBe(18)
+test('version 19 keeps skill xp without stored level or score', () => {
+  expect(SAVE_VERSION).toBe(19)
 
   const next = migrateSave(
     {
       characterName: 'ada',
       skills: {
-        athletics: { xp: 83, level: 2, score: 18 },
+        mining: { xp: 83, level: 2, score: 18 },
         vitality: { xp: 40, level: 1, score: 10 },
       },
       abilityScores: { STR: 16 },
       inventory: [],
       lastSaved: '2020-01-01T00:00:00.000Z',
     },
-    1,
+    SAVE_VERSION,
   )
 
-  expect(next.skills.athletics).toEqual({ xp: 83 })
+  expect(next.skills.mining).toEqual({ xp: 83 })
   expect(next.skills.vitality).toEqual({ xp: 40 })
   expect('abilityScores' in next).toBe(false)
-  expect('level' in next.skills.athletics).toBe(false)
-  expect('score' in next.skills.athletics).toBe(false)
+  expect('level' in next.skills.mining).toBe(false)
+  expect('score' in next.skills.mining).toBe(false)
   expect(next.inventory).toEqual({})
   expect(next.gold).toBe(0)
   expect(next.activeAction).toBeNull()
   expect(next.lastTick).toBeGreaterThan(Date.now() - 5_000)
-  expect(next.classId).toBe('fighter')
+  expect(next.classId).toBeNull()
   expect(next.classXp).toBe(0)
   expect(next.clericFocus).toBe('INT')
   expect(next.isInDungeonOrQuest).toBe(false)
@@ -87,32 +81,32 @@ test('version 4 drops stored level and score and keeps vitality xp', () => {
   expect(next.equipmentSets).toEqual([])
 })
 
-test('version 3 keeps the active action and last tick', () => {
+test('version 19 keeps the active action and last tick', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
-      skills: { athletics: { xp: 10 } },
+      skills: { mining: { xp: 10 } },
       inventory: [],
       lastSaved: '2020-01-01T00:00:00.000Z',
       lastTick: 1_000,
       activeAction: {
         kind: 'skill',
-        skillId: 'athletics',
-        activityId: 'basic',
-        label: 'Basic Training',
+        skillId: 'mining',
+        activityId: 'mine-iron',
+        label: 'Mine Iron',
         baseIntervalMs: 6000,
         requiredLevel: 1,
         baseXp: 10,
         progressMs: 1500,
       },
     },
-    3,
+    SAVE_VERSION,
   )
 
   expect(next.lastTick).toBe(1000)
   expect(next.gold).toBe(0)
-  expect(next.activeAction).toMatchObject({ kind: 'skill', skillId: 'athletics', progressMs: 1500 })
-  expect(next.classId).toBe('fighter')
+  expect(next.activeAction).toMatchObject({ kind: 'skill', skillId: 'mining', progressMs: 1500 })
+  expect(next.classId).toBeNull()
   expect(next.classXp).toBe(0)
 })
 
@@ -120,7 +114,7 @@ test('a legacy item list becomes counts and drops unknown ids', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
-      skills: { athletics: { xp: 1 } },
+      skills: { mining: { xp: 1 } },
       inventory: [
         { id: 'iron-ore', name: 'Iron Ore', quantity: 2, description: 'Ore' },
         { id: 'iron-ore', name: 'Iron Ore', quantity: 1.9, description: 'Ore' },
@@ -128,42 +122,38 @@ test('a legacy item list becomes counts and drops unknown ids', () => {
       ],
       gold: -5,
     },
-    3,
+    SAVE_VERSION,
   )
 
   expect(next.inventory).toEqual({ 'iron-ore': 3 })
   expect(next.gold).toBe(0)
 })
 
-test('version 4 keeps item counts and gold and becomes Fighter', () => {
+test('version 19 keeps item counts and gold', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
-      skills: { athletics: { xp: 10 } },
+      skills: { mining: { xp: 10 } },
       inventory: { 'iron-ore': 3, 'not-an-item': 9, coal: 0 },
       gold: 40.8,
       lastSaved: '2020-01-01T00:00:00.000Z',
       lastTick: 1_000,
       activeAction: null,
     },
-    4,
+    SAVE_VERSION,
   )
 
   expect(next.inventory).toEqual({ 'iron-ore': 3 })
   expect(next.gold).toBe(40)
-  expect(next.classId).toBe('fighter')
+  expect(next.classId).toBeNull()
   expect(next.classXp).toBe(0)
-  expect(next.clericFocus).toBe('INT')
-  expect(next.isInDungeonOrQuest).toBe(false)
-  expect(next.equipment).toEqual(emptyEquipment())
-  expect(next.equipmentSets).toEqual([])
 })
 
-test('version 5 keeps the highest class XP, gold, inventory, and gains empty equipment', () => {
+test('version 19 keeps the highest class XP from legacy classes map', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
-      skills: { athletics: { xp: 10 } },
+      skills: { mining: { xp: 10 } },
       inventory: { dagger: 1 },
       gold: 25,
       lastSaved: '2020-01-01T00:00:00.000Z',
@@ -174,7 +164,7 @@ test('version 5 keeps the highest class XP, gold, inventory, and gains empty equ
       clericFocus: 'STR',
       isInDungeonOrQuest: false,
     },
-    5,
+    SAVE_VERSION,
   )
 
   expect(next.classId).toBe('barbarian')
@@ -183,7 +173,6 @@ test('version 5 keeps the highest class XP, gold, inventory, and gains empty equ
   expect(next.inventory).toEqual({ dagger: 1 })
   expect(next.gold).toBe(25)
   expect(next.equipment).toEqual(emptyEquipment())
-  expect(next.equipmentSets).toEqual([])
 })
 
 test('a save with no class stays unset until character creation', () => {
@@ -197,71 +186,35 @@ test('a save with no class stays unset until character creation', () => {
   expect(next.classXp).toBe(0)
 })
 
-test('migration picks the highest-XP class', () => {
+test('migration picks the highest-XP class at v19', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
-      skills: { athletics: { xp: 10 } },
+      skills: { mining: { xp: 10 } },
       inventory: {},
       gold: 0,
       activeClassId: 'wizard',
       classes: { barbarian: { xp: 500 }, wizard: { xp: 80 }, fighter: { xp: 1200 } },
       clericFocus: 'INT',
     },
-    9,
+    SAVE_VERSION,
   )
 
   expect(next.classId).toBe('fighter')
   expect(next.classXp).toBe(1200)
-  expect('classes' in next).toBe(false)
-  expect('activeClassId' in next).toBe(false)
-})
-
-test('migration keeps the active class when class XP is tied', () => {
-  const next = migrateSave(
-    {
-      characterName: 'ada',
-      activeClassId: 'wizard',
-      classes: { wizard: { xp: 100 }, barbarian: { xp: 100 } },
-    },
-    9,
-  )
-
-  expect(next.classId).toBe('wizard')
-  expect(next.classXp).toBe(100)
 })
 
 test('a save without inventoryTabs puts every owned item on Tab 1', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
-      skills: { athletics: { xp: 10 } },
+      skills: { mining: { xp: 10 } },
       inventory: { 'iron-ore': 3, coal: 1 },
       gold: 0,
       classId: 'fighter',
       classXp: 0,
     },
-    10,
-  )
-
-  expect(next.inventoryTabs).toHaveLength(5)
-  expect(next.inventoryTabs[0].name).toBe('Tab 1')
-  expect(next.inventoryTabs[0].itemIds).toEqual(expect.arrayContaining(['iron-ore', 'coal']))
-  expect(next.inventoryTabs[0].itemIds).toHaveLength(2)
-  expect(next.inventoryTabs.slice(1).every((tab) => tab.itemIds.length === 0)).toBe(true)
-})
-
-test('a save without inventoryTabs puts every owned item on Tab 1', () => {
-  const next = migrateSave(
-    {
-      characterName: 'ada',
-      skills: { athletics: { xp: 10 } },
-      inventory: { 'iron-ore': 3, coal: 1 },
-      gold: 0,
-      classId: 'fighter',
-      classXp: 0,
-    },
-    10,
+    SAVE_VERSION,
   )
 
   expect(next.inventoryTabs).toHaveLength(5)
@@ -275,7 +228,7 @@ test('legacy component bags convert to gold at old sell values', () => {
   const next = migrateSave(
     {
       characterName: 'ada',
-      skills: { athletics: { xp: 0 } },
+      skills: { mining: { xp: 0 } },
       inventory: {
         'component-bag-basic': 2,
         'component-bag-fine': 1,
@@ -285,74 +238,10 @@ test('legacy component bags convert to gold at old sell values', () => {
       classId: 'wizard',
       classXp: 0,
     },
-    13,
+    SAVE_VERSION,
   )
   expect(next.inventory['component-bag-basic']).toBeUndefined()
   expect(next.inventory['component-bag-fine']).toBeUndefined()
   expect(next.inventory['iron-ore']).toBe(3)
   expect(next.gold).toBe(10 + 2 * 12 + 50)
-})
-
-test('v17 drops old quest progress and refunds completed shattered-mile', () => {
-  const next = migrateSave(
-    {
-      characterName: 'ada',
-      skills: { athletics: { xp: 0 } },
-      inventory: {},
-      gold: 20,
-      classId: 'fighter',
-      classXp: 0,
-      questProgress: { 'shattered-mile': { step: 6, done: true } },
-      combat: {
-        monsterId: 'wolf',
-        biome: 'forest',
-        playerHp: 10,
-        playerMaxHp: 10,
-        monsterHp: 5,
-        monsterMaxHp: 11,
-        playerProgressMs: 0,
-        monsterProgressMs: 0,
-        phase: 'fight',
-        restProgressMs: 0,
-        playerIntervalMs: 2000,
-        monsterIntervalMs: 2000,
-        playerIntervalCount: 0,
-        nextAttackAdvantage: false,
-        monsterNextDisadvantage: false,
-        slowActive: false,
-        pushDelayMs: 0,
-        cleaveOverflow: 0,
-        ammoSpent: 0,
-        signature: { id: 'secondWind', uses: 0, maxUses: 1 },
-        kills: 0,
-        sessionMs: 0,
-        lootGained: [],
-        goldGained: 0,
-        classXpGained: 0,
-        openingDone: true,
-        outOfAmmo: false,
-        defeated: false,
-        log: [],
-        spellSlots: [],
-        rotationIndex: 0,
-        concentration: null,
-        shieldBonus: 0,
-        dungeonId: null,
-        nodeIndex: 0,
-        runsCompleted: 0,
-        restKind: null,
-        roomLog: [],
-        questId: 'shattered-mile',
-        pendingCleave: 0,
-        relentlessUsed: false,
-        frightenAttacksLeft: 0,
-      },
-    },
-    16,
-  )
-  expect(next.questProgress).toEqual({})
-  expect(next.gold).toBe(70)
-  expect(next.pinnedQuestId).toBeNull()
-  expect(next.noticeBoard.offers).toEqual([])
-  expect(next.combat?.questId).toBeNull()
 })

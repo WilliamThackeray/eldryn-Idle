@@ -26,13 +26,14 @@ test('tabbed skills categorize every activity and leave no empty tab', () => {
 
   const tiers = new Set(['Iron', 'Steel', 'Silvered', 'Mithral', 'Adamantine'])
   const sections = new Set(['Weapons', 'Armor', 'Shields', 'Ammo/Other'])
-  for (const activity of activitiesFor('athletics').filter((entry) => entry.category === 'Smithing')) {
+  for (const activity of activitiesFor('smithing').filter((entry) => entry.category === 'Armor')) {
     const [tier, section] = activity.group?.split(' / ') ?? []
     expect(tiers.has(tier ?? ''), activity.id).toBe(true)
-    expect(sections.has(section ?? ''), activity.id).toBe(true)
+    expect(sections.has(section ?? ''), activity.id).toBe(false)
+    expect(section).toBeTruthy()
   }
 
-  expect(skillUsesTabs('medicine', activitiesFor('medicine'))).toBe(false)
+  expect(skillUsesTabs('vitality', activitiesFor('vitality'))).toBe(false)
 })
 
 test('locked activities keep the next one and collapse the rest', () => {

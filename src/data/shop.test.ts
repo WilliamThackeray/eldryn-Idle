@@ -72,10 +72,10 @@ test('intervalBonus applies to mining and not smithing', () => {
 
 test('pickaxe shortens mining interval and farm plot halves herb plot', () => {
   const skills = initialSkillProgress()
-  expect(activityIntervalMs('athletics', 6000, skills, emptyEquipment(), 0.05)).toBe(5700)
+  expect(activityIntervalMs('mining', 6000, skills, emptyEquipment(), 0.05)).toBe(5700)
 
   const plot = 30 * 60 * 1000
-  expect(activityIntervalMs('nature', plot, skills, emptyEquipment(), 0.5)).toBe(plot * 0.5)
+  expect(activityIntervalMs('foraging', plot, skills, emptyEquipment(), 0.5)).toBe(plot * 0.5)
 })
 
 test('general goods are not gear or ammo', () => {

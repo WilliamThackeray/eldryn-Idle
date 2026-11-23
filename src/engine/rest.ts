@@ -1,7 +1,7 @@
 import { getClass, type ClassId } from '../data/classes'
 import { getMonster } from '../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import { activePerks, hasPerkEffect } from './abilities'
 import { SHORT_REST_MAX_FOOD } from './config'
 import { roll } from './dice'
@@ -20,7 +20,7 @@ export interface RestContext {
   chaMod: number
   inventory: Inventory
   equipment: Equipment
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   modifiers: Partial<Record<AbilityAbbr, number>>
   rng: Rng
   trace: boolean
@@ -30,7 +30,7 @@ export interface RestContext {
 
 export interface RestResult {
   inventory: Inventory
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   /** True when the hunt/dungeon should stop (out of food and still hurt). */
   stopped: boolean
 }
@@ -45,11 +45,11 @@ function eatWhileBelowMax(input: {
   fight: CombatFight
   inventory: Inventory
   equipment: Equipment
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   modifiers: Partial<Record<AbilityAbbr, number>>
   trace: boolean
   maxBites: number
-}): { inventory: Inventory; skills: Record<SkillId, SkillProgress> } {
+}): { inventory: Inventory; skills: Record<TradeSkillId, SkillProgress> } {
   let inventory = input.inventory
   let skills = input.skills
   let bites = 0

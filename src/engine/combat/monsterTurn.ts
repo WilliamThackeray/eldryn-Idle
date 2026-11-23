@@ -2,7 +2,7 @@ import { getClass, type ClassId } from '../../data/classes'
 import type { DamageType } from '../../data/items'
 import type { MonsterDef } from '../../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { FRIGHTEN_DAMAGE_PCT } from '../config'
 import { applyDamageModifiers } from '../damage'
 import { resolveRollMode, rollD20, rollDamageParts } from '../dice'
@@ -17,7 +17,7 @@ export function applyPlayerDamage(input: {
   fight: CombatFight
   amount: number
   damageType: DamageType
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   activeClassId: ClassId
   classXp: number
   rng: Rng
@@ -25,7 +25,7 @@ export function applyPlayerDamage(input: {
   modifiers: Partial<Record<AbilityAbbr, number>>
   equipment?: Equipment
   xpExtra?: number
-}): { skills: Record<SkillId, SkillProgress>; defeated: boolean } {
+}): { skills: Record<TradeSkillId, SkillProgress>; defeated: boolean } {
   const { fight, rng, trace } = input
   let skills = input.skills
   let amount = input.amount
@@ -140,14 +140,14 @@ export function resolveMonsterAttacks(input: {
   monster: MonsterDef
   equipment: Equipment
   dexMod: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   activeClassId: ClassId
   classXp: number
   rng: Rng
   trace: boolean
   modifiers: Partial<Record<AbilityAbbr, number>>
   xpExtra?: number
-}): { skills: Record<SkillId, SkillProgress>; defeated: boolean } {
+}): { skills: Record<TradeSkillId, SkillProgress>; defeated: boolean } {
   const { fight, monster, equipment, trace } = input
   let skills = input.skills
   fight.monsterProgressMs = 0

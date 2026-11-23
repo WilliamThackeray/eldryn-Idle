@@ -15,58 +15,56 @@ import {
 } from './items/knowledge'
 
 export { BESTIARY_TYPES, NOTE_GROUPS, TOME_SKILLS, type BestiaryType, type NoteGroupId }
-import { SKILLS, type SkillId } from './skills'
-import { acrobaticsActivities } from './activities/acrobatics'
-import { animalHandlingActivities } from './activities/animalHandling'
-import { arcanaActivities } from './activities/arcana'
-import { athleticsActivities } from './activities/athletics'
-import { deceptionActivities } from './activities/deception'
-import { insightActivities } from './activities/insight'
-import { intimidationActivities } from './activities/intimidation'
-import { investigationActivities } from './activities/investigation'
-import { medicineActivities } from './activities/medicine'
-import { natureActivities } from './activities/nature'
-import { perceptionActivities } from './activities/perception'
+import { SKILLS } from './skills'
+import { alchemyActivities } from './activities/alchemy'
+import { bindingActivities } from './activities/binding'
+import { commerceActivities } from './activities/commerce'
+import { cookingActivities } from './activities/cooking'
+import { enchantingActivities } from './activities/enchanting'
+import { fishingActivities } from './activities/fishing'
+import { foragingActivities } from './activities/foraging'
+import { huntingActivities } from './activities/hunting'
+import { jewelcraftingActivities } from './activities/jewelcrafting'
+import { leatherworkingActivities } from './activities/leatherworking'
+import { miningActivities } from './activities/mining'
 import { performanceActivities } from './activities/performance'
-import { persuasionActivities } from './activities/persuasion'
-import { religionActivities } from './activities/religion'
-import { sleightOfHandActivities } from './activities/sleightOfHand'
-import { stealthActivities } from './activities/stealth'
-import { survivalActivities } from './activities/survival'
-import { vitalityActivities } from './activities/vitality'
+import { smithingActivities } from './activities/smithing'
+import { thieveryActivities } from './activities/thievery'
+import { weavingActivities } from './activities/weaving'
+import { woodcraftActivities } from './activities/woodcraft'
+import { woodcuttingActivities } from './activities/woodcutting'
 import { activity, drop, stack } from './activities/define'
 import type { ActivityDef, ItemStack } from './activities/types'
 
-const SKILL_ACTIVITIES: Record<Exclude<SkillId, 'history'>, ActivityDef[]> = {
-  athletics: athleticsActivities,
-  vitality: vitalityActivities,
-  acrobatics: acrobaticsActivities,
-  sleightOfHand: sleightOfHandActivities,
-  stealth: stealthActivities,
-  arcana: arcanaActivities,
-  investigation: investigationActivities,
-  nature: natureActivities,
-  religion: religionActivities,
-  animalHandling: animalHandlingActivities,
-  insight: insightActivities,
-  medicine: medicineActivities,
-  perception: perceptionActivities,
-  survival: survivalActivities,
-  deception: deceptionActivities,
-  intimidation: intimidationActivities,
+export type TomeSkillId = (typeof TOME_SKILLS)[number]
+
+const SKILL_ACTIVITIES: Record<TomeSkillId, ActivityDef[]> = {
+  mining: miningActivities,
+  smithing: smithingActivities,
+  woodcutting: woodcuttingActivities,
+  woodcraft: woodcraftActivities,
+  leatherworking: leatherworkingActivities,
+  jewelcrafting: jewelcraftingActivities,
+  thievery: thieveryActivities,
+  cooking: cookingActivities,
+  alchemy: alchemyActivities,
+  enchanting: enchantingActivities,
+  weaving: weavingActivities,
+  foraging: foragingActivities,
+  fishing: fishingActivities,
+  hunting: huntingActivities,
+  commerce: commerceActivities,
   performance: performanceActivities,
-  persuasion: persuasionActivities,
+  binding: bindingActivities,
 }
 
-const FALLBACK_TOKEN: Partial<Record<SkillId, ItemId>> = {
-  vitality: 'bandages',
-  acrobatics: 'practice-ribbon',
-  stealth: 'black-cloth',
-  intimidation: 'menace-token',
-  persuasion: 'silver-tongue',
-  investigation: 'field-notes',
-  perception: 'watch-mark',
-  deception: 'marked-cards',
+/** Fallback when a skill has no non-gear outputs yet (Prompt 23 fills these). */
+const FALLBACK_TOKEN: Partial<Record<TomeSkillId, ItemId>> = {
+  woodcraft: 'arrows',
+  leatherworking: 'hide',
+  jewelcrafting: 'gem',
+  weaving: 'forest-herbs',
+  binding: 'eggs',
 }
 
 function isThemedCandidate(itemId: string): boolean {
@@ -77,7 +75,7 @@ function isThemedCandidate(itemId: string): boolean {
 }
 
 /** Highest-level non-gear (non-arrowhead) output at or below historyLevel. Ties: later activity. */
-export function themedItemFor(skillId: Exclude<SkillId, 'history'>, historyLevel: number): ItemId {
+export function themedItemFor(skillId: TomeSkillId, historyLevel: number): ItemId {
   const activities = SKILL_ACTIVITIES[skillId]
   let bestLevel = -1
   let bestIndex = -1
@@ -99,7 +97,7 @@ export function themedItemFor(skillId: Exclude<SkillId, 'history'>, historyLevel
   throw new Error(`No themed item for ${skillId} at History ${historyLevel}`)
 }
 
-export function tomeCraftInputs(skillId: Exclude<SkillId, 'history'>, volume: number): ItemStack[] {
+export function tomeCraftInputs(skillId: TomeSkillId, volume: number): ItemStack[] {
   const pages = volume
   const themed = themedItemFor(skillId, TOME_VOLUME_LEVELS[volume - 1])
   return [stack('ancient-page', pages), stack('ink'), stack(themed)]
@@ -112,7 +110,7 @@ function buildTomeActivities(): ActivityDef[] {
       const volume = index + 1
       const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][index]
       return activity({
-        skillId: 'history',
+        skillId: 'scribing',
         id: `craft-tome-${skillId}-${volume}`,
         name: `The Art of ${skill.name}, Vol. ${roman}`,
         description: `Bind a permanent tome for ${skill.name}.`,
@@ -130,7 +128,7 @@ function buildTomeActivities(): ActivityDef[] {
 function buildNoteActivities(): ActivityDef[] {
   return NOTE_GROUPS.map((group) =>
     activity({
-      skillId: 'history',
+      skillId: 'scribing',
       id: `craft-notes-${group.id}`,
       name: `Notes on ${group.name}`,
       description: `Cheap study notes. +10% ${group.name.toLowerCase()} yield for 1 hour.`,
@@ -149,7 +147,7 @@ function buildBestiaryActivities(): ActivityDef[] {
       const roman = ['I', 'II', 'III'][index]
       const trophy = trophyItemId(type) as ItemId
       return activity({
-        skillId: 'history',
+        skillId: 'scribing',
         id: `craft-bestiary-${type}-${volume}`,
         name: `${type.charAt(0).toUpperCase()}${type.slice(1)} Bestiary, Vol. ${roman}`,
         description: `Compile notes on fighting ${type}s.`,
@@ -164,22 +162,25 @@ function buildBestiaryActivities(): ActivityDef[] {
   )
 }
 
-export const historyCraftActivities: ActivityDef[] = [
+export const scribingCraftActivities: ActivityDef[] = [
   ...buildTomeActivities(),
   ...buildNoteActivities(),
   ...buildBestiaryActivities(),
 ]
 
+/** @deprecated Use scribingCraftActivities. */
+export const historyCraftActivities = scribingCraftActivities
+
 export function parseTomeActivityId(
   activityId: string,
-): { skillId: Exclude<SkillId, 'history'>; volume: number } | null {
+): { skillId: TomeSkillId; volume: number } | null {
   const match = /^craft-tome-(.+)-(\d+)$/.exec(activityId)
   if (!match) return null
   const skillId = match[1]
   const volume = Number(match[2])
-  if (!TOME_SKILLS.includes(skillId as Exclude<SkillId, 'history'>)) return null
+  if (!TOME_SKILLS.includes(skillId as TomeSkillId)) return null
   if (!Number.isInteger(volume) || volume < 1 || volume > 10) return null
-  return { skillId: skillId as Exclude<SkillId, 'history'>, volume }
+  return { skillId: skillId as TomeSkillId, volume }
 }
 
 export function parseNoteItemId(itemId: string): NoteGroupId | null {
@@ -189,16 +190,14 @@ export function parseNoteItemId(itemId: string): NoteGroupId | null {
   return group?.id ?? null
 }
 
-export function parseTomeItemId(
-  itemId: string,
-): { skillId: Exclude<SkillId, 'history'>; volume: number } | null {
+export function parseTomeItemId(itemId: string): { skillId: TomeSkillId; volume: number } | null {
   const match = /^tome-(.+)-vol-(\d+)$/.exec(itemId)
   if (!match) return null
   const skillId = match[1]
   const volume = Number(match[2])
-  if (!TOME_SKILLS.includes(skillId as Exclude<SkillId, 'history'>)) return null
+  if (!TOME_SKILLS.includes(skillId as TomeSkillId)) return null
   if (!Number.isInteger(volume) || volume < 1 || volume > 10) return null
-  return { skillId: skillId as Exclude<SkillId, 'history'>, volume }
+  return { skillId: skillId as TomeSkillId, volume }
 }
 
 export function parseBestiaryItemId(

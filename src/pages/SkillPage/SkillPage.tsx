@@ -17,7 +17,7 @@ import {
 } from '../../data/historyContent'
 import type { ItemId } from '../../data/items'
 import { intervalBonus } from '../../data/shop'
-import { SKILLS, type SkillId } from '../../data/skills'
+import { SKILLS, type TradeSkillId } from '../../data/skills'
 import { activePerks, deriveAbilities, effectTotal } from '../../engine/abilities'
 import { actionIntervalMs, activityIntervalMs } from '../../engine/advance'
 import { tomeCheckBonus, tomeSpeedBonus, tomeXpPct } from '../../engine/history'
@@ -44,8 +44,8 @@ import {
 } from './present'
 
 interface SkillPageProps {
-  skillId: SkillId
-  focus?: { kind: 'activity'; skillId: SkillId; activityId: string } | null
+  skillId: TradeSkillId
+  focus?: { kind: 'activity'; skillId: TradeSkillId; activityId: string } | null
   onFocusConsumed?: () => void
 }
 
@@ -180,6 +180,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
     checkBonus,
     ability,
     rank,
+    toolName: skill && 'toolName' in skill ? skill.toolName : undefined,
     renown: skillId === 'performance' ? renown : null,
   })
 
@@ -430,17 +431,19 @@ function modifierLine(input: {
   checkBonus: number
   ability?: string
   rank?: number
+  toolName?: string
   renown: number | null
 }): string {
   const parts: string[] = []
   if (input.className) parts.push(`${input.className} ×${(1 + input.classFrac).toFixed(2)} XP`)
   if (input.tomePct > 0) {
-    const history = [`History +${Math.round(input.tomePct * 100)}%`]
+    const history = [`Scribing +${Math.round(input.tomePct * 100)}%`]
     if (input.tomeSpeed !== 0) history.push('−5% interval')
     if (input.checkBonus > 0) history.push('+1 check')
     parts.push(history.join(', '))
   }
   if (input.ability && input.rank != null) parts.push(`${input.ability} Rank ${input.rank}`)
+  if (input.toolName) parts.push(input.toolName)
   if (input.renown != null) parts.push(`Renown ${input.renown}`)
   return parts.join(' · ')
 }
@@ -473,7 +476,7 @@ function outputChips(activity: ActivityDef): { name: string; note?: string }[] {
 function secondaryAction(
   activity: ActivityDef,
   inventory: Inventory,
-  tomes: Partial<Record<SkillId, number>>,
+  tomes: Partial<Record<TradeSkillId, number>>,
   bestiaries: Record<string, number>,
   readTome: (itemId: ItemId) => void,
   readBestiary: (itemId: ItemId) => void,

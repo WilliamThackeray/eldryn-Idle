@@ -1,4 +1,4 @@
-import type { SkillId } from '../skills'
+import type { TradeSkillId } from '../skills'
 import type { ItemId } from '../items'
 
 export interface ItemStack {
@@ -21,7 +21,7 @@ export interface GoldDrop {
 
 export interface ActivityDef {
   id: string
-  skillId: SkillId
+  skillId: TradeSkillId
   name: string
   description: string
   requiredLevel: number

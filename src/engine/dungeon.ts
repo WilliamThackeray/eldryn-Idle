@@ -1,13 +1,20 @@
+import type { ClassId } from '../data/classes'
 import type { DungeonDef, DungeonRoom } from '../data/dungeons'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
-import { deriveAbilities } from './abilities'
-import { checkDc, skillCheck } from './skillCheck'
+import { checkDc } from './skillCheck'
+import {
+  checkModifier,
+  formatCheck,
+  rollCheck,
+  toolCheckModifier,
+  type CheckModifier,
+} from './checks'
+import type { RollMode } from './dice'
+import { emptyEquipment, gearRollMode, type Equipment } from './equipment'
 import { addItems, hasItems, removeItems, type Inventory } from './inventory'
 import { rollLoot } from './loot'
 import type { Rng } from './rng'
-import { withInspirationReroll } from './social'
-import { levelForXp, proficiency, tier } from './xp'
 import type { CombatLootGain } from './combat'
 
 export type DungeonNode =
@@ -18,6 +25,13 @@ export type DungeonNode =
   | { kind: 'secret'; room: Extract<DungeonRoom, { kind: 'secret' }> }
   | { kind: 'chest' }
   | { kind: 'longRest' }
+
+export interface DungeonCheckContext {
+  skills: Record<TradeSkillId, SkillProgress>
+  classId: ClassId | null
+  classXp: number
+  equipment?: Equipment
+}
 
 /** Build one loop: encounters with short rests and rooms, then boss, chest, long rest. */
 export function buildRunOrder(dungeon: DungeonDef): DungeonNode[] {
@@ -53,12 +67,22 @@ export function consumeEntryItem(
   }
 }
 
-function skillLevel(skills: Record<SkillId, SkillProgress>, skillId: SkillId): number {
-  return levelForXp(skills[skillId]?.xp ?? 0)
+function withInspirationRerollCheck(
+  inspiration: number,
+  first: { success: boolean },
+  reroll: () => { success: boolean; roll: number; total: number; dc: number; margin: number },
+): {
+  check: { success: boolean; roll: number; total: number; dc: number; margin: number }
+  spent: number
+} {
+  if (first.success || inspiration < 1) {
+    return { check: first as { success: boolean; roll: number; total: number; dc: number; margin: number }, spent: 0 }
+  }
+  return { check: reroll(), spent: 1 }
 }
 
-function abilityMod(skills: Record<SkillId, SkillProgress>, ability: 'WIS' | 'DEX' | 'INT'): number {
-  return deriveAbilities(skills).find((a) => a.abbr === ability)?.modifier ?? 0
+function thieveryMode(equipment: Equipment | undefined): RollMode {
+  return gearRollMode('thievery', equipment ?? emptyEquipment())
 }
 
 export interface TrapResult {
@@ -69,47 +93,38 @@ export interface TrapResult {
   inspirationSpent: number
 }
 
-/** Passive Perception vs DC, then Sleight of Hand to disarm. No XP. Inspiration rerolls the disarm only. */
+/** Perception check to spot, then Thievery tool check to disarm. No XP. */
 export function resolveTrap(
   room: Extract<DungeonRoom, { kind: 'trap' }>,
-  skills: Record<SkillId, SkillProgress>,
+  ctx: DungeonCheckContext,
   rng: Rng,
   inspiration = 0,
 ): TrapResult {
-  const perceptionLevel = skillLevel(skills, 'perception')
-  const passive = 10 + abilityMod(skills, 'WIS') + proficiency(tier(perceptionLevel))
   const dc = checkDc(room.requiredLevel)
-  if (passive < dc) {
+  const perception = checkModifier(ctx, 'perception')
+  const spot = rollCheck(rng, perception, dc)
+  if (!spot.success) {
     return {
       spotted: false,
       disarmed: false,
       damage: room.damage,
-      line: `Trap: failed to spot (passive ${passive} vs DC ${dc}). Took ${room.damage} damage.`,
+      line: `Trap: failed to spot (${formatCheck(perception)}; rolled ${spot.total} vs DC ${dc}). Took ${room.damage} damage.`,
       inspirationSpent: 0,
     }
   }
 
-  const first = skillCheck({
-    rng,
-    abilityModifier: abilityMod(skills, 'DEX'),
-    skillLevel: skillLevel(skills, 'sleightOfHand'),
-    requiredLevel: room.requiredLevel,
-  })
-  const { check, spent } = withInspirationReroll(inspiration, first, () =>
-    skillCheck({
-      rng,
-      abilityModifier: abilityMod(skills, 'DEX'),
-      skillLevel: skillLevel(skills, 'sleightOfHand'),
-      requiredLevel: room.requiredLevel,
-    }),
+  const tool = toolCheckModifier(ctx, 'thievery')
+  const mode = thieveryMode(ctx.equipment)
+  const first = rollCheck(rng, tool, dc, mode)
+  const { check, spent } = withInspirationRerollCheck(inspiration, first, () =>
+    rollCheck(rng, tool, dc, mode),
   )
-  const pass = check.outcome === 'success' || check.outcome === 'critical'
-  if (pass) {
+  if (check.success) {
     return {
       spotted: true,
       disarmed: true,
       damage: 0,
-      line: `Trap: spotted and disarmed (Sleight ${check.total} vs DC ${check.dc}).`,
+      line: `Trap: spotted (${formatCheck(perception)}) and disarmed (${formatCheck(tool)}; rolled ${check.total} vs DC ${check.dc}).`,
       inspirationSpent: spent,
     }
   }
@@ -117,7 +132,7 @@ export function resolveTrap(
     spotted: true,
     disarmed: false,
     damage: room.damage,
-    line: `Trap: spotted but failed to disarm (Sleight ${check.total} vs DC ${check.dc}). Took ${room.damage} damage.`,
+    line: `Trap: spotted (${formatCheck(perception)}) but failed to disarm (${formatCheck(tool)}; rolled ${check.total} vs DC ${check.dc}). Took ${room.damage} damage.`,
     inspirationSpent: spent,
   }
 }
@@ -132,30 +147,21 @@ export interface SecretResult {
 /** Investigation check → bonus chest loot. No XP. */
 export function resolveSecret(
   room: Extract<DungeonRoom, { kind: 'secret' }>,
-  skills: Record<SkillId, SkillProgress>,
+  ctx: DungeonCheckContext,
   rng: Rng,
   inspiration = 0,
 ): SecretResult {
-  const first = skillCheck({
-    rng,
-    abilityModifier: abilityMod(skills, 'INT'),
-    skillLevel: skillLevel(skills, 'investigation'),
-    requiredLevel: room.requiredLevel,
-  })
-  const { check, spent } = withInspirationReroll(inspiration, first, () =>
-    skillCheck({
-      rng,
-      abilityModifier: abilityMod(skills, 'INT'),
-      skillLevel: skillLevel(skills, 'investigation'),
-      requiredLevel: room.requiredLevel,
-    }),
+  const dc = checkDc(room.requiredLevel)
+  const investigation = checkModifier(ctx, 'investigation')
+  const first = rollCheck(rng, investigation, dc)
+  const { check, spent } = withInspirationRerollCheck(inspiration, first, () =>
+    rollCheck(rng, investigation, dc),
   )
-  const pass = check.outcome === 'success' || check.outcome === 'critical'
-  if (!pass) {
+  if (!check.success) {
     return {
       found: false,
       loot: [],
-      line: `Secret door: failed Investigation (${check.total} vs DC ${check.dc}).`,
+      line: `Secret door: failed (${formatCheck(investigation)}; rolled ${check.total} vs DC ${check.dc}).`,
       inspirationSpent: spent,
     }
   }
@@ -163,7 +169,48 @@ export function resolveSecret(
   return {
     found: true,
     loot,
-    line: `Secret door: found (Investigation ${check.total} vs DC ${check.dc}).`,
+    line: `Secret door: found (${formatCheck(investigation)}; rolled ${check.total} vs DC ${check.dc}).`,
+    inspirationSpent: spent,
+  }
+}
+
+export interface ChestResult {
+  opened: boolean
+  loot: { itemId: string; quantity: number }[]
+  line: string
+  inspirationSpent: number
+}
+
+/** Locked chest: Thievery tool check. Failure = no loot. */
+export function resolveChest(
+  dungeon: DungeonDef,
+  ctx: DungeonCheckContext,
+  rng: Rng,
+  inspiration = 0,
+): ChestResult {
+  const requiredLevel = dungeon.recommendedTier * 5
+  const dc = checkDc(requiredLevel)
+  const tool = toolCheckModifier(ctx, 'thievery')
+  const mode = thieveryMode(ctx.equipment)
+  const first = rollCheck(rng, tool, dc, mode)
+  const { check, spent } = withInspirationRerollCheck(inspiration, first, () =>
+    rollCheck(rng, tool, dc, mode),
+  )
+  if (!check.success) {
+    return {
+      opened: false,
+      loot: [],
+      line: `Chest: locked (${formatCheck(tool)}; rolled ${check.total} vs DC ${check.dc}).`,
+      inspirationSpent: spent,
+    }
+  }
+  const loot = rollLoot(dungeon.chest, rng, 1)
+  return {
+    opened: true,
+    loot,
+    line: loot.length
+      ? `Chest: opened (${formatCheck(tool)}; rolled ${check.total} vs DC ${check.dc}). ${loot.map((s) => `${s.itemId}×${s.quantity}`).join(', ')}.`
+      : `Chest: opened (${formatCheck(tool)}; rolled ${check.total} vs DC ${check.dc}). Empty.`,
     inspirationSpent: spent,
   }
 }
@@ -187,3 +234,6 @@ export function applyLootToInventory(
 ): Inventory {
   return addItems(inventory, loot)
 }
+
+/** @internal helper for tests that need a CheckModifier label. */
+export type { CheckModifier }

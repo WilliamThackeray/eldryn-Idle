@@ -1,6 +1,6 @@
 import { getItem } from '../../data/items'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { activePerks, effectTotal } from '../abilities'
 import { AUTO_EAT_THRESHOLD } from '../config'
 import type { Equipment } from '../equipment'
@@ -11,7 +11,7 @@ import { type CombatFight, pushLog } from './state'
 /** Heal amount for one bite of the equipped food, after the CON food-heal perk. */
 export function foodHealAmount(
   equipment: Equipment,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
 ): number | null {
   const foodId = equipment.food
   const item = foodId ? getItem(foodId) : undefined
@@ -38,11 +38,11 @@ export function eatOneFood(input: {
   fight: CombatFight
   inventory: Inventory
   equipment: Equipment
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   modifiers: Partial<Record<AbilityAbbr, number>>
   trace: boolean
   xpExtra?: number
-}): { inventory: Inventory; skills: Record<SkillId, SkillProgress>; ate: boolean } {
+}): { inventory: Inventory; skills: Record<TradeSkillId, SkillProgress>; ate: boolean } {
   const { fight, equipment, trace } = input
   let inventory = input.inventory
   let skills = input.skills
@@ -69,11 +69,11 @@ export function tryAutoEat(input: {
   fight: CombatFight
   inventory: Inventory
   equipment: Equipment
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   modifiers: Partial<Record<AbilityAbbr, number>>
   trace: boolean
   xpExtra?: number
-}): { inventory: Inventory; skills: Record<SkillId, SkillProgress>; ate: boolean; defeated: boolean } {
+}): { inventory: Inventory; skills: Record<TradeSkillId, SkillProgress>; ate: boolean; defeated: boolean } {
   const { fight, equipment, trace } = input
   let inventory = input.inventory
   let skills = input.skills

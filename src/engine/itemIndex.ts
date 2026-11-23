@@ -6,10 +6,10 @@ import { MONSTERS } from '../data/monsters'
 import { QUESTS } from '../data/quests'
 import { GENERAL_GOODS } from '../data/shop'
 import { SPELLS } from '../data/spells'
-import type { SkillId } from '../data/skills'
+import type { TradeSkillId } from '../data/skills'
 
 export type ItemLink =
-  | { kind: 'activity'; skillId: SkillId; activityId: string; label: string }
+  | { kind: 'activity'; skillId: TradeSkillId; activityId: string; label: string }
   | { kind: 'monster'; monsterId: string; label: string }
   | { kind: 'dungeon'; dungeonId: string; label: string }
   | { kind: 'quest'; questId: string; label: string }
@@ -99,22 +99,50 @@ function buildIndex(): ItemIndex {
     })
   }
 
-  push(uses, 'trade-contract', { kind: 'shop', itemId: 'trade-contract', label: 'Sell prices' })
+  push(uses, 'trade-contract', {
+    kind: 'activity',
+    skillId: 'commerce',
+    activityId: 'haggle',
+    label: 'Haggle at Market',
+  })
+  push(uses, 'letter-of-introduction', {
+    kind: 'activity',
+    skillId: 'commerce',
+    activityId: 'petition-guilds',
+    label: 'Petition the Guilds',
+  })
+  push(uses, 'rumor', {
+    kind: 'activity',
+    skillId: 'commerce',
+    activityId: 'tavern-gossip',
+    label: 'Tavern Gossip',
+  })
   push(uses, 'disguise-kit', {
     kind: 'activity',
-    skillId: 'stealth',
+    skillId: 'thievery',
     activityId: 'merchant-warehouse',
     label: 'Merchant Warehouse',
   })
-  push(uses, 'disguise-kit', {
+  push(uses, 'forged-writ', {
     kind: 'activity',
-    skillId: 'sleightOfHand',
-    activityId: 'trap-small',
-    label: 'Trap Small Animals',
+    skillId: 'thievery',
+    activityId: 'forgery-papers',
+    label: 'Forge Travel Papers',
+  })
+  push(uses, 'false-papers', {
+    kind: 'activity',
+    skillId: 'thievery',
+    activityId: 'forgery-papers',
+    label: 'Forge Travel Papers',
+  })
+  push(uses, 'inspiration', {
+    kind: 'activity',
+    skillId: 'performance',
+    activityId: 'local-music',
+    label: 'Local Music',
   })
   push(uses, 'bounty-contract', { kind: 'combat', label: 'Bounties' })
   push(uses, 'menace-trophy', { kind: 'combat', label: 'Frighten' })
-  push(uses, 'rumor', { kind: 'combat', label: 'Rare spawns' })
   push(uses, 'intel', { kind: 'combat', label: 'Damage by creature type' })
 
   for (const spell of SPELLS) {

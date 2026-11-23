@@ -330,7 +330,8 @@ function CheckModal(props: { questId: string; onClose: () => void }) {
   const skills = useGameStore((s) => s.skills)
   const inventory = useGameStore((s) => s.inventory)
   const gold = useGameStore((s) => s.gold)
-  const tomes = useGameStore((s) => s.tomes)
+  const classId = useGameStore((s) => s.classId)
+  const classXp = useGameStore((s) => s.classXp)
   const questProgress = useGameStore((s) => s.questProgress)
   const rollQuestCheck = useGameStore((s) => s.rollQuestCheck)
   const resolveQuestCheck = useGameStore((s) => s.resolveQuestCheck)
@@ -368,7 +369,13 @@ function CheckModal(props: { questId: string; onClose: () => void }) {
               (prepOn[approach.id] ?? true) &&
               Boolean(approach.prep) &&
               (inventory[approach.prep!.itemId] ?? 0) > 0
-            const { bonus, mode, autoPass } = approachBonus(approach, skills, tomes, usePrep)
+            const { bonus, mode, autoPass, label } = approachBonus(
+              approach,
+              skills,
+              classId,
+              classXp,
+              usePrep,
+            )
             const chance =
               approach.goldCost != null
                 ? gold >= approach.goldCost
@@ -377,14 +384,13 @@ function CheckModal(props: { questId: string; onClose: () => void }) {
                 : autoPass
                   ? 1
                   : fixedDcSuccessChance(bonus, approach.dc, mode)
-            const skillName = SKILLS.find((s) => s.id === approach.skillId)?.name ?? approach.skillId
             return (
               <div key={approach.id} className="rounded border border-brown/40 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="font-bold text-parchment">{approach.label}</div>
                     <div className="text-xs text-parchment/70">
-                      {skillName}
+                      {label}
                       {approach.goldCost != null
                         ? ` · ${approach.goldCost} gp`
                         : ` · DC ${approach.dc} · ${Math.round(chance * 100)}%`}

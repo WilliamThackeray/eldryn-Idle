@@ -2,12 +2,13 @@ import { type ClassId } from '../../data/classes'
 import { getDungeon } from '../../data/dungeons'
 import { getMonster, monstersForBiome, type MonsterDef } from '../../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import { COMBAT_LOG_LIMIT } from '../config'
 import {
   applyLootToInventory,
   buildRunOrder,
   consumeEntryItem,
+  resolveChest,
   resolveSecret,
   resolveTrap,
   type DungeonNode,
@@ -37,7 +38,7 @@ export function pushRoomLog(fight: CombatFight, line: string) {
 export function spawnDungeonMonster(
   fight: CombatFight,
   monster: MonsterDef,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Equipment,
   casting: boolean,
   trace: boolean,
@@ -105,7 +106,7 @@ export function maybeRareSwap(
 export function advanceDungeonNodes(input: {
   fight: CombatFight
   inventory: Inventory
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
@@ -126,7 +127,7 @@ export function advanceDungeonNodes(input: {
   inventory: Inventory
   classXp: number
   secondaryClassXp: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   stop: boolean
   questStepComplete: string | null
   monster: MonsterDef | null
@@ -278,7 +279,17 @@ export function advanceDungeonNodes(input: {
 
     if (node.kind === 'trap') {
       const inspiration = inventory.inspiration ?? 0
-      const result = resolveTrap(node.room, skills, rng, inspiration)
+      const result = resolveTrap(
+        node.room,
+        {
+          skills,
+          classId: input.activeClassId,
+          classXp,
+          equipment,
+        },
+        rng,
+        inspiration,
+      )
       if (result.inspirationSpent > 0) {
         inventory = removeItems(inventory, [{ itemId: 'inspiration', quantity: result.inspirationSpent }])
       }
@@ -311,7 +322,17 @@ export function advanceDungeonNodes(input: {
 
     if (node.kind === 'secret') {
       const inspiration = inventory.inspiration ?? 0
-      const result = resolveSecret(node.room, skills, rng, inspiration)
+      const result = resolveSecret(
+        node.room,
+        {
+          skills,
+          classId: input.activeClassId,
+          classXp,
+          equipment,
+        },
+        rng,
+        inspiration,
+      )
       if (result.inspirationSpent > 0) {
         inventory = removeItems(inventory, [{ itemId: 'inspiration', quantity: result.inspirationSpent }])
       }
@@ -326,14 +347,27 @@ export function advanceDungeonNodes(input: {
     }
 
     if (node.kind === 'chest') {
-      const loot = rollLoot(dungeon.chest, rng, 1)
-      inventory = applyLootToInventory(inventory, loot)
-      fight.lootGained = mergeLoot(fight.lootGained, loot)
-      const line = loot.length
-        ? `Chest: ${loot.map((s) => `${s.itemId}×${s.quantity}`).join(', ')}.`
-        : 'Chest: empty.'
-      pushRoomLog(fight, line)
-      pushLog(fight, line, trace)
+      const inspiration = inventory.inspiration ?? 0
+      const result = resolveChest(
+        dungeon,
+        {
+          skills,
+          classId: input.activeClassId,
+          classXp,
+          equipment,
+        },
+        rng,
+        inspiration,
+      )
+      if (result.inspirationSpent > 0) {
+        inventory = removeItems(inventory, [{ itemId: 'inspiration', quantity: result.inspirationSpent }])
+      }
+      if (result.opened && result.loot.length) {
+        inventory = applyLootToInventory(inventory, result.loot)
+        fight.lootGained = mergeLoot(fight.lootGained, result.loot)
+      }
+      pushRoomLog(fight, result.line)
+      pushLog(fight, result.line, trace)
       fight.dungeonClearedThisTick = dungeon.id
       fight.nodeIndex += 1
       continue
@@ -406,7 +440,7 @@ export function onKill(input: {
   secondaryClassXp?: number
   echoes?: number
   hasSecondary?: boolean
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   rng: Rng
   trace: boolean
   modifiers: Partial<Record<AbilityAbbr, number>>
@@ -422,7 +456,7 @@ export function onKill(input: {
   inventory: Inventory
   classXp: number
   secondaryClassXp: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   stop: boolean
   questStepComplete: string | null
   monster: MonsterDef | null
@@ -548,7 +582,7 @@ export function onKill(input: {
 export function respawnMonster(
   fight: CombatFight,
   monster: MonsterDef,
-  skills: Record<SkillId, SkillProgress>,
+  skills: Record<TradeSkillId, SkillProgress>,
   equipment: Equipment,
   casting: boolean,
   rng?: Rng,

@@ -1,26 +1,36 @@
-import type { SkillId } from '../skills'
+import type { TradeSkillId } from '../skills'
 import type { ActivityDef } from './types'
 
 /** Skills with an explicit tab list. Anything else tabs only when it is large and categorized. */
-export const SKILL_TABS: Partial<Record<SkillId, readonly string[]>> = {
-  athletics: ['Mining', 'Smelting', 'Smithing'],
-  survival: ['Woodcutting', 'Foraging', 'Fishing', 'Butchering', 'Fletching', 'Woodworking', 'Leatherworking'],
-  history: ['Lore', 'Tomes', 'Study Notes', 'Bestiaries'],
-  arcana: ['Study', 'Focuses', 'Attire', 'Reagents'],
-  sleightOfHand: ['Trapping', 'Pickpocketing', 'Lockpicking', 'Jewelcrafting'],
-  nature: ['Cooking', 'Gardening', 'Crafting', 'Attire'],
-  religion: ['Worship', 'Crafting', 'Attire'],
-  performance: ['Venues', 'Attire'],
+export const SKILL_TABS: Partial<Record<TradeSkillId, readonly string[]>> = {
+  mining: ['Mining', 'Excavation'],
+  smithing: ['Smelting', 'Weapons', 'Armor', 'Shields'],
+  woodcutting: ['Woodcutting'],
+  woodcraft: ['Weapons', 'Ammo', 'Bows', 'Crossbows', 'Focuses'],
+  leatherworking: ['Armor', 'Attire', 'Weapons'],
+  jewelcrafting: ['Jewelry', 'Appraisal', 'Focuses'],
+  thievery: ['Pickpocketing', 'Lockpicking', 'Forgery', 'Infiltration'],
+  cooking: ['Cooking'],
+  alchemy: ['Potions', 'Reagents', 'Holy Water'],
+  scribing: ['Lore', 'Ink', 'Tomes', 'Study Notes', 'Bestiaries', 'Field Notes'],
+  enchanting: ['Arcane Study'],
+  weaving: ['Attire'],
+  foraging: ['Foraging', 'Plots'],
+  fishing: ['Fishing'],
+  hunting: ['Trapping', 'Butchering', 'Husbandry'],
+  commerce: ['Trade', 'Rumors', 'Schemes', 'Debts'],
+  performance: ['Venues'],
+  binding: ['Drills'],
 }
 
-export function skillUsesTabs(skillId: SkillId, activities: ActivityDef[]): boolean {
+export function skillUsesTabs(skillId: TradeSkillId, activities: ActivityDef[]): boolean {
   if (SKILL_TABS[skillId]) return activities.length > 0
   if (activities.length <= 8) return false
   const categories = new Set(activities.map((activity) => activity.category).filter(Boolean))
   return categories.size >= 2
 }
 
-export function tabsFor(skillId: SkillId, activities: ActivityDef[]): string[] {
+export function tabsFor(skillId: TradeSkillId, activities: ActivityDef[]): string[] {
   if (!skillUsesTabs(skillId, activities)) return []
   const declared = SKILL_TABS[skillId]
   const present = declared

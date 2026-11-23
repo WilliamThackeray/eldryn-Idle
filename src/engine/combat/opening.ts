@@ -1,7 +1,7 @@
 import type { ClassId } from '../../data/classes'
 import type { MonsterDef } from '../../data/monsters'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
-import type { SkillId } from '../../data/skills'
+import type { TradeSkillId } from '../../data/skills'
 import type { Equipment } from '../equipment'
 import type { ActiveBuff } from '../history'
 import type { Inventory } from '../inventory'
@@ -14,7 +14,7 @@ import type { CombatFight } from './state'
 export function runOpening(input: {
   fight: CombatFight
   monster: MonsterDef
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   equipment: Equipment
   inventory: Inventory
   activeClassId: ClassId
@@ -34,7 +34,7 @@ export function runOpening(input: {
 }): {
   inventory: Inventory
   classXp: number
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   monster: MonsterDef
   action: 'proceed' | 'ammo' | 'quest' | 'defeat' | 'loop'
   questStepComplete: string | null

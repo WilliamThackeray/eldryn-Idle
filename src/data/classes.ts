@@ -1,6 +1,7 @@
 import type { AbilityAbbr } from '../types/game'
+import type { CheckSkillId } from './checkSkills'
 import { GEAR_MATERIALS, getItem, type ItemId } from './items'
-import type { SkillId } from './skills'
+import type { TradeSkillId } from './skills'
 
 export type ClassId =
   | 'barbarian'
@@ -25,7 +26,8 @@ export type Spellcasting =
   | { casterType: 'none' }
   | {
       casterType: 'full' | 'half' | 'pact'
-      unlockSkill: SkillId
+      /** TODO(Prompt 25): spells are learned by inscribing scrolls. */
+      unlockSkill: TradeSkillId
       castingAbility: AbilityAbbr
       tradition: SpellTradition
     }
@@ -54,6 +56,7 @@ export interface ClassDefinition {
   /** 5e weapon list: category tags and/or specific weapon ids. */
   weaponProficiencies: readonly WeaponProficiency[]
   spellcasting: Spellcasting
+  checkProficiencies: readonly CheckSkillId[]
   signatureAbility: SignatureAbility
   startingKit: readonly { itemId: ItemId; quantity: number }[]
 }
@@ -138,6 +141,7 @@ export const CLASSES = [
     saveProficiencies: ['STR', 'CON'],
     weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
+    checkProficiencies: ['athletics', 'intimidation', 'perception', 'survival'],
     startingKit: martialKit('greataxe', 'leather'),
     signatureAbility: {
       id: 'rage',
@@ -157,6 +161,7 @@ export const CLASSES = [
     saveProficiencies: ['STR', 'CON'],
     weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
+    checkProficiencies: ['athletics', 'acrobatics', 'intimidation', 'perception'],
     startingKit: martialKit('longsword', 'leather'),
     signatureAbility: {
       id: 'secondWind',
@@ -176,6 +181,7 @@ export const CLASSES = [
     saveProficiencies: ['DEX', 'INT'],
     weaponProficiencies: ROGUE_BARD,
     spellcasting: { casterType: 'none' },
+    checkProficiencies: ['stealth', 'sleightOfHand', 'perception', 'investigation', 'deception'],
     startingKit: martialKit('rapier', 'leather'),
     signatureAbility: {
       id: 'sneakAttack',
@@ -194,6 +200,7 @@ export const CLASSES = [
     saveProficiencies: ['STR', 'DEX'],
     weaponProficiencies: ['simple', 'shortsword'],
     spellcasting: { casterType: 'none' },
+    checkProficiencies: ['acrobatics', 'stealth', 'insight', 'religion'],
     startingKit: martialKit('quarterstaff', 'padded'),
     signatureAbility: {
       id: 'flurryOfBlows',
@@ -214,10 +221,11 @@ export const CLASSES = [
     weaponProficiencies: WIZARD_WEAPONS,
     spellcasting: {
       casterType: 'full',
-      unlockSkill: 'arcana',
+      unlockSkill: 'scribing',
       castingAbility: 'INT',
       tradition: 'arcane',
     },
+    checkProficiencies: ['arcana', 'history', 'investigation', 'insight'],
     startingKit: casterKit('quarterstaff', 'arcane', 'arcane'),
     signatureAbility: {
       id: 'arcaneRecovery',
@@ -239,10 +247,11 @@ export const CLASSES = [
     weaponProficiencies: ['simple'],
     spellcasting: {
       casterType: 'full',
-      unlockSkill: 'religion',
+      unlockSkill: 'scribing',
       castingAbility: 'WIS',
       tradition: 'divine',
     },
+    checkProficiencies: ['religion', 'medicine', 'insight', 'history'],
     startingKit: casterKit('quarterstaff', 'vestment', 'divine'),
     signatureAbility: {
       id: 'channelDivinity',
@@ -264,10 +273,11 @@ export const CLASSES = [
     // TODO(design): casting ability may become INT after the INT/CHA XP swap.
     spellcasting: {
       casterType: 'full',
-      unlockSkill: 'arcana',
+      unlockSkill: 'scribing',
       castingAbility: 'CHA',
       tradition: 'arcane',
     },
+    checkProficiencies: ['arcana', 'deception', 'persuasion', 'intimidation'],
     startingKit: casterKit('dagger', 'arcane', 'arcane'),
     signatureAbility: {
       id: 'metamagicPactMagic',
@@ -289,10 +299,11 @@ export const CLASSES = [
     // TODO(design): casting ability may become INT after the INT/CHA XP swap.
     spellcasting: {
       casterType: 'half',
-      unlockSkill: 'religion',
+      unlockSkill: 'scribing',
       castingAbility: 'CHA',
       tradition: 'divine',
     },
+    checkProficiencies: ['athletics', 'religion', 'persuasion', 'intimidation'],
     startingKit: casterKit('longsword', 'leather', 'divine'),
     signatureAbility: {
       id: 'divineSmite',
@@ -312,10 +323,11 @@ export const CLASSES = [
     weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: {
       casterType: 'half',
-      unlockSkill: 'nature',
+      unlockSkill: 'scribing',
       castingAbility: 'WIS',
       tradition: 'primal',
     },
+    checkProficiencies: ['survival', 'perception', 'stealth', 'nature'],
     startingKit: casterKit('shortsword', 'leather', 'primal'),
     signatureAbility: {
       id: 'huntersMark',
@@ -335,10 +347,11 @@ export const CLASSES = [
     weaponProficiencies: DRUID_WEAPONS,
     spellcasting: {
       casterType: 'full',
-      unlockSkill: 'nature',
+      unlockSkill: 'scribing',
       castingAbility: 'WIS',
       tradition: 'primal',
     },
+    checkProficiencies: ['nature', 'animalHandling', 'medicine', 'survival'],
     startingKit: casterKit('quarterstaff', 'wildweave', 'primal'),
     signatureAbility: {
       id: 'wildShape',
@@ -351,19 +364,19 @@ export const CLASSES = [
     id: 'bard',
     name: 'Bard',
     role: 'Support caster',
-    playstyle: 'Inspiration dice patch failed rolls. Train Performance to unlock spells.',
+    playstyle: 'Inspiration dice patch failed rolls. Train Scribing to inscribe spells.',
     difficulty: 2,
     xpModifiers: { CHA: 0.25, DEX: 0.15, STR: -0.15, CON: -0.15 },
     hitDie: 8,
     saveProficiencies: ['DEX', 'CHA'],
     weaponProficiencies: ROGUE_BARD,
-    // TODO(design): unlockSkill Performance vs Arcana.
     spellcasting: {
       casterType: 'full',
-      unlockSkill: 'performance',
+      unlockSkill: 'scribing',
       castingAbility: 'CHA',
       tradition: 'bardic',
     },
+    checkProficiencies: ['performance', 'persuasion', 'deception', 'insight'],
     startingKit: casterKit('dagger', 'minstrel', 'bardic'),
     signatureAbility: {
       id: 'bardicInspiration',

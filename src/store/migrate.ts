@@ -10,9 +10,8 @@ import { NOTE_GROUPS, type NoteGroupId } from '../data/historyContent'
 import { CREATURE_TYPES, getMonster, isBiomeId, type CreatureType } from '../data/monsters'
 import { isQuestId } from '../data/quests'
 import { isSpellId } from '../data/spells'
-import { initialSkillProgress, isSkillId, SKILLS, type SkillId } from '../data/skills'
+import { initialSkillProgress, isSkillId, SKILLS, type TradeSkillId } from '../data/skills'
 import type { ActiveAction, CombatFight } from '../engine/advance'
-import { LEGACY_QUEST_GOLD } from '../engine/config'
 import type { ActiveBuff, BuffEffect } from '../engine/history'
 import { emptyNoticeBoard, type NoticeBoard } from '../engine/noticeBoard'
 import type { Bounty } from '../engine/social'
@@ -34,7 +33,7 @@ import type { SkillProgress } from '../types/game'
 
 export const SAVE_KEY = 'idle_game_save'
 /** v18: secondary class + Echo rebirth prestige. */
-export const SAVE_VERSION = 18
+export const SAVE_VERSION = 19
 
 /** Old sell values for bags removed in the specific-components rework. */
 const LEGACY_BAG_SELL: Record<string, number> = {
@@ -47,7 +46,7 @@ const LEGACY_BAG_SELL: Record<string, number> = {
 
 export interface SaveData {
   characterName: string
-  skills: Record<SkillId, SkillProgress>
+  skills: Record<TradeSkillId, SkillProgress>
   inventory: Inventory
   inventoryTabs: InventoryTab[]
   gold: number
@@ -76,7 +75,7 @@ export interface SaveData {
   /** End hunt/dungeon after a rest when food runs out and HP is still below max. Default on. */
   stopWhenOutOfFood: boolean
   /** Highest History tome volume read per skill. */
-  tomes: Record<SkillId, number>
+  tomes: Record<TradeSkillId, number>
   /** Highest bestiary volume read per creature type. */
   bestiaries: Record<CreatureType, number>
   /** Timed buffs (Study Notes and CHA consumables). Tick during active actions, including offline. */
@@ -124,8 +123,8 @@ export function createInitialSave(): SaveData {
   }
 }
 
-function emptyTomes(): Record<SkillId, number> {
-  const tomes = {} as Record<SkillId, number>
+function emptyTomes(): Record<TradeSkillId, number> {
+  const tomes = {} as Record<TradeSkillId, number>
   for (const skill of SKILLS) tomes[skill.id] = 0
   return tomes
 }
@@ -137,30 +136,9 @@ function emptyBestiaries(): Record<CreatureType, number> {
 }
 
 export function migrateSave(persisted: unknown, version: number): SaveData {
-  const source = version < SAVE_VERSION ? fromLegacy(persisted) : persisted
-  let legacyGold = 0
-  if (version < 17 && isRecord(source)) {
-    const qp = source.questProgress
-    if (isRecord(qp)) {
-      const old = qp['shattered-mile']
-      if (isRecord(old) && old.done === true) legacyGold = LEGACY_QUEST_GOLD
-    }
-  }
-  const save = normalizeSave(source)
-  let next = save
-  if (version < 17) {
-    next = {
-      ...next,
-      gold: next.gold + legacyGold,
-      questProgress: emptyQuestProgress(),
-      pinnedQuestId: null,
-      noticeBoard: emptyNoticeBoard(next.lastTick),
-      combat: next.combat ? { ...next.combat, questId: null } : null,
-    }
-  }
-  // Old saves predate the class picker and start as Fighter.
-  if (version < 5) return { ...next, classId: 'fighter', classXp: 0 }
-  return next
+  // Pre-v19 saves are wiped at the slot layer; never remap old skill ids.
+  if (version < SAVE_VERSION) return createInitialSave()
+  return normalizeSave(persisted)
 }
 
 export function normalizeSave(raw: unknown): SaveData {
@@ -168,7 +146,7 @@ export function normalizeSave(raw: unknown): SaveData {
   const source = isRecord(raw) ? raw : {}
 
   if (isRecord(source.skills)) {
-    for (const id of Object.keys(skills) as SkillId[]) {
+    for (const id of Object.keys(skills) as TradeSkillId[]) {
       const entry = source.skills[id]
       if (!isRecord(entry) || typeof entry.xp !== 'number' || !Number.isFinite(entry.xp) || entry.xp < 0) continue
       skills[id] = { xp: entry.xp }
@@ -238,7 +216,7 @@ function readBounty(value: unknown): Bounty | null {
   return { monsterId: value.monsterId, need: Math.floor(need), have: Math.floor(have) }
 }
 
-function readTomes(value: unknown): Record<SkillId, number> {
+function readTomes(value: unknown): Record<TradeSkillId, number> {
   const tomes = emptyTomes()
   if (!isRecord(value)) return tomes
   for (const skill of SKILLS) {
@@ -294,7 +272,7 @@ function readBuffEffect(value: unknown): BuffEffect | null {
   }
   if (value.type === 'activityAdvantage') {
     if (!Array.isArray(value.skills)) return null
-    const skills = value.skills.filter((id): id is SkillId => typeof id === 'string' && isSkillId(id))
+    const skills = value.skills.filter((id): id is TradeSkillId => typeof id === 'string' && isSkillId(id))
     if (!skills.length) return null
     return { type: 'activityAdvantage', skills }
   }
@@ -487,36 +465,6 @@ function readEchoes(value: unknown): number {
   const n = finite(value)
   if (n == null || n < 0) return 0
   return Math.floor(n)
-}
-
-function fromLegacy(raw: unknown): unknown {
-  if (!isRecord(raw)) return raw
-  if (isRecord(raw.skills)) return raw
-
-  const character = isRecord(raw.character) ? raw.character : null
-  if (!character) return raw
-
-  const skills = initialSkillProgress()
-  readLegacySkills(character.nonCombatSkills, skills)
-  readLegacySkills(character.combatSkills, skills)
-  readLegacySkills(character.passiveSkills, skills)
-
-  return {
-    characterName: character.name,
-    skills,
-    inventory: character.inventory,
-    lastSaved: raw.lastSaved,
-  }
-}
-
-function readLegacySkills(raw: unknown, skills: Record<SkillId, SkillProgress>) {
-  if (!Array.isArray(raw)) return
-  for (const entry of raw) {
-    if (!isRecord(entry) || typeof entry.id !== 'string' || !isSkillId(entry.id)) continue
-    const xp = typeof entry.currentXP === 'number' ? entry.currentXP : entry.xp
-    if (typeof xp !== 'number' || !Number.isFinite(xp) || xp < 0) continue
-    skills[entry.id] = { xp }
-  }
 }
 
 function parseActiveAction(value: unknown): ActiveAction | null {

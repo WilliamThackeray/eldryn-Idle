@@ -30,7 +30,8 @@ function App() {
   useGameLoop(playing)
   const [currentPage, setCurrentPage] = useState('shop')
   const [pageFocus, setPageFocus] = useState<PageFocus | null>(null)
-  const skillId = isSkillId(currentPage) ? currentPage : null
+  const skillId =
+    isSkillId(currentPage) && currentPage !== 'vitality' ? currentPage : null
 
   function navigate(page: string, focus?: PageFocus) {
     setCurrentPage(page)

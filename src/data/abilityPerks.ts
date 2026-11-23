@@ -45,7 +45,7 @@ export const ABILITY_PERKS = [
     rank: 1,
     id: 'str-yield',
     name: 'Athletic Yield',
-    description: '+1% Athletics yield per Rank.',
+    description: '+1% STR skill yield per Rank.',
     effect: { type: 'skillYieldPct', ability: 'STR', value: 0.01, perRank: true },
   },
   {
@@ -53,7 +53,7 @@ export const ABILITY_PERKS = [
     rank: 5,
     id: 'str-save-bar',
     name: 'Spare the Bar',
-    description: '10% chance to save a bar when smithing.',
+    description: '10% chance to save a bar when Smithing.',
     effect: { type: 'saveBarChance', value: 0.1 },
   },
   {
@@ -95,7 +95,7 @@ export const ABILITY_PERKS = [
     rank: 5,
     id: 'dex-lockpick',
     name: 'Lucky Lockpick',
-    description: '10% chance of double loot when lockpicking.',
+    description: '10% chance of double loot when Thievery lockpicking.',
     effect: { type: 'lockpickDoubleLootChance', value: 0.1 },
   },
   {
@@ -221,7 +221,7 @@ export const ABILITY_PERKS = [
     rank: 5,
     id: 'wis-double-gather',
     name: 'Keen Eye',
-    description: '10% chance of double gathering.',
+    description: '10% chance of double gathering from Foraging, Fishing, and Hunting.',
     effect: { type: 'doubleGatherChance', value: 0.1 },
   },
   {
@@ -229,7 +229,7 @@ export const ABILITY_PERKS = [
     rank: 10,
     id: 'wis-forage',
     name: 'Trail Forager',
-    description: 'Forage food while hunting.',
+    description: 'Forage food while Hunting.',
     effect: { type: 'forageWhileHunting' },
   },
   {

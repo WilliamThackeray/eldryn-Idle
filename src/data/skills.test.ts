@@ -1,15 +1,15 @@
 import { expect, test } from 'vitest'
 import { SKILL_ABILITY_GROUPS, SKILLS } from './skills'
 
-test('lists the 5e skills plus hidden Vitality on Constitution', () => {
+test('lists the 19 trade skills under the six abilities', () => {
   const ids = (ability: string) => SKILLS.filter((skill) => skill.ability === ability).map((skill) => skill.id)
 
   expect(SKILLS).toHaveLength(19)
-  expect(ids('STR')).toEqual(['athletics'])
-  expect(ids('DEX')).toEqual(['acrobatics', 'sleightOfHand', 'stealth'])
-  expect(ids('CON')).toEqual(['vitality'])
-  expect(ids('INT')).toEqual(['arcana', 'history', 'investigation', 'nature', 'religion'])
-  expect(ids('WIS')).toEqual(['animalHandling', 'insight', 'medicine', 'perception', 'survival'])
-  expect(ids('CHA')).toEqual(['deception', 'intimidation', 'performance', 'persuasion'])
-  expect(SKILL_ABILITY_GROUPS).not.toContain('CON')
+  expect(ids('STR')).toEqual(['mining', 'smithing', 'woodcutting'])
+  expect(ids('DEX')).toEqual(['woodcraft', 'leatherworking', 'jewelcrafting', 'thievery'])
+  expect(ids('CON')).toEqual(['cooking', 'vitality'])
+  expect(ids('INT')).toEqual(['alchemy', 'scribing', 'enchanting', 'weaving'])
+  expect(ids('WIS')).toEqual(['foraging', 'fishing', 'hunting'])
+  expect(ids('CHA')).toEqual(['commerce', 'performance', 'binding'])
+  expect(SKILL_ABILITY_GROUPS).toEqual(['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'])
 })

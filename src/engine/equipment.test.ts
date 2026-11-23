@@ -136,11 +136,11 @@ test('heavy armor STR soft requirement and mithral ignore', () => {
   expect(armorStrain(getItem('chain-mail-chest')?.gear, 12)).toBe(true)
 })
 
-test('stealth and acrobatics disadvantage from heavy or padded armor', () => {
-  expect(gearRollMode('stealth', fullSet('padded'))).toBe('disadvantage')
-  expect(gearRollMode('acrobatics', fullSet('plate'))).toBe('disadvantage')
-  expect(gearRollMode('stealth', fullSet('leather'))).toBe('normal')
-  expect(gearRollMode('athletics', fullSet('plate'))).toBe('normal')
+test('thievery disadvantage from heavy or padded armor', () => {
+  expect(gearRollMode('thievery', fullSet('padded'))).toBe('disadvantage')
+  expect(gearRollMode('thievery', fullSet('plate'))).toBe('disadvantage')
+  expect(gearRollMode('thievery', fullSet('leather'))).toBe('normal')
+  expect(gearRollMode('mining', fullSet('plate'))).toBe('normal')
 })
 
 test('a starting kit equips the weapon and armor and keeps 10 cooked food', () => {
