@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Shuffle } from 'lucide-react'
 import { ClassCard } from '../../components/ClassCard'
+import { Button } from '../../components/ui/Button'
 import { CLASSES, TRADITION_LABEL, type ClassId, type ClericFocus } from '../../data/classes'
 import { getItem } from '../../data/items'
 
@@ -52,7 +53,8 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
   const chosen = classId ? CLASSES.find((entry) => entry.id === classId) : undefined
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-8 text-parchment">
+    <div className="flex h-screen flex-col bg-ink text-parchment">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-auto px-6 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm text-sage">Step {step} of 3</p>
@@ -143,35 +145,29 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
         </div>
       )}
 
-      <div className="mt-8 flex gap-3">
-        {step > 1 && (
-          <button
-            type="button"
-            onClick={() => setStep((current) => (current === 3 ? 2 : 1))}
-            className="rounded-lg bg-brown px-4 py-2 text-parchment hover:bg-crimson"
-          >
-            Back
-          </button>
-        )}
-        {step < 3 && (
-          <button
-            type="button"
-            disabled={step === 1 ? trimmed.length === 0 : !classId}
-            onClick={() => setStep((current) => (current === 1 ? 2 : 3))}
-            className="rounded-lg bg-sage px-3 py-2 text-ink hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Next
-          </button>
-        )}
-        {step === 3 && chosen && (
-          <button
-            type="button"
-            onClick={() => onBegin({ name: trimmed, classId: chosen.id, clericFocus: focus })}
-            className="rounded-lg bg-sage px-4 py-2 text-ink hover:bg-gold"
-          >
-            Begin
-          </button>
-        )}
+      </div>
+      <div className="sticky bottom-0 border-t border-line bg-ink/95 px-6 py-3">
+        <div className="mx-auto flex max-w-5xl gap-3">
+          {step > 1 && (
+            <Button variant="secondary" onClick={() => setStep((current) => (current === 3 ? 2 : 1))}>
+              Back
+            </Button>
+          )}
+          {step < 3 && (
+            <Button
+              disabled={step === 1 ? trimmed.length === 0 : !classId}
+              disabledReason={step === 1 ? 'Enter a name' : 'Choose a class'}
+              onClick={() => setStep((current) => (current === 1 ? 2 : 3))}
+            >
+              Next
+            </Button>
+          )}
+          {step === 3 && chosen && (
+            <Button onClick={() => onBegin({ name: trimmed, classId: chosen.id, clericFocus: focus })}>
+              Begin
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

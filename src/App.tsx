@@ -58,7 +58,7 @@ function App() {
             }}
           />
 
-          <div className="min-h-0 flex-1 overflow-auto p-6">
+          <div className="min-h-0 flex-1 overflow-auto">
             {skillId && (
               <SkillPage
                 skillId={skillId}

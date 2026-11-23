@@ -206,7 +206,7 @@ export const CLASSES = [
     id: 'wizard',
     name: 'Wizard',
     role: 'Glass-cannon caster',
-    playstyle: 'Cast from a spellbook. Stay back and spend slots in order.',
+    playstyle: 'Cast from a spellbook. The rotation spends components, not spell slots.',
     difficulty: 3,
     xpModifiers: { INT: 0.3, WIS: 0.1, STR: -0.15, CON: -0.15 },
     hitDie: 6,
@@ -255,7 +255,7 @@ export const CLASSES = [
     id: 'sorcererWarlock',
     name: 'Sorcerer / Warlock',
     role: 'Arcane striker',
-    playstyle: 'Quickened spells, and pact slots that return on a short rest.',
+    playstyle: 'Quickened spells shorten the next interval. Leveled spells cost half the components.',
     difficulty: 3,
     xpModifiers: { INT: 0.3, CHA: 0.1, STR: -0.15, CON: -0.15 },
     hitDie: 6,
@@ -273,7 +273,7 @@ export const CLASSES = [
       id: 'metamagicPactMagic',
       name: 'Metamagic / Pact Magic',
       description:
-        'Metamagic: Quickened Spell makes the next spell interval 50% shorter (sorcery points per long rest). Pact Magic: fewer slots, all at max level, recharged on short rests; leveled spells cost half the components; Eldritch Blast cantrip.',
+        'Metamagic: Quickened Spell makes the next spell interval 50% shorter (sorcery points per long rest). Leveled spells cost half the components. Eldritch Blast is the cantrip.',
     },
   },
   {

@@ -3,16 +3,27 @@ import { getClass } from '../../data/classes'
 import { BESTIARY_TYPES } from '../../data/historyContent'
 import { getItem, type ItemId } from '../../data/items'
 import { getMonster } from '../../data/monsters'
-import { getSkill, SKILLS } from '../../data/skills'
+import { getShopUpgrade, type OwnedUpgrades } from '../../data/shop'
+import { getSkill, SKILLS, type SkillId } from '../../data/skills'
 import { getSpell, spellsForClass, type SpellId } from '../../data/spells'
 import { ladderPerksFor, perRankPerkFor } from '../../data/abilityPerks'
 import { ProgressBar } from '../../components/ProgressBar'
 import { CombatStatsPanel } from '../../components/CombatStatsPanel'
 import { ItemDetail } from '../../components/ItemDetail'
 import { PaperDoll } from '../../components/PaperDoll'
-import { deriveAbilities } from '../../engine/abilities'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { PageLayout } from '../../components/ui/PageLayout'
+import { SubHeading } from '../../components/ui/SectionHeading'
+import { StatTile } from '../../components/ui/StatTile'
+import { TabPanel, Tabs } from '../../components/ui/Tabs'
+import { cx } from '../../components/ui/format'
+import { useUiPrefs } from '../../store/uiPrefs'
+import { activePerks, deriveAbilities, type DerivedAbility } from '../../engine/abilities'
+import { computeCombatStats, type StatBreakdown } from '../../engine/combatStats'
 import { type EquipmentSlot } from '../../engine/equipment'
 import { sourcesOf, type ItemLink } from '../../engine/itemIndex'
+import type { Bestiaries, Tomes } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
 import { ECHO_XP_PCT } from '../../engine/config'
 import {
@@ -29,9 +40,36 @@ import {
 } from '../../engine/spells'
 import { levelForXp, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
+import type { AbilityAbbr, SkillProgress } from '../../types/game'
 import type { PageFocus } from '../pageFocus'
 
-type Tab = 'gear' | 'spellbook'
+const TABS = ['overview', 'abilities', 'equipment', 'spellbook', 'bonuses'] as const
+type Tab = (typeof TABS)[number]
+
+const ABILITY_BORDER: Record<AbilityAbbr, string> = {
+  STR: 'border-ability-str',
+  DEX: 'border-ability-dex',
+  CON: 'border-ability-con',
+  INT: 'border-ability-int',
+  WIS: 'border-ability-wis',
+  CHA: 'border-ability-cha',
+}
+const ABILITY_TEXT: Record<AbilityAbbr, string> = {
+  STR: 'text-ability-str',
+  DEX: 'text-ability-dex',
+  CON: 'text-ability-con',
+  INT: 'text-ability-int',
+  WIS: 'text-ability-wis',
+  CHA: 'text-ability-cha',
+}
+const ABILITY_BAR: Record<AbilityAbbr, string> = {
+  STR: 'bg-ability-str',
+  DEX: 'bg-ability-dex',
+  CON: 'bg-ability-con',
+  INT: 'bg-ability-int',
+  WIS: 'bg-ability-wis',
+  CHA: 'bg-ability-cha',
+}
 
 interface CharacterPageProps {
   focus?: { kind: 'spell'; spellId: string } | null
@@ -65,22 +103,21 @@ export function CharacterPage({
   const deleteEquipmentSet = useGameStore((state) => state.deleteEquipmentSet)
   const tomes = useGameStore((state) => state.tomes)
   const bestiaries = useGameStore((state) => state.bestiaries)
+  const upgrades = useGameStore((state) => state.upgrades)
   const [setName, setSetName] = useState('')
-  const [tab, setTab] = useState<Tab>('gear')
+  const savedTab = useUiPrefs((state) => state.lastTab.character)
+  const setLastTab = useUiPrefs((state) => state.setLastTab)
+  const [pickedTab, setPickedTab] = useState<Tab | null>(null)
   const [highlightSpellId, setHighlightSpellId] = useState<string | null>(null)
   const [detailSlot, setDetailSlot] = useState<EquipmentSlot | null>(null)
 
   useEffect(() => {
     if (!focus) return
-    setTab('spellbook')
+    setPickedTab('spellbook')
+    setLastTab('character', 'spellbook')
     setHighlightSpellId(focus.spellId)
     onFocusConsumed?.()
-  }, [focus, onFocusConsumed])
-
-  useEffect(() => {
-    if (!highlightSpellId || tab !== 'spellbook') return
-    document.getElementById(`spell-${highlightSpellId}`)?.scrollIntoView({ block: 'nearest' })
-  }, [highlightSpellId, tab])
+  }, [focus, onFocusConsumed, setLastTab])
 
   const abilities = deriveAbilities(skills)
   const active = classId ? getClass(classId) : null
@@ -170,257 +207,204 @@ export function CharacterPage({
     return `Out of ${missing}: will cast ${cantrip.name}`
   }
 
+  const showSpells = Boolean(casterType || classSpells.length > 0)
+  const tabItems = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'abilities', label: 'Abilities' },
+    { id: 'equipment', label: 'Equipment' },
+    ...(showSpells ? [{ id: 'spellbook', label: 'Spellbook' }] : []),
+    { id: 'bonuses', label: 'Bonuses' },
+  ]
+  const remembered = savedTab === 'gear' ? 'equipment' : savedTab
+  const tab: Tab =
+    pickedTab && tabItems.some((entry) => entry.id === pickedTab)
+      ? pickedTab
+      : remembered && tabItems.some((entry) => entry.id === remembered)
+        ? (remembered as Tab)
+        : 'overview'
+
+  useEffect(() => {
+    if (!highlightSpellId || tab !== 'spellbook') return
+    document.getElementById(`spell-${highlightSpellId}`)?.scrollIntoView({ block: 'nearest' })
+  }, [highlightSpellId, tab])
+
+  function chooseTab(next: string) {
+    if (!(TABS as readonly string[]).includes(next)) return
+    setPickedTab(next as Tab)
+    setLastTab('character', next)
+  }
+
+  const combat = classId
+    ? computeCombatStats({
+        skills,
+        equipment,
+        classId,
+        classXp,
+        inventory,
+        spellLoadout: loadout,
+        bestiaries,
+      })
+    : null
+
   return (
-    <div className="space-y-6 text-parchment">
-      <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-        <h2 className="mb-1 text-2xl font-bold text-gold">{characterName}</h2>
-        {active ? (
-          <p className="text-sm text-sage">
-            {active.name} · Class Level {activeLevel} · Tier {classTier}
-            {secondary && secondaryLevel != null
-              ? ` · ${secondary.name} Level ${secondaryLevel}`
-              : ''}
-            {echoes > 0 ? ` · Echo ${echoes} (+${echoes * ECHO_XP_PCT}% XP)` : ''} ·{' '}
-            {activeProgress.capped
-              ? `${activeProgress.xp} XP`
-              : `${activeProgress.xp} / ${activeProgress.xpToNextLevel} XP`}
-          </p>
-        ) : (
-          <p className="text-sm text-sage">No class selected</p>
-        )}
-      </section>
-
-      <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-        <h3 className="mb-3 font-bold text-gold">Abilities</h3>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {abilities.map((ability) => {
-            const ladder = ladderPerksFor(ability.abbr)
-            const nextMilestone = ladder.find((perk) => perk.rank > ability.rank)
-            const perRank = perRankPerkFor(ability.abbr)
-            return (
-              <div key={ability.id} className="rounded-md bg-ink/50 px-3 py-3 text-sm">
-                <div className="flex items-baseline justify-between gap-2">
-                  <div className="text-xs uppercase tracking-wide text-sage/80">{ability.abbr}</div>
-                  <div className="text-xs text-sage">Rank {ability.rank}/20</div>
-                </div>
-                <div className="font-semibold">
-                  {ability.score} ({ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier})
-                </div>
-                <div className="mt-2">
-                  <ProgressBar
-                    progress={ability.rankProgress}
-                    className="h-1.5"
-                    label={`${ability.abbr} rank progress`}
-                  />
-                </div>
-                {perRank && (
-                  <p className="mt-2 text-xs text-parchment/70">
-                    +1% per Rank, now +{ability.rank}%
-                  </p>
-                )}
-                <ul className="mt-2 space-y-1">
-                  {ladder.map((perk) => {
-                    const earned = ability.rank >= perk.rank
-                    const next = nextMilestone?.id === perk.id
-                    return (
-                      <li
-                        key={perk.id}
-                        className={`rounded px-2 py-1.5 ${
-                          earned
-                            ? 'bg-sage/20 text-parchment'
-                            : next
-                              ? 'ring-1 ring-gold/70 text-gold'
-                              : 'text-parchment/40'
-                        }`}
-                      >
-                        <div className="text-xs font-semibold">
-                          R{perk.rank} {perk.name}
-                        </div>
-                        <div className="text-[11px] leading-snug opacity-80">{perk.description}</div>
-                      </li>
-                    )
-                  })}
-                </ul>
+    <PageLayout
+      side={
+        tab === 'equipment' ? (
+          <div className="rounded-lg border border-line bg-panel p-3">
+            <ItemDetail
+              itemId={detailItemId}
+              owned={detailItemId ? 1 : 0}
+              equipment={equipment}
+              inventory={inventory}
+              skills={skills}
+              classXp={classXp}
+              classId={classId}
+              isInDungeonOrQuest={isInDungeonOrQuest}
+              mode="worn"
+              emptyLabel="Click a worn item"
+              onUnequip={() => {
+                if (!detailSlot) return
+                unequipSlot(detailSlot)
+                setDetailSlot(null)
+              }}
+            />
+          </div>
+        ) : undefined
+      }
+    >
+      <div className="space-y-4">
+        <Tabs name="character" label="Character" tabs={tabItems} value={tab} onChange={chooseTab} />
+        <TabPanel name="character" id={tab} active>
+          {tab === 'overview' && (
+            <Card className="space-y-4">
+              <div>
+                <h2 className="text-page font-bold text-gold">{characterName}</h2>
+                <p className="text-body text-parchment">
+                  {active ? `${active.name} · Level ${activeLevel} · Tier ${classTier}` : 'No class'}
+                </p>
               </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {active && (
-        <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-          <h3 className="mb-3 font-bold text-gold">Class</h3>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <Stat label="Hit Die" value={`1d${active.hitDie}`} />
-            <Stat label="Saves" value={active.saveProficiencies.join(', ')} />
-          </dl>
-          <p className="mt-3 text-sm font-semibold">{active.signatureAbility.name}</p>
-          <p className="mt-1 text-sm text-parchment/80">{active.signatureAbility.description}</p>
-          {active.id === 'cleric' && (
-            <p className="mt-3 text-sage text-sm">Focus {clericFocus}</p>
-          )}
-        </section>
-      )}
-
-      <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-        <h3 className="mb-3 font-bold text-gold">History</h3>
-        <div className="space-y-3 text-sm">
-          <div>
-            <h4 className="mb-1 text-xs uppercase tracking-wide text-sage">Tomes</h4>
-            {SKILLS.filter((skill) => skill.id !== 'history' && (tomes[skill.id] ?? 0) > 0).length ===
-            0 ? (
-              <p className="text-parchment/60">No tomes read yet.</p>
-            ) : (
-              <ul className="space-y-1">
-                {SKILLS.filter((skill) => skill.id !== 'history' && (tomes[skill.id] ?? 0) > 0).map(
-                  (skill) => {
-                    const volumes = tomes[skill.id] ?? 0
-                    const extras = [
-                      volumes >= 5 ? '−5% interval' : null,
-                      volumes >= 10 ? '+1 check' : null,
-                    ].filter(Boolean)
-                    return (
-                      <li key={skill.id}>
-                        {skill.name} Vol. {volumes} (+{Math.min(volumes, 10)}% XP
-                        {extras.length ? `; ${extras.join(', ')}` : ''})
-                      </li>
-                    )
-                  },
-                )}
-              </ul>
-            )}
-          </div>
-          <div>
-            <h4 className="mb-1 text-xs uppercase tracking-wide text-sage">Bestiaries</h4>
-            {BESTIARY_TYPES.filter((type) => (bestiaries[type] ?? 0) > 0).length === 0 ? (
-              <p className="text-parchment/60">No bestiaries read yet.</p>
-            ) : (
-              <ul className="space-y-1">
-                {BESTIARY_TYPES.filter((type) => (bestiaries[type] ?? 0) > 0).map((type) => (
-                  <li key={type}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)} Vol. {bestiaries[type]} (+
-                    {bestiaries[type]} to hit)
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <div className="flex gap-2">
-        {(['gear', 'spellbook'] as const).map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`rounded-lg px-3 py-2 text-sm capitalize ${
-              tab === id ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
-            }`}
-          >
-            {id}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'gear' && (
-        <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
-          <h3 className="mb-3 font-bold text-gold">Equipment</h3>
-          {isInDungeonOrQuest && (
-            <p className="mb-3 text-sm text-parchment/70">Swapping is locked in a dungeon or quest.</p>
-          )}
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]">
-            <div className="space-y-4">
-              <PaperDoll
-                equipment={equipment}
-                inventory={inventory}
-                classXp={classXp}
-                locked={isInDungeonOrQuest}
-                onSelectWorn={(slot) => setDetailSlot(slot)}
-                onEquip={(itemId) => equipItem(itemId)}
-              />
-              <div className="space-y-3">
-                <h4 className="font-semibold text-sage">Loadouts</h4>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    value={setName}
-                    onChange={(event) => setSetName(event.target.value)}
-                    placeholder="Loadout name"
-                    className="rounded-lg border border-brown/40 bg-ink/50 px-3 py-1 text-sm text-parchment"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      saveEquipmentSet(setName)
-                      setSetName('')
-                    }}
-                    className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold"
+              <ProgressBar progress={activeProgress.progress} label="Class experience" />
+              <p className="text-meta text-muted">
+                {active ? `Primary ${active.name} ${activeLevel}` : 'No class'}
+                {secondary && secondaryLevel != null ? ` · Secondary ${secondary.name} ${secondaryLevel}` : ''}
+                {echoes > 0 ? ` · Echo ${echoes} (+${echoes * ECHO_XP_PCT}% XP)` : ''}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <StatTile label="HP" value={combat ? combat.maxHp.value : '—'} breakdown={combat ? statTip(combat.maxHp) : undefined} />
+                <StatTile label="AC" value={combat ? combat.ac.value : '—'} breakdown={combat ? statTip(combat.ac) : undefined} />
+              </div>
+              <div className="grid grid-cols-3 gap-2 min-[1100px]:grid-cols-6">
+                {abilities.map((ability) => (
+                  <div
+                    key={ability.abbr}
+                    className={cx('rounded-md border bg-ink px-2 py-1.5 text-center', ABILITY_BORDER[ability.abbr])}
                   >
-                    Save
-                  </button>
-                </div>
-                <ul className="space-y-2">
-                  {equipmentSets.map((entry) => (
-                    <li
-                      key={entry.name}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink/40 px-3 py-2"
-                    >
-                      <span>{entry.name}</span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={isInDungeonOrQuest}
-                          onClick={() => loadEquipmentSet(entry.name)}
-                          className="rounded-lg bg-sage px-3 py-1 text-sm text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteEquipmentSet(entry.name)}
-                          className="rounded-lg bg-brown/60 px-3 py-1 text-sm text-parchment transition-colors hover:bg-crimson"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                    <div className={cx('text-meta font-semibold', ABILITY_TEXT[ability.abbr])}>{ability.abbr}</div>
+                    <div className="text-card text-parchment">{ability.score}</div>
+                    <div className="text-meta text-muted">
+                      {ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier}
+                    </div>
+                  </div>
+                ))}
               </div>
+              {active && (
+                <div className="space-y-2 border-t border-line pt-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatTile label="Hit Die" value={`1d${active.hitDie}`} />
+                    <StatTile label="Saves" value={active.saveProficiencies.join(', ')} />
+                  </div>
+                  <p className="text-body font-semibold text-parchment">{active.signatureAbility.name}</p>
+                  <p className="text-meta text-muted">{active.signatureAbility.description}</p>
+                  {active.id === 'cleric' && <p className="text-meta text-sage">Focus {clericFocus}</p>}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {tab === 'abilities' && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 min-[1100px]:grid-cols-3">
+              {abilities.map((ability) => (
+                <AbilityCard key={ability.id} ability={ability} />
+              ))}
             </div>
+          )}
+
+          {tab === 'equipment' && (
             <div className="space-y-4">
-              <CombatStatsPanel
-                skills={skills}
-                equipment={equipment}
-                classId={classId}
-                classXp={classXp}
-                inventory={inventory}
-                spellLoadout={classId ? spellLoadouts[classId] : undefined}
-                bestiaries={bestiaries}
-              />
-              <div className="rounded-lg border border-brown/40 bg-ink/40 p-3">
-                <ItemDetail
-                  itemId={detailItemId}
-                  owned={detailItemId ? 1 : 0}
+              {isInDungeonOrQuest && (
+                <p className="text-meta text-muted">Swapping is locked in a dungeon or quest.</p>
+              )}
+              <div className="grid items-start gap-4 min-[1200px]:grid-cols-[auto_minmax(0,1fr)]">
+                <PaperDoll
                   equipment={equipment}
                   inventory={inventory}
-                  skills={skills}
                   classXp={classXp}
-                  classId={classId}
-                  isInDungeonOrQuest={isInDungeonOrQuest}
-                  mode="worn"
-                  emptyLabel="Click a worn item"
-                  onUnequip={() => {
-                    if (!detailSlot) return
-                    unequipSlot(detailSlot)
-                    setDetailSlot(null)
-                  }}
+                  locked={isInDungeonOrQuest}
+                  onSelectWorn={setDetailSlot}
+                  onEquip={equipItem}
                 />
+                <div className="space-y-4">
+                  <CombatStatsPanel
+                    skills={skills}
+                    equipment={equipment}
+                    classId={classId}
+                    classXp={classXp}
+                    inventory={inventory}
+                    spellLoadout={loadout}
+                    bestiaries={bestiaries}
+                  />
+                  <Card>
+                    <SubHeading title="Loadouts" count={equipmentSets.length} />
+                    {equipmentSets.length === 0 ? (
+                      <p className="mb-3 text-meta text-muted">No saved loadouts.</p>
+                    ) : (
+                      <ul className="mb-3 space-y-2">
+                        {equipmentSets.map((entry) => (
+                          <li key={entry.name} className="flex items-center justify-between gap-2">
+                            <span className="text-body text-parchment">{entry.name}</span>
+                            <span className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={isInDungeonOrQuest}
+                                disabledReason={isInDungeonOrQuest ? 'Locked in a dungeon or quest' : undefined}
+                                onClick={() => loadEquipmentSet(entry.name)}
+                              >
+                                Load
+                              </Button>
+                              <Button size="sm" variant="danger" onClick={() => deleteEquipmentSet(entry.name)}>
+                                Delete
+                              </Button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        const name = setName.trim()
+                        if (!name) return
+                        saveEquipmentSet(name)
+                        setSetName('')
+                      }}
+                    >
+                      <input
+                        aria-label="Loadout name"
+                        value={setName}
+                        onChange={(event) => setSetName(event.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-line bg-ink px-2 py-1 text-body text-parchment"
+                      />
+                      <Button type="submit" size="sm" disabled={!setName.trim()}>
+                        Save
+                      </Button>
+                    </form>
+                  </Card>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      )}
+          )}
 
       {tab === 'spellbook' && (
         <section className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg">
@@ -488,7 +472,7 @@ export function CharacterPage({
               <h4 className="mb-2 font-semibold text-sage">Known & locked</h4>
               <ul className="space-y-2 text-sm">
                 {classSpells.map((spell) => {
-                  const owner = spellOwnerClass(spell.id, classId, secondaryClassId)
+                  const owner = spellOwnerClass(spell.id as SpellId, classId, secondaryClassId)
                   const ownerUnlock = unlockSkillFor(owner)
                   const ownerLevel = ownerUnlock ? levelForXp(skills[ownerUnlock]?.xp ?? 0) : 0
                   const need = unlockSkillLevel(spell.level)
@@ -524,16 +508,188 @@ export function CharacterPage({
         </section>
       )}
 
-    </div>
+          {tab === 'bonuses' && (
+            <Bonuses
+              skills={skills}
+              tomes={tomes}
+              bestiaries={bestiaries}
+              upgrades={upgrades}
+              echoes={echoes}
+            />
+          )}
+        </TabPanel>
+      </div>
+    </PageLayout>
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+
+function statTip(stat: StatBreakdown): string {
+  if (stat.parts.length === 0) return String(stat.value)
+  return `${stat.value} = ${stat.parts.map((part) => `${part.label} ${part.value}`).join(' · ')}`
+}
+
+function AbilityCard({ ability }: { ability: DerivedAbility }) {
+  const [open, setOpen] = useState(false)
+  const ladder = ladderPerksFor(ability.abbr)
+  const earned = ladder.filter((perk) => ability.rank >= perk.rank)
+  const upcoming = ladder.filter((perk) => ability.rank < perk.rank)
+  const next = upcoming[0]
+  const later = upcoming.slice(1)
+  const perRank = perRankPerkFor(ability.abbr)
+  const modifier = ability.modifier >= 0 ? `+${ability.modifier}` : String(ability.modifier)
   return (
-    <div className="rounded-md bg-ink/50 px-3 py-2">
-      <dt className="text-xs uppercase tracking-wide text-sage/80">{label}</dt>
-      <dd className="font-semibold text-parchment">{value}</dd>
-    </div>
+    <Card className="relative">
+      <span className={cx('absolute inset-y-0 left-0 w-1', ABILITY_BAR[ability.abbr])} aria-hidden />
+      <div className="flex items-baseline justify-between gap-2">
+        <span className={cx('text-section font-bold', ABILITY_TEXT[ability.abbr])}>{ability.score}</span>
+        <span className="text-card text-parchment">{modifier}</span>
+      </div>
+      <p className="text-meta text-muted">{ability.name}</p>
+      <p className="mt-2 text-meta text-muted">Rank {ability.rank}/20</p>
+      <ProgressBar
+        progress={ability.rankProgress}
+        className="mt-1 h-1.5"
+        barClassName={ABILITY_BAR[ability.abbr]}
+        label={`${ability.name} rank`}
+      />
+      {perRank && (
+        <p className="mt-2 text-meta text-muted">+1% per Rank, now +{ability.rank}%</p>
+      )}
+      {earned.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-meta text-parchment">
+          {earned.map((perk) => (
+            <li key={perk.id}>
+              R{perk.rank} {perk.name}
+            </li>
+          ))}
+        </ul>
+      )}
+      {next && (
+        <div className="mt-2 rounded px-2 py-1.5 ring-1 ring-gold">
+          <p className="text-meta font-semibold text-gold">
+            R{next.rank} {next.name}
+          </p>
+          <p className="text-meta text-parchment">{next.description}</p>
+        </div>
+      )}
+      {later.length > 0 && (
+        <div className="mt-1">
+          <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+            {open ? 'Hide' : `+${later.length} more`}
+          </Button>
+          {open && (
+            <ul className="space-y-0.5 text-meta text-muted">
+              {later.map((perk) => (
+                <li key={perk.id}>
+                  R{perk.rank} {perk.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function Bonuses({
+  skills,
+  tomes,
+  bestiaries,
+  upgrades,
+  echoes,
+}: {
+  skills: Record<SkillId, SkillProgress>
+  tomes: Tomes
+  bestiaries: Bestiaries
+  upgrades: OwnedUpgrades
+  echoes: number
+}) {
+  const tomeRows = SKILLS.filter((skill) => skill.id !== 'history' && (tomes[skill.id] ?? 0) > 0)
+  const books = BESTIARY_TYPES.filter((type) => (bestiaries[type] ?? 0) > 0)
+  const perks = activePerks({ skills })
+  const bought = Object.entries(upgrades).flatMap(([id, index]) => {
+    const upgrade = getShopUpgrade(id)
+    if (!upgrade || typeof index !== 'number' || index < 0) return []
+    const tier = upgrade.tiers[index]
+    return [{ id, name: upgrade.name, tier: index + 1, detail: tier?.effect.kind === 'soon' ? 'Coming soon' : null }]
+  })
+  return (
+    <Card className="space-y-4">
+      <div>
+        <SubHeading title="History tomes" />
+        {tomeRows.length === 0 ? (
+          <p className="text-meta text-muted">None yet</p>
+        ) : (
+          <ul className="space-y-1 text-body text-parchment">
+            {tomeRows.map((skill) => {
+              const volumes = tomes[skill.id] ?? 0
+              const extras = [volumes >= 5 ? '−5% interval' : null, volumes >= 10 ? '+1 check' : null].filter(Boolean)
+              return (
+                <li key={skill.id}>
+                  {skill.name} Vol. {volumes} (+{Math.min(volumes, 10)}% XP
+                  {extras.length ? `; ${extras.join(', ')}` : ''})
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+      <div>
+        <SubHeading title="Bestiaries" />
+        {books.length === 0 ? (
+          <p className="text-meta text-muted">None yet</p>
+        ) : (
+          <ul className="space-y-1 text-body text-parchment">
+            {books.map((type) => (
+              <li key={type}>
+                {type.charAt(0).toUpperCase() + type.slice(1)} Vol. {bestiaries[type]} (+{bestiaries[type]} to hit)
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div>
+        <SubHeading title="Ability perks" />
+        {perks.length === 0 ? (
+          <p className="text-meta text-muted">None yet</p>
+        ) : (
+          <ul className="space-y-1 text-body text-parchment">
+            {perks.map((perk) => (
+              <li key={perk.id}>
+                {perk.ability} R{perk.rank} {perk.name}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div>
+        <SubHeading title="Shop upgrades" />
+        {bought.length === 0 ? (
+          <p className="text-meta text-muted">None yet</p>
+        ) : (
+          <ul className="space-y-1 text-body text-parchment">
+            {bought.map((upgrade) => (
+              <li key={upgrade.id}>
+                {upgrade.name} tier {upgrade.tier}
+                {upgrade.detail ? ` · ${upgrade.detail}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div>
+        <SubHeading title="Echo" />
+        {echoes > 0 ? (
+          <p className="text-body text-parchment">
+            Echo {echoes} (+{echoes * ECHO_XP_PCT}% XP)
+          </p>
+        ) : (
+          <p className="text-meta text-muted">No Echo yet.</p>
+        )}
+      </div>
+    </Card>
   )
 }
 

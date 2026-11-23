@@ -38,5 +38,10 @@ export interface ActivityDef {
   renownRequired?: number
   /** Hidden until this quest is complete. */
   requiresQuest?: string
+  /** Tab on the skill page. */
+  category?: string
+  /** Sub-tab and subheading. shortcut: "Subtab / Heading / Subheading", upgrade if a skill needs another level. */
+  group?: string
+  sortOrder?: number
   kind: 'gather' | 'craft' | 'train'
 }

@@ -20,7 +20,17 @@ import {
   NOTICE_BOARD_REROLL_FAVOR,
 } from '../../engine/config'
 import { noticeOfferLabel, noticeOfferReady } from '../../engine/noticeBoard'
+import { levelForXp } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
+import { usePageTab } from '../../store/uiPrefs'
+import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { ItemChip } from '../../components/ui/ItemChip'
+import { PageLayout } from '../../components/ui/PageLayout'
+import { ProgressBar } from '../../components/ProgressBar'
+import { TabPanel, Tabs } from '../../components/ui/Tabs'
 
 export function MileCampPage() {
   const inventory = useGameStore((s) => s.inventory)
@@ -36,6 +46,7 @@ export function MileCampPage() {
   const rerollNotice = useGameStore((s) => s.rerollNotice)
   const refreshNoticeBoard = useGameStore((s) => s.refreshNoticeBoard)
   const [checkQuestId, setCheckQuestId] = useState<string | null>(null)
+  const [tab, setTab] = usePageTab('mile-camp', 'people', ['people', 'board', 'log'] as const)
 
   useEffect(() => {
     refreshNoticeBoard()
@@ -44,6 +55,7 @@ export function MileCampPage() {
   const refreshIn = Math.max(0, NOTICE_BOARD_MS - (Date.now() - noticeBoard.refreshedAt))
 
   return (
+    <PageLayout>
     <div className="space-y-8">
       <p className="text-sm text-parchment/70">
         The mile-camp holds while the road forgets itself. Accept work here, then finish it out in the
@@ -53,20 +65,38 @@ export function MileCampPage() {
         <p className="rounded-lg border border-brown/40 bg-panel p-3 text-sm text-gold">{questMessage}</p>
       )}
 
+      <Tabs
+        name="mile-camp"
+        label="Mile-Camp"
+        value={tab}
+        onChange={(id) => setTab(id as 'people' | 'board' | 'log')}
+        tabs={[
+          { id: 'people', label: 'People' },
+          { id: 'board', label: 'Notice Board' },
+          { id: 'log', label: 'Quest Log' },
+        ]}
+      />
+
+      <TabPanel name="mile-camp" id={tab} active>
+      {tab === 'people' && (
       <section className="space-y-4">
-        <h2 className="text-lg font-bold text-gold">People of the Camp</h2>
         {NPCS.map((npc) => {
           const related = QUESTS.filter(
             (q) => q.giverNpcId === npc.id || q.turnInNpcId === npc.id,
           )
           return (
-            <div key={npc.id} className="rounded-lg border border-brown/40 bg-panel p-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="font-bold text-gold">
-                  {npc.name} · {npc.title}
-                </h3>
+            <Card key={npc.id}>
+              <div className="flex gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-card text-gold" aria-hidden>
+                  {npc.name.slice(0, 1)}
+                </span>
+                <div>
+                  <h3 className="text-card text-gold">
+                    {npc.name} <span className="text-meta font-normal text-muted">{npc.title}</span>
+                  </h3>
+                  <p className="text-body text-muted">{npc.description}</p>
+                </div>
               </div>
-              <p className="mt-1 text-sm text-parchment/70">{npc.description}</p>
               <div className="mt-3 space-y-2">
                 {related.length === 0 && (
                   <p className="text-sm text-parchment/60">No work right now.</p>
@@ -83,63 +113,56 @@ export function MileCampPage() {
                   />
                 ))}
               </div>
-            </div>
+            </Card>
           )
         })}
       </section>
+      )}
 
+      {tab === 'board' && (
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-bold text-gold">Notice Board</h2>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-parchment/70">Refresh in {formatMs(refreshIn)}</span>
-            <button
-              type="button"
-              disabled={favor < NOTICE_BOARD_REROLL_FAVOR}
-              onClick={() => rerollNotice()}
-              className="rounded bg-crimson px-3 py-1 text-parchment disabled:opacity-40"
-            >
-              Reroll ({NOTICE_BOARD_REROLL_FAVOR} Favor)
-            </button>
-          </div>
-        </div>
-        {noticeBoard.offers.length === 0 && (
-          <p className="text-sm text-parchment/70">No postings. Wait for a refresh.</p>
-        )}
-        {noticeBoard.offers.map((offer) => (
-          <div
-            key={offer.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brown/40 bg-panel p-3"
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={favor < NOTICE_BOARD_REROLL_FAVOR}
+            disabledReason={favor < NOTICE_BOARD_REROLL_FAVOR ? `Need ${NOTICE_BOARD_REROLL_FAVOR} Favor` : undefined}
+            onClick={() => rerollNotice()}
           >
+            Reroll ({NOTICE_BOARD_REROLL_FAVOR} Favor)
+          </Button>
+        </div>
+        {noticeBoard.offers.length === 0 && <EmptyState text="No postings. Wait for a refresh." />}
+        {noticeBoard.offers.map((offer) => (
+          <Card key={offer.id} className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="font-bold text-parchment">{noticeOfferLabel(offer)}</div>
-              <div className="text-xs text-parchment/70">
-                {offer.gold} gp · {offer.favor} Favor
+              <div className="font-semibold text-parchment">{noticeOfferLabel(offer)}</div>
+              <div className="text-meta text-muted">
+                {offer.gold} gp · {offer.favor} Favor · Refresh in {formatMs(refreshIn)}
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={!noticeOfferReady(offer, inventory)}
+              disabledReason={noticeOfferReady(offer, inventory) ? undefined : 'Requirements not met'}
               onClick={() => turnInNotice(offer.id)}
-              className="rounded bg-crimson px-3 py-1 text-sm text-parchment disabled:opacity-40"
             >
               Turn in
-            </button>
-          </div>
+            </Button>
+          </Card>
         ))}
       </section>
+      )}
 
+      {tab === 'log' && (
       <section className="space-y-3">
-        <h2 className="text-lg font-bold text-gold">Quest Log</h2>
         {QUESTS.filter((q) => questProgress[q.id]).map((quest) => {
           const run = getRun(questProgress, quest.id)!
           return (
-            <div key={quest.id} className="rounded-lg border border-brown/40 bg-panel p-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="font-bold text-gold">{quest.title}</h3>
-                <span className="text-xs text-parchment/70">
-                  {run.done ? 'Complete' : `Stage ${run.stage + 1}`}
-                </span>
+            <Card key={quest.id}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-semibold text-gold">{quest.title}</h3>
+                <Badge tone={run.done ? 'neutral' : 'gold'}>{run.done ? 'Completed' : 'In progress'}</Badge>
               </div>
               <ul className="mt-2 space-y-1 text-sm text-parchment/80">
                 {run.history.map((entry, i) => (
@@ -153,18 +176,19 @@ export function MileCampPage() {
                   <li className="text-parchment/60">In progress…</li>
                 )}
               </ul>
-            </div>
+            </Card>
           )
         })}
-        {!QUESTS.some((q) => questProgress[q.id]) && (
-          <p className="text-sm text-parchment/70">No quests accepted yet.</p>
-        )}
+        {!QUESTS.some((q) => questProgress[q.id]) && <EmptyState text="No quests accepted yet." />}
       </section>
+      )}
+      </TabPanel>
 
       {checkQuestId && (
         <CheckModal questId={checkQuestId} onClose={() => setCheckQuestId(null)} />
       )}
     </div>
+    </PageLayout>
   )
 }
 
@@ -194,74 +218,111 @@ function QuestRow(props: {
       : false
   const isCheck = Boolean(stage && 'check' in stage)
 
+  const locked = !available && !active && !done
+  const reason = locked
+    ? lockReason(quest, questProgress, skills, classXp, inventory)
+    : null
+  const status = done
+    ? { label: 'Completed', tone: 'neutral' as const }
+    : ready
+      ? { label: 'Ready to turn in', tone: 'sage' as const }
+      : active
+        ? { label: 'In progress', tone: 'gold' as const }
+        : available
+          ? { label: 'Available', tone: 'sage' as const }
+          : { label: 'Locked', tone: 'crimson' as const }
+
   return (
-    <div className="rounded border border-brown/30 bg-ink/40 p-3">
+    <div className="rounded-lg border border-line bg-ink p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="font-bold text-parchment">{quest.title}</div>
-          <p className="text-xs text-parchment/70">{quest.description}</p>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-parchment">{quest.title}</span>
+            <Badge tone={status.tone}>{status.label}</Badge>
+          </div>
+          <p className="text-meta text-muted">{quest.description}</p>
+          {reason && <p className="mt-1 text-meta text-lack">{reason}</p>}
           {active && run && stage && 'objectives' in stage && (
-            <ul className="mt-2 space-y-0.5 text-sm text-sage">
+            <ul className="mt-2 space-y-2">
               {stage.objectives.map((obj, i) => {
-                const prog = objectiveProgress(
-                  obj,
-                  run.counts[i] ?? 0,
-                  inventory,
-                  skills,
-                  classXp,
-                )
+                const prog = objectiveProgress(obj, run.counts[i] ?? 0, inventory, skills, classXp)
+                const itemId = obj.type === 'have' || obj.type === 'deliver' ? obj.itemId : null
+                const progress = prog.need > 0 ? Math.min(100, (prog.have / prog.need) * 100) : 0
                 return (
                   <li key={i}>
-                    {objectiveLabel(obj)} {Math.min(prog.have, prog.need)}/{prog.need}
+                    {itemId ? (
+                      <ItemChip name={getItem(itemId)?.name ?? itemId} owned={prog.have} needed={prog.need} />
+                    ) : (
+                      <span className="text-body text-parchment">
+                        {objectiveLabel(obj)} {Math.min(prog.have, prog.need)}/{prog.need}
+                      </span>
+                    )}
+                    <ProgressBar progress={progress} label={objectiveLabel(obj)} className="mt-1 h-1.5" />
                   </li>
                 )
               })}
             </ul>
           )}
-          {active && isCheck && <p className="mt-2 text-sm text-gold">A check awaits.</p>}
-          {done && <p className="mt-2 text-sm text-sage">Complete.</p>}
+          {active && isCheck && <p className="mt-2 text-body text-gold">A check awaits.</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {available && (
-            <button
-              type="button"
-              onClick={props.onAccept}
-              className="rounded bg-crimson px-3 py-1 text-sm text-parchment"
-            >
+            <Button size="sm" onClick={props.onAccept}>
               Accept
-            </button>
+            </Button>
           )}
           {active && ready && (
-            <button
-              type="button"
-              onClick={props.onTurnIn}
-              className="rounded bg-crimson px-3 py-1 text-sm text-parchment"
-            >
+            <Button size="sm" onClick={props.onTurnIn}>
               Turn in
-            </button>
+            </Button>
           )}
           {active && isCheck && (
-            <button
-              type="button"
-              onClick={props.onOpenCheck}
-              className="rounded bg-crimson px-3 py-1 text-sm text-parchment"
-            >
+            <Button size="sm" onClick={props.onOpenCheck}>
               Check
-            </button>
+            </Button>
           )}
           {active && (
-            <button
-              type="button"
-              onClick={props.onPin}
-              className="rounded border border-brown/50 px-3 py-1 text-sm text-parchment"
-            >
+            <Button size="sm" variant="secondary" onClick={props.onPin}>
               {props.pinned ? 'Pinned' : 'Pin'}
-            </button>
+            </Button>
           )}
         </div>
       </div>
     </div>
   )
+}
+
+function lockReason(
+  quest: QuestDef,
+  questProgress: Parameters<typeof prerequisitesMet>[1]['questProgress'],
+  skills: Parameters<typeof prerequisitesMet>[1]['skills'],
+  classXp: number,
+  inventory: Parameters<typeof prerequisitesMet>[1]['inventory'],
+): string {
+  const missing: string[] = []
+  for (const id of quest.prerequisites.quests ?? []) {
+    if (!isQuestComplete(questProgress, id)) missing.push(getQuest(id)?.title ?? id)
+  }
+  const levelReq = quest.prerequisites.level
+  if (levelReq) {
+    const level =
+      levelReq.skillId === 'class'
+        ? levelForXp(classXp)
+        : levelForXp(skills[levelReq.skillId]?.xp ?? 0)
+    if (level < levelReq.level) {
+      const name =
+        levelReq.skillId === 'class'
+          ? 'Class'
+          : SKILLS.find((skill) => skill.id === levelReq.skillId)?.name ?? levelReq.skillId
+      missing.push(`${name} ${levelReq.level}`)
+    }
+  }
+  for (const stack of quest.prerequisites.items ?? []) {
+    if ((inventory[stack.itemId] ?? 0) < stack.quantity) {
+      missing.push(`${getItem(stack.itemId)?.name ?? stack.itemId} ×${stack.quantity}`)
+    }
+  }
+  return missing.length ? `Requires: ${missing.join(', ')}` : 'Requirements not met'
 }
 
 function CheckModal(props: { questId: string; onClose: () => void }) {

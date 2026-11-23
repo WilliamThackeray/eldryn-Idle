@@ -2,6 +2,7 @@ import { ACCESSORIES } from '../items/accessories'
 import { ARMOR } from '../items/armor'
 import type { ItemId } from '../items'
 import { activity, drop, stack } from './define'
+import { fillDisplay } from './display'
 import type { ActivityDef } from './types'
 
 const LEATHER_SETS = new Set(['leather', 'hide', 'padded', 'studded-leather'])
@@ -67,7 +68,20 @@ function leatherAndCloth(): ActivityDef[] {
       }),
     )
   }
-  return recipes
+  return recipes.map((recipe, index) => ({
+    ...recipe,
+    category: 'Leatherworking',
+    group: leatherGroup(recipe.id),
+    sortOrder: index,
+  }))
+}
+
+function leatherGroup(activityId: string): string {
+  if (activityId.includes('studded-leather')) return 'Studded Leather'
+  if (activityId.includes('leather-belt') || activityId.includes('leather-cloak')) return 'Other'
+  if (activityId.includes('padded')) return 'Padded'
+  if (activityId.includes('hide')) return 'Hide'
+  return 'Leather'
 }
 
 function woodGear(): ActivityDef[] {
@@ -78,7 +92,7 @@ function woodGear(): ActivityDef[] {
     { id: 'whip', name: 'Whip', inputs: [stack('hide')] },
     { id: 'sling', name: 'Sling', inputs: [stack('hide')] },
   ]
-  return specs.map((spec) =>
+  return specs.map((spec, index) =>
     activity({
       skillId: 'survival',
       id: `craft-${spec.id}`,
@@ -87,11 +101,13 @@ function woodGear(): ActivityDef[] {
       requiredLevel: spec.level ?? 1,
       inputs: spec.inputs,
       outputs: [drop(spec.id)],
+      category: 'Woodworking',
+      sortOrder: index,
     }),
   )
 }
 
-export const survivalActivities = [
+export const survivalActivities = fillDisplay([
   activity({ skillId: 'survival', id: 'chop-wood', name: 'Chop Wood', description: 'Fell ordinary trees for timber.', requiredLevel: 1, outputs: [drop('logs'), drop('oak-bark', 1, 1, 0.25)] }),
   activity({ skillId: 'survival', id: 'chop-hardwood', name: 'Chop Hardwood', description: 'Fell dense trees for bows and hafts.', requiredLevel: 20, outputs: [drop('hardwood'), drop('oak-bark', 1, 1, 0.25)] }),
   activity({ skillId: 'survival', id: 'chop-ironwood', name: 'Chop Ironwood', description: 'Fell ironwood.', requiredLevel: 50, outputs: [drop('ironwood'), drop('oak-bark', 1, 1, 0.25)] }),
@@ -165,4 +181,12 @@ export const survivalActivities = [
   }),
   ...woodGear(),
   ...leatherAndCloth(),
-]
+], (def, index) => {
+  const id = def.id
+  if (id.startsWith('chop-')) return { category: 'Woodcutting', sortOrder: index }
+  if (id.startsWith('forage-')) return { category: 'Foraging', sortOrder: index }
+  if (id.startsWith('fish-')) return { category: 'Fishing', sortOrder: index }
+  if (id.startsWith('butcher-')) return { category: 'Butchering', sortOrder: index }
+  const group = id.includes('crossbow') ? 'Crossbows' : id.endsWith('bow') ? 'Bows' : 'Ammo'
+  return { category: 'Fletching', group, sortOrder: index }
+})

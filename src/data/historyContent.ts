@@ -119,6 +119,9 @@ function buildTomeActivities(): ActivityDef[] {
         requiredLevel: level,
         inputs: tomeCraftInputs(skillId, volume),
         outputs: [drop(tomeItemId(skillId, volume) as ItemId)],
+        category: 'Tomes',
+        group: skillId,
+        sortOrder: volume,
       })
     })
   })
@@ -134,6 +137,7 @@ function buildNoteActivities(): ActivityDef[] {
       requiredLevel: 1,
       inputs: [stack('ink'), ...group.inputs.map((entry) => stack(entry.itemId, entry.quantity))],
       outputs: [drop(noteItemId(group.id) as ItemId)],
+      category: 'Study Notes',
     }),
   )
 }
@@ -152,6 +156,9 @@ function buildBestiaryActivities(): ActivityDef[] {
         requiredLevel: level,
         inputs: [stack(trophy, BESTIARY_TROPHY_COSTS[index]), stack('ink')],
         outputs: [drop(bestiaryItemId(type, volume) as ItemId)],
+        category: 'Bestiaries',
+        group: `${type.charAt(0).toUpperCase()}${type.slice(1)}`,
+        sortOrder: volume,
       })
     }),
   )

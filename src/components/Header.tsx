@@ -1,6 +1,5 @@
-import { BookOpen, Coins, Info, Menu, Package, Save, ScrollText, ShoppingCart, Swords, Tent, User } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { BookOpen, Menu, MoreHorizontal, Package, ShoppingCart, Swords, Tent, User } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { getActivity } from '../data/activities'
 import { getClass } from '../data/classes'
 import { getMonster, type BiomeId } from '../data/monsters'
@@ -10,18 +9,17 @@ import { actionIntervalMs } from '../engine/advance'
 import { deriveAbilities } from '../engine/abilities'
 import { RESPAWN_MS } from '../engine/config'
 import { sourcesOf } from '../engine/itemIndex'
-import {
-  currentStage,
-  getRun,
-  objectiveLabel,
-  objectiveProgress,
-} from '../engine/quest'
+import { currentStage, getRun, objectiveLabel, objectiveProgress } from '../engine/quest'
 import { levelForXp } from '../engine/xp'
 import type { PageFocus } from '../pages/pageFocus'
 import { useGameStore } from '../store/gameStore'
 import { CreditsModal } from './CreditsModal'
-import { Link } from './Link'
 import { ProgressBar } from './ProgressBar'
+import { SkillIcon } from './skillIcons'
+import { Button } from './ui/Button'
+import { Chip } from './ui/Badge'
+import { Currency } from './ui/Currency'
+import { Tooltip } from './ui/Tooltip'
 
 interface HeaderProps {
   title: string
@@ -31,10 +29,17 @@ interface HeaderProps {
   onMainMenu: () => void
 }
 
+const NAV = [
+  { id: 'shop', label: 'Shop', icon: ShoppingCart },
+  { id: 'inventory', label: 'Inventory', icon: Package },
+  { id: 'monsterHunting', label: 'Combat', icon: Swords },
+  { id: 'mile-camp', label: 'Mile-Camp', icon: Tent },
+] as const
+
 export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainMenu }: HeaderProps) {
-  const [charTip, setCharTip] = useState<{ top: number; left: number } | null>(null)
   const [creditsOpen, setCreditsOpen] = useState(false)
-  const charRef = useRef<HTMLButtonElement>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef<HTMLDivElement>(null)
   const characterName = useGameStore((state) => state.characterName)
   const classId = useGameStore((state) => state.classId)
   const classXp = useGameStore((state) => state.classXp)
@@ -51,6 +56,7 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
   const pinnedQuestId = useGameStore((state) => state.pinnedQuestId)
   const questProgress = useGameStore((state) => state.questProgress)
   const saveGame = useGameStore((state) => state.saveGame)
+  const stopActivity = useGameStore((state) => state.stopActivity)
   const pinnedQuest = pinnedQuestId ? getQuest(pinnedQuestId) : undefined
   const pinnedRun = pinnedQuestId ? getRun(questProgress, pinnedQuestId) : undefined
   const pinnedStage =
@@ -72,12 +78,6 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
             100,
         )
       : 0
-  const actionLabel = activeAction
-    ? activeAction.kind === 'skill'
-      ? `${SKILLS.find((skill) => skill.id === activeAction.skillId)?.name ?? 'Skill'} · ${activeAction.label}`
-      : activeAction.label
-    : 'Idle'
-  const tipHost = typeof document !== 'undefined' ? document.getElementById('tooltip-root') : null
   const classLevel = classId ? levelForXp(classXp) : null
   const secondaryLabel =
     secondaryClassId != null
@@ -89,55 +89,69 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
     .map((ability) => `${ability.abbr} ${ability.score} (R${ability.rank})`)
     .join(' · ')
 
-  const showCharTip = () => {
-    const rect = charRef.current?.getBoundingClientRect()
-    if (!rect) return
-    setCharTip({ top: rect.bottom + 8, left: rect.left + rect.width / 2 })
-  }
+  useEffect(() => {
+    if (!moreOpen) return
+    const onPointer = (event: MouseEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [moreOpen])
 
   return (
-    <div className="flex items-center justify-between border-b border-brown/40 bg-panel px-4 py-3 text-parchment">
+    <header
+      id="app-header"
+      className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-panel px-4 py-2 text-parchment"
+    >
       <CreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />
-      <h1 className="text-2xl font-bold text-gold">{title}</h1>
+      <h1 className="text-page text-gold">{title}</h1>
 
-      <div className="mx-4 flex min-w-0 flex-1 items-center gap-3" aria-label="Active action">
-        <div className="flex min-w-0 items-center gap-2">
-          {activeAction ? (
+      <div className="flex min-w-0 flex-1 items-center gap-3" aria-label="Active action">
+        {activeAction ? (
+          <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
               onClick={() =>
                 setCurrentPage(activeAction.kind === 'skill' ? activeAction.skillId : 'monsterHunting')
               }
-              className="truncate text-sm hover:text-gold hover:underline"
+              className="flex min-w-0 items-center gap-2 rounded-full border border-line bg-raised py-1 pl-2 pr-2 hover:border-gold"
+              aria-label={`Open ${activeAction.label}`}
             >
-              {actionLabel}
+              {activeAction.kind === 'skill' ? (
+                <SkillIcon id={activeAction.skillId} size={16} />
+              ) : (
+                <Swords size={16} aria-hidden />
+              )}
+              <span className="max-w-[10rem] truncate text-body">{activeAction.label}</span>
+              <span className="w-16 shrink-0">
+                <ProgressBar progress={actionProgress} className="h-1" label="Active action progress" />
+              </span>
             </button>
-          ) : (
-            <span className="truncate text-sm">{actionLabel}</span>
-          )}
-          {activeAction && (
-            <div className="w-24 shrink-0">
-              <ProgressBar progress={actionProgress} className="h-2" label="Active action progress" />
-            </div>
-          )}
-        </div>
+            <Button size="sm" variant="danger" onClick={() => stopActivity()}>
+              Stop
+            </Button>
+          </div>
+        ) : (
+          <span className="text-body text-muted">Idle</span>
+        )}
         {pinnedQuest && pinnedRun && pinnedStage && 'objectives' in pinnedStage && (
-          <div className="flex min-w-0 flex-wrap items-center gap-2 border-l border-brown/40 pl-3" aria-label="Quest tracker">
-            <span className="truncate text-xs text-gold">{pinnedQuest.title}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 border-l border-line pl-3" aria-label="Quest tracker">
+            <span className="truncate text-meta text-gold">{pinnedQuest.title}</span>
             {pinnedStage.objectives.map((obj, i) => {
-              const prog = objectiveProgress(
-                obj,
-                pinnedRun.counts[i] ?? 0,
-                inventory,
-                skills,
-                classXp,
-              )
+              const prog = objectiveProgress(obj, pinnedRun.counts[i] ?? 0, inventory, skills, classXp)
               return (
                 <button
                   key={i}
                   type="button"
                   onClick={() => jumpObjective(obj, onNavigate)}
-                  className="truncate text-xs text-sage hover:underline"
+                  className="truncate text-meta text-sage hover:underline"
                 >
                   {objectiveLabel(obj)} {Math.min(prog.have, prog.need)}/{prog.need}
                 </button>
@@ -149,125 +163,120 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
           <button
             type="button"
             onClick={() => onNavigate('mile-camp', { kind: 'quest', questId: pinnedQuest.id })}
-            className="border-l border-brown/40 pl-3 text-xs text-gold hover:underline"
+            className="border-l border-line pl-3 text-meta text-gold hover:underline"
           >
             {pinnedQuest.title}: check ready
           </button>
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {activeBuffs.length > 0 && (
           <div className="flex items-center gap-1" aria-label="Active buffs">
             {activeBuffs.map((buff) => (
-              <span
-                key={buff.id}
-                title={`${buffLabel(buff.id)} · ${formatBuffTime(buff.remainingMs)} left`}
-                className="inline-flex items-center gap-0.5 rounded bg-ink/60 px-1.5 py-0.5 text-[10px] text-sage"
-              >
-                <BookOpen size={12} />
-                {formatBuffTime(buff.remainingMs)}
-              </span>
+              <Tooltip key={buff.id} content={`${buffLabel(buff.id)} · ${formatBuffTime(buff.remainingMs)} left`}>
+                <Chip tone="sage">
+                  <BookOpen size={12} aria-hidden />
+                  {formatBuffTime(buff.remainingMs)}
+                </Chip>
+              </Tooltip>
             ))}
           </div>
         )}
-        <div className="flex items-center gap-1 text-gold" aria-label="Gold">
-          <Coins size={18} />
-          <span>{gold.toLocaleString()} gp</span>
-        </div>
-        <div className="flex items-center gap-1 text-sage" aria-label="Guild Favor">
-          <ScrollText size={18} />
-          <span>{favor.toLocaleString()} Favor</span>
-        </div>
+        <Currency kind="gp" amount={gold} />
+        <Currency kind="favor" amount={favor} />
 
-        <Link
-          icon={<ShoppingCart size={20} />}
-          label="Shop"
-          tipSide="below"
-          onClick={() => setCurrentPage('shop')}
-          active={currentPage === 'shop'}
-        />
-        <Link
-          icon={<Package size={20} />}
-          label="Inventory"
-          tipSide="below"
-          onClick={() => setCurrentPage('inventory')}
-          active={currentPage === 'inventory'}
-        />
-        <Link
-          icon={<Swords size={20} />}
-          label="Combat"
-          tipSide="below"
-          onClick={() => setCurrentPage('monsterHunting')}
-          active={currentPage === 'monsterHunting'}
-        />
-        <Link
-          icon={<Tent size={20} />}
-          label="Mile-Camp"
-          tipSide="below"
-          onClick={() => setCurrentPage('mile-camp')}
-          active={currentPage === 'mile-camp'}
-        />
-
-        <div className="relative">
+        <Tooltip content={abilityTip}>
           <button
-            ref={charRef}
             type="button"
             onClick={() => setCurrentPage('character')}
-            onMouseEnter={showCharTip}
-            onFocus={showCharTip}
-            onMouseLeave={() => setCharTip(null)}
-            onBlur={() => setCharTip(null)}
-            aria-label="Character"
             aria-current={currentPage === 'character' ? 'page' : undefined}
-            className={`flex max-w-[14rem] items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+            className={`flex max-w-[14rem] items-center gap-2 rounded-lg px-2 py-1.5 text-body ${
               currentPage === 'character' ? 'bg-crimson text-parchment' : 'text-parchment hover:bg-brown'
             }`}
           >
-            <User size={20} className="shrink-0" />
+            <User size={18} className="shrink-0" aria-hidden />
             <span className="truncate">{summary}</span>
           </button>
-          {charTip &&
-            tipHost &&
-            createPortal(
-              <span
-                role="tooltip"
-                className="absolute -translate-x-1/2 whitespace-nowrap rounded-md bg-panel px-2 py-1 text-xs text-parchment shadow-lg ring-1 ring-brown/60"
-                style={{ top: charTip.top, left: charTip.left }}
+        </Tooltip>
+
+        <nav aria-label="Main" className="flex flex-wrap items-center gap-1">
+          {NAV.map((item) => {
+            const Icon = item.icon
+            const active = currentPage === item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setCurrentPage(item.id)}
+                aria-current={active ? 'page' : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-meta font-semibold ${
+                  active ? 'bg-crimson text-parchment' : 'text-parchment hover:bg-brown'
+                }`}
               >
-                {abilityTip}
-              </span>,
-              tipHost,
-            )}
+                <Icon size={16} aria-hidden />
+                {item.label}
+              </button>
+            )
+          })}
+        </nav>
+
+        <div className="relative" ref={moreRef}>
+          <button
+            type="button"
+            aria-label="More actions"
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            onClick={() => setMoreOpen((open) => !open)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-parchment hover:bg-brown"
+          >
+            <MoreHorizontal size={18} aria-hidden />
+          </button>
+          {moreOpen && (
+            <div role="menu" className="absolute right-0 z-40 mt-1 w-40 rounded-lg border border-line bg-raised p-1 shadow-lg">
+              <MenuItem
+                onClick={() => {
+                  setMoreOpen(false)
+                  setCreditsOpen(true)
+                }}
+              >
+                About
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setMoreOpen(false)
+                  saveGame()
+                }}
+              >
+                Save
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setMoreOpen(false)
+                  onMainMenu()
+                }}
+              >
+                <Menu size={14} aria-hidden />
+                Main Menu
+              </MenuItem>
+            </div>
+          )}
         </div>
-
-        <Link
-          icon={<Info size={20} />}
-          label="About"
-          tipSide="below"
-          onClick={() => setCreditsOpen(true)}
-          active={false}
-        />
-
-        <button
-          type="button"
-          onClick={onMainMenu}
-          className="flex items-center gap-2 rounded-lg bg-brown px-3 py-2 text-parchment transition-colors hover:bg-crimson"
-        >
-          <Menu size={20} />
-          <span>Main Menu</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={saveGame}
-          className="flex items-center gap-2 rounded-lg bg-sage px-4 py-2 text-ink transition-colors hover:bg-gold"
-        >
-          <Save size={20} />
-          <span>Save Game</span>
-        </button>
       </div>
-    </div>
+    </header>
+  )
+}
+
+function MenuItem({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-body text-parchment hover:bg-brown"
+    >
+      {children}
+    </button>
   )
 }
 

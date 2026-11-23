@@ -1,19 +1,19 @@
 import type { ItemRarity } from '../data/items'
 
 export const RARITY_TEXT: Record<ItemRarity, string> = {
-  common: 'text-parchment',
-  uncommon: 'text-sage',
-  rare: 'text-[#7EB6D9]',
-  'very-rare': 'text-[#C58BE2]',
-  legendary: 'text-gold',
-  artifact: 'text-[#E85D4C]',
+  common: 'text-rarity-common',
+  uncommon: 'text-rarity-uncommon',
+  rare: 'text-rarity-rare',
+  'very-rare': 'text-rarity-very-rare',
+  legendary: 'text-rarity-legendary',
+  artifact: 'text-rarity-artifact',
 }
 
 export const RARITY_BORDER: Record<ItemRarity, string> = {
-  common: 'border-parchment/40',
-  uncommon: 'border-sage',
-  rare: 'border-[#7EB6D9]',
-  'very-rare': 'border-[#C58BE2]',
-  legendary: 'border-gold',
-  artifact: 'border-[#E85D4C]',
+  common: 'border-rarity-common/40',
+  uncommon: 'border-rarity-uncommon',
+  rare: 'border-rarity-rare',
+  'very-rare': 'border-rarity-very-rare',
+  legendary: 'border-rarity-legendary',
+  artifact: 'border-rarity-artifact',
 }

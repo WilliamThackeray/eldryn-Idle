@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Settings } from 'lucide-react'
 import { getClass, type ClassId } from '../../data/classes'
 import { DUNGEONS, getDungeon } from '../../data/dungeons'
 import { getItem } from '../../data/items'
@@ -21,7 +22,22 @@ import {
 } from '../../engine/combat'
 import { CombatStatsPanel } from '../../components/CombatStatsPanel'
 import { ProgressBar } from '../../components/ProgressBar'
+import { Badge, Chip } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { ItemChip } from '../../components/ui/ItemChip'
+import { PageLayout, SidePanel } from '../../components/ui/PageLayout'
+import { StatTile } from '../../components/ui/StatTile'
+import { Tabs } from '../../components/ui/Tabs'
+import { Tooltip } from '../../components/ui/Tooltip'
+import { difficultyBadge } from './difficultyBadge'
+import { useUiPrefs } from '../../store/uiPrefs'
 import { RESPAWN_MS } from '../../engine/config'
+import type { Bestiaries } from '../../engine/history'
+import type { Equipment } from '../../engine/equipment'
+import type { Inventory } from '../../engine/inventory'
+import type { SpellLoadout } from '../../engine/spells'
+import { hitChance } from '../../engine/combat'
 import { equippedFoodCount, foodHealAmount, foodOutlook } from '../../engine/combat/food'
 import { computeCombatStats } from '../../engine/combatStats'
 import { buildRunOrder } from '../../engine/dungeon'
@@ -41,11 +57,20 @@ interface CombatPageProps {
 
 export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const combat = useGameStore((state) => state.combat)
-  const [tab, setTab] = useState<CombatTab>(() => (combat?.dungeonId ? 'dungeons' : 'hunting'))
+  const [tab, setTabState] = useState<CombatTab>(() => {
+    if (combat?.dungeonId) return 'dungeons'
+    const saved = useUiPrefs.getState().lastTab.combat
+    return saved === 'dungeons' ? 'dungeons' : 'hunting'
+  })
+  const setTab = (next: CombatTab) => {
+    setTabState(next)
+    useUiPrefs.getState().setLastTab('combat', next)
+  }
   useEffect(() => {
     if (combat?.dungeonId) setTab('dungeons')
   }, [combat?.dungeonId])
   const [biome, setBiome] = useState<BiomeId>('forest')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [highlightMonsterId, setHighlightMonsterId] = useState<string | null>(null)
   const [selectedMonsterId, setSelectedMonsterId] = useState<string | null>(null)
   const [highlightDungeonId, setHighlightDungeonId] = useState<string | null>(null)
@@ -162,48 +187,53 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
       : null
 
   return (
+    <PageLayout>
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setTab('hunting')}
-          className={`rounded-lg px-3 py-2 text-sm transition-colors ${
-            tab === 'hunting' ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
-          }`}
-        >
-          Hunting
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('dungeons')}
-          className={`rounded-lg px-3 py-2 text-sm transition-colors ${
-            tab === 'dungeons' ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
-          }`}
-        >
-          Dungeons
-        </button>
-        <label className="flex items-center gap-2 text-sm text-parchment/80">
-          <input
-            type="checkbox"
-            checked={stopWhenOutOfFood !== false}
-            onChange={(event) => setStopWhenOutOfFood(event.target.checked)}
-          />
-          Stop when out of food
-        </label>
+        <Tabs
+          name="combat"
+          label="Combat"
+          value={tab}
+          onChange={(id) => setTab(id as CombatTab)}
+          tabs={[
+            { id: 'hunting', label: 'Hunting' },
+            { id: 'dungeons', label: 'Dungeons' },
+          ]}
+        />
+        <div className="relative ml-auto">
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-expanded={settingsOpen}
+            aria-label="Hunt settings"
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            <Settings size={16} aria-hidden />
+            Settings
+          </Button>
+          {settingsOpen && (
+            <div role="dialog" aria-label="Hunt settings" className="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-line bg-ink p-3 shadow-xl">
+              <label className="flex items-center gap-2 text-body text-parchment">
+                <input
+                  type="checkbox"
+                  checked={stopWhenOutOfFood !== false}
+                  onChange={(event) => setStopWhenOutOfFood(event.target.checked)}
+                />
+                Stop when out of food
+              </label>
+            </div>
+          )}
+        </div>
       </div>
 
       {inCombat && combat && (tab === 'dungeons') === inDungeon ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div className="space-y-4 rounded-lg border border-brown/40 bg-panel p-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-gold">{activeAction.label}</h2>
-              <button
-                type="button"
-                onClick={() => stopActivity()}
-                className="rounded-lg bg-crimson px-3 py-1.5 text-sm text-parchment hover:bg-brown"
-              >
+              <Button size="sm" variant="danger" onClick={() => stopActivity()}>
                 Stop
-              </button>
+              </Button>
             </div>
 
             {inDungeon && dungeon && (
@@ -268,11 +298,8 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               </div>
               <div className="col-span-2 rounded border border-brown/40 p-2">
                 <div className="text-parchment/70">Food</div>
-                {foodSummary ? (
-                  <div className="font-bold text-gold">
-                    {foodSummary.foodPerHour.toFixed(1)} / hour · empty in{' '}
-                    {formatHours(foodSummary.hoursUntilEmpty)} ({foodSummary.count} left)
-                  </div>
+                {foodSummary && matchupMonster ? (
+                  <div className="font-bold text-gold">{foodLine(matchupMonster.name, foodSummary)}</div>
                 ) : (
                   <div className="font-bold text-parchment/70">No food equipped</div>
                 )}
@@ -295,21 +322,13 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-brown/40 bg-panel p-4">
+          <SidePanel className="rounded-lg border border-line bg-panel p-4">
             <h3 className="mb-2 font-bold text-gold">Combat log</h3>
-            <div className="max-h-[28rem] space-y-1 overflow-auto font-mono text-xs leading-relaxed">
-              {displayLog.length === 0 ? (
-                <p className="text-parchment/70">Waiting for the first interval…</p>
-              ) : (
-                displayLog.map((line, index) => (
-                  <p key={`${index}-${line.slice(0, 12)}`}>{line}</p>
-                ))
-              )}
-            </div>
-          </div>
+            <CombatLog lines={displayLog} />
+          </SidePanel>
         </div>
       ) : tab === 'hunting' ? (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
           <div className="space-y-3">
             {bounty && (
               <div className="rounded-lg border border-gold/40 bg-panel p-3 text-sm">
@@ -318,20 +337,14 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
                 {bounty.have}/{bounty.need})
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
-              {huntTabs.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setBiome(id)}
-                  className={`rounded-lg px-3 py-2 text-sm transition-colors ${
-                    biome === id ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown'
-                  }`}
-                >
-                  {BIOME_LABELS[id]}
-                </button>
-              ))}
-            </div>
+            <Tabs
+              name="biome"
+              label="Biome"
+              variant="pill"
+              value={biome}
+              onChange={(id) => setBiome(id as BiomeId)}
+              tabs={huntTabs.map((id) => ({ id, label: BIOME_LABELS[id] }))}
+            />
             {monsters.map((monster) => (
               <MonsterRow
                 key={monster.id}
@@ -347,9 +360,10 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               />
             ))}
           </div>
-          <div className="space-y-3">
+          <SidePanel className="space-y-3">
             <CombatStatsPanel
               compact
+              showMatchup={false}
               skills={skills}
               equipment={equipment}
               classId={classId}
@@ -359,18 +373,8 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               monster={matchupMonster}
               bestiaries={bestiaries}
             />
-            <div className="rounded-lg border border-brown/40 bg-panel p-3 text-sm">
-              <div className="text-parchment/70">Food</div>
-              {foodSummary ? (
-                <div className="font-bold text-gold">
-                  {foodSummary.foodPerHour.toFixed(1)} / hour · empty in{' '}
-                  {formatHours(foodSummary.hoursUntilEmpty)}
-                </div>
-              ) : (
-                <div className="text-parchment/70">No food equipped</div>
-              )}
-            </div>
-          </div>
+            <MatchupPanel monster={matchupMonster} classId={classId} skills={skills} equipment={equipment} classXp={classXp} inventory={inventory} spellLoadout={classId ? spellLoadouts[classId] : undefined} bestiaries={bestiaries} foodSummary={foodSummary} />
+          </SidePanel>
         </div>
       ) : (
         <div className="space-y-3">
@@ -418,6 +422,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
         </div>
       )}
     </div>
+    </PageLayout>
   )
 }
 
@@ -457,53 +462,45 @@ function MonsterRow({
     playerHp: playerHpEstimate,
     monsterAvgDamagePerInterval: avgDamage,
   })
-  const drops = monster.lootTable
-    .map((entry) => getItem(entry.itemId)?.name ?? entry.itemId)
-    .join(', ')
+  const badge = difficultyBadge(hint, hitChance(toHit, monster.ac), playerHpEstimate, avgDamage)
+  const archetype = archetypeLine(monster.archetype)
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onSelect()
-      }}
-      className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-panel p-4 ${
-        highlighted ? 'border-gold' : 'border-brown/40'
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <h3 className="text-lg font-bold text-gold">{monster.name}</h3>
-          <span className="text-sm text-parchment/70">
-            CR {formatCr(monster.cr)} · AC {monster.ac} · HP {monster.hp}
-          </span>
-          <span
-            className={`rounded px-2 py-0.5 text-xs font-bold ${
-              hint === 'Easy' ? 'bg-sage/30 text-sage' : hint === 'Hard' ? 'bg-crimson/30 text-crimson' : 'bg-brown text-parchment'
-            }`}
-          >
-            {hint}
-          </span>
+    <Card selected={highlighted} className="flex flex-wrap items-center justify-between gap-3">
+      <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-card text-gold">{monster.name}</h3>
+          <Chip>CR {formatCr(monster.cr)}</Chip>
+          <Chip>AC {monster.ac}</Chip>
+          <Chip>HP {monster.hp}</Chip>
+          <Badge tone={badge.tone}>{badge.label}</Badge>
+          {archetype && (
+            <Tooltip content={TRIANGLE_TIP}>
+              <Chip tone="gold">{archetype.name}</Chip>
+            </Tooltip>
+          )}
         </div>
-        <p className="mt-1 text-sm text-parchment/80">Drops: {drops || '—'}</p>
-        {archetypeLine(monster.archetype) && (
-          <p className="mt-1 text-xs text-sage">{archetypeLine(monster.archetype)}</p>
-        )}
-      </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation()
-          onFight()
-        }}
-        className="rounded-lg bg-crimson px-4 py-2 text-sm font-bold text-parchment transition-colors hover:bg-brown disabled:cursor-not-allowed disabled:opacity-40"
+        <div className="mt-2 flex flex-wrap gap-1">
+          {monster.lootTable.length === 0 && <span className="text-meta text-muted">No drops</span>}
+          {monster.lootTable.map((entry) => (
+            <ItemChip
+              key={entry.itemId}
+              name={getItem(entry.itemId)?.name ?? entry.itemId}
+              note={entry.chance < 1 ? `${Math.round(entry.chance * 100)}%` : undefined}
+            />
+          ))}
+        </div>
+      </button>
+      <Button
+        size="sm"
+        variant="danger"
+                disabled={disabled}
+                disabledReason={disabled ? 'Cannot start a fight right now' : undefined}
+        onClick={onFight}
       >
         Fight
-      </button>
-    </div>
+      </Button>
+    </Card>
   )
 }
 
@@ -539,16 +536,118 @@ function formatCr(cr: number): string {
   return String(cr)
 }
 
-function formatHours(hours: number): string {
-  if (!(hours > 0) || !Number.isFinite(hours)) return '—'
-  if (hours < 1 / 60) return `${Math.round(hours * 3600)}s`
-  if (hours < 1) return `${Math.round(hours * 60)}m`
-  return `${hours.toFixed(1)}h`
+const TRIANGLE_TIP =
+  'Armored is weak to Magic and resists Ranged. Skirmisher is weak to Ranged and resists Melee. Warded is weak to Melee and resists Magic.'
+
+function archetypeLine(archetype: MonsterDef['archetype']): { name: string } | null {
+  if (archetype === 'armored') return { name: 'Armored' }
+  if (archetype === 'skirmisher') return { name: 'Skirmisher' }
+  if (archetype === 'warded') return { name: 'Warded' }
+  return null
 }
 
-function archetypeLine(archetype: MonsterDef['archetype']): string | null {
-  if (archetype === 'armored') return 'Armored: weak to Magic, resists Ranged'
-  if (archetype === 'skirmisher') return 'Skirmisher: weak to Ranged, resists Melee'
-  if (archetype === 'warded') return 'Warded: weak to Melee, resists Magic'
-  return null
+function foodLine(
+  name: string,
+  summary: { foodPerHour: number; hoursUntilEmpty: number; count: number },
+): string {
+  return `Food vs ${name}: ~${Math.round(summary.foodPerHour)}/hr · ${summary.count} owned · ${formatFoodWait(summary.hoursUntilEmpty)}`
+}
+
+function formatFoodWait(hours: number): string {
+  if (!(hours > 0) || !Number.isFinite(hours)) return '—'
+  const minutes = Math.round(hours * 60)
+  if (minutes < 90) return `~${Math.max(1, minutes)} min`
+  return `~${hours.toFixed(1)} hr`
+}
+
+function logTone(line: string): string {
+  const text = line.toLowerCase()
+  if (text.startsWith('eat ') || text.startsWith('no food')) return 'text-ability-con'
+  if (text.includes('(crit)')) return 'text-gold'
+  if (text.startsWith('cast ')) return 'text-ability-int'
+  if (text.includes('heal')) return 'text-sage'
+  if (text.includes('misses')) return 'text-muted'
+  return 'text-parchment'
+}
+
+function CombatLog({ lines }: { lines: string[] }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const stick = useRef(true)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !stick.current) return
+    el.scrollTop = el.scrollHeight
+  }, [lines])
+  return (
+    <div
+      ref={ref}
+      onScroll={() => {
+        const el = ref.current
+        if (!el) return
+        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32
+      }}
+      className="max-h-[28rem] space-y-1 overflow-auto font-mono text-meta leading-relaxed"
+    >
+      {lines.length === 0 ? (
+        <p className="text-muted">Waiting for the first interval…</p>
+      ) : (
+        lines.map((line, index) => (
+          <p key={`${index}-${line.slice(0, 12)}`} className={logTone(line)}>
+            {line}
+          </p>
+        ))
+      )}
+    </div>
+  )
+}
+
+function MatchupPanel({
+  monster,
+  classId,
+  skills,
+  equipment,
+  classXp,
+  inventory,
+  spellLoadout,
+  bestiaries,
+  foodSummary,
+}: {
+  monster: MonsterDef | null
+  classId: ClassId | null
+  skills: Record<SkillId, SkillProgress>
+  equipment: Equipment
+  classXp: number
+  inventory: Inventory
+  spellLoadout?: SpellLoadout
+  bestiaries?: Bestiaries
+  foodSummary: { foodPerHour: number; hoursUntilEmpty: number; count: number } | null
+}) {
+  const stats =
+    classId && monster
+      ? computeCombatStats(
+          { skills, equipment, classId, classXp, inventory, spellLoadout, bestiaries },
+          monster,
+        )
+      : null
+  const matchup = stats?.matchup
+  return (
+    <Card className="space-y-2">
+      <h3 className="text-card text-gold">{monster ? monster.name : 'Matchup'}</h3>
+      {matchup ? (
+        <div className="grid grid-cols-2 gap-2">
+          <StatTile label="Your hit" value={`${Math.round(matchup.yourHitChance.value * 100)}%`} />
+          <StatTile label="Their hit" value={`${Math.round(matchup.itsHitChance.value * 100)}%`} />
+          <StatTile label="Your DPS" value={matchup.yourDps.value.toFixed(1)} />
+          <StatTile label="Their DPS" value={matchup.itsDps.value.toFixed(1)} />
+          <StatTile label="Time to kill" value={`${matchup.timeToKillSec.value.toFixed(1)}s`} />
+          <StatTile label="Triangle" value={`×${matchup.triangleMultiplier}`} />
+        </div>
+      ) : (
+        <p className="text-meta text-muted">Select a monster.</p>
+      )}
+      <p className="text-body text-parchment">
+        {foodSummary && monster ? foodLine(monster.name, foodSummary) : 'No food equipped'}
+      </p>
+    </Card>
+  )
 }

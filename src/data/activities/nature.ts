@@ -1,12 +1,13 @@
 import { ARMOR } from '../items/armor'
 import type { ItemId } from '../items'
 import { activity, drop, stack } from './define'
+import { fillDisplay } from './display'
 
 // shortcut: one plot is a long-interval activity, upgrade when plots are plantable objects.
 const PLOT_MS = 30 * 60 * 1000
 
 function wildweave() {
-  return ARMOR.filter((item) => item.id.startsWith('wildweave-')).map((item) => {
+  return ARMOR.filter((item) => item.id.startsWith('wildweave-')).map((item, index) => {
     const isChest = item.id.endsWith('-chest')
     return activity({
       skillId: 'nature',
@@ -16,11 +17,13 @@ function wildweave() {
       requiredLevel: 1,
       inputs: [stack('forest-herbs', isChest ? 2 : 1)],
       outputs: [drop(item.id as ItemId)],
+      category: 'Attire',
+      sortOrder: index,
     })
   })
 }
 
-export const natureActivities = [
+export const natureActivities = fillDisplay([
   activity({ skillId: 'nature', id: 'cook-forest-fish', name: 'Cook Forest Fish', description: 'Cook a raw forest fish.', requiredLevel: 1, inputs: [stack('raw-forest-fish')], outputs: [drop('cooked-forest-fish')] }),
   activity({ skillId: 'nature', id: 'cook-meat', name: 'Cook Meat', description: 'Roast raw meat.', requiredLevel: 1, inputs: [stack('raw-meat')], outputs: [drop('cooked-meat')] }),
   activity({
@@ -64,4 +67,13 @@ export const natureActivities = [
     outputs: [drop('druidic-focus')],
   }),
   ...wildweave(),
-]
+], (def, index) => ({
+  category: def.id.startsWith('cook-')
+    ? 'Cooking'
+    : def.id === 'gardening' || def.id === 'herb-plot'
+      ? 'Gardening'
+      : def.id === 'craft-ink' || def.id === 'craft-druidic-focus'
+        ? 'Crafting'
+        : 'Attire',
+  sortOrder: index,
+}))

@@ -1,9 +1,10 @@
 import { ARMOR } from '../items/armor'
 import type { ItemId } from '../items'
 import { activity, drop, stack } from './define'
+import { fillDisplay } from './display'
 
 function arcaneRobes() {
-  return ARMOR.filter((item) => item.id.startsWith('arcane-')).map((item) => {
+  return ARMOR.filter((item) => item.id.startsWith('arcane-')).map((item, index) => {
     const isChest = item.id.endsWith('-chest')
     return activity({
       skillId: 'arcana',
@@ -13,13 +14,19 @@ function arcaneRobes() {
       requiredLevel: 1,
       inputs: [stack('forest-herbs', isChest ? 2 : 1)],
       outputs: [drop(item.id as ItemId)],
+      category: 'Attire',
+      sortOrder: index,
     })
   })
 }
 
 const dust = [drop('arcane-dust', 5, 10)]
 
-export const arcanaActivities = [
+const STUDY = new Set(['read-omens', 'fire-bolt-drills', 'scrying-pool'])
+const FOCUSES = new Set(['craft-arcane-wand', 'craft-arcane-staff', 'craft-arcane-orb'])
+const REAGENTS = new Set(['craft-fireball-reagent', 'craft-troll-blood-tonic', 'craft-warding-chalk'])
+
+export const arcanaActivities = fillDisplay([
   activity({
     skillId: 'arcana',
     id: 'read-omens',
@@ -99,4 +106,7 @@ export const arcanaActivities = [
     inputs: [stack('silver-bar'), stack('arcane-dust')],
     outputs: [drop('warding-chalk')],
   }),
-]
+], (def, index) => ({
+  category: STUDY.has(def.id) ? 'Study' : FOCUSES.has(def.id) ? 'Focuses' : REAGENTS.has(def.id) ? 'Reagents' : 'Attire',
+  sortOrder: index,
+}))

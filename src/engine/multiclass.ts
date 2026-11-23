@@ -24,7 +24,7 @@ import { addXp, levelForXp } from './xp'
 export function multiclassRequirements(classId: ClassId): AbilityAbbr[] {
   const mods = getClass(classId).xpModifiers
   return (Object.keys(mods) as AbilityAbbr[]).filter(
-    (abbr) => (mods[abbr] ?? 0) >= MULTICLASS_XP_MOD_MIN,
+    (abbr) => ((mods as Partial<Record<AbilityAbbr, number>>)[abbr] ?? 0) >= MULTICLASS_XP_MOD_MIN,
   )
 }
 

@@ -1,80 +1,140 @@
-import {
-  Axe,
-  Crosshair,
-  Drama,
-  Dumbbell,
-  Eye,
-  Footprints,
-  Hand,
-  HeartPulse,
-  Leaf,
-  MessageCircle,
-  PawPrint,
-  Scale,
-  ScrollText,
-  Search,
-  Sparkles,
-  Theater,
-  TreePine,
-  User,
-  Wand2,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import { SKILL_ABILITY_GROUPS, SKILLS, type SkillId } from '../data/skills'
-import { Link } from './Link'
-import { Section } from './Section'
+import { PanelLeftClose, PanelLeftOpen, User } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { SKILL_ABILITY_GROUPS, SKILLS } from '../data/skills'
+import { levelForXp } from '../engine/xp'
+import { useGameStore } from '../store/gameStore'
+import { useUiPrefs } from '../store/uiPrefs'
+import { SkillIcon } from './skillIcons'
+import { cx } from './ui/format'
+import { Tooltip } from './ui/Tooltip'
 
 interface SidebarProps {
   currentPage: string
   setCurrentPage: (page: string) => void
 }
 
-const SKILL_ICONS: Record<Exclude<SkillId, 'vitality'>, LucideIcon> = {
-  athletics: Dumbbell,
-  acrobatics: Footprints,
-  sleightOfHand: Hand,
-  stealth: Eye,
-  arcana: Wand2,
-  history: ScrollText,
-  investigation: Search,
-  nature: Leaf,
-  religion: Sparkles,
-  animalHandling: PawPrint,
-  insight: Scale,
-  medicine: HeartPulse,
-  perception: Crosshair,
-  survival: TreePine,
-  deception: Drama,
-  intimidation: Axe,
-  performance: Theater,
-  persuasion: MessageCircle,
-}
+const ABILITY_TEXT = {
+  STR: 'text-ability-str',
+  DEX: 'text-ability-dex',
+  INT: 'text-ability-int',
+  WIS: 'text-ability-wis',
+  CHA: 'text-ability-cha',
+} as const
 
 export function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
+  const expanded = useUiPrefs((state) => state.sidebarExpanded)
+  const toggleSidebar = useUiPrefs((state) => state.toggleSidebar)
+  const skills = useGameStore((state) => state.skills)
+  const activeAction = useGameStore((state) => state.activeAction)
+  const runningId = activeAction?.kind === 'skill' ? activeAction.skillId : null
+
   return (
-    <aside className="relative z-40 flex h-full w-16 shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-brown/40 bg-ink py-3">
-      <Link
-        icon={<User size={20} />}
-        label="Character"
-        onClick={() => setCurrentPage('character')}
-        active={currentPage === 'character'}
-      />
-      {SKILL_ABILITY_GROUPS.map((abbr) => (
-        <Section
-          key={abbr}
-          title={abbr}
-          skills={SKILLS.filter((skill) => skill.ability === abbr).map((skill) => {
-            const Icon = SKILL_ICONS[skill.id as Exclude<SkillId, 'vitality'>]
-            return {
-              id: skill.id,
-              name: skill.name,
-              icon: <Icon size={20} />,
-            }
-          })}
-          currentPage={currentPage}
-          onNavigate={setCurrentPage}
+    <aside
+      className={cx(
+        'flex h-full shrink-0 flex-col border-r border-line bg-ink py-2',
+        expanded ? 'w-52' : 'w-16',
+      )}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2">
+        <NavButton
+          expanded={expanded}
+          label="Character"
+          active={currentPage === 'character'}
+          onClick={() => setCurrentPage('character')}
+          icon={<User size={20} aria-hidden />}
         />
-      ))}
+        {SKILL_ABILITY_GROUPS.map((abbr) => (
+          <div key={abbr} className={cx('flex flex-col gap-1', expanded && 'items-stretch')}>
+            <span
+              className={cx(
+                'px-1 font-semibold uppercase tracking-wide',
+                ABILITY_TEXT[abbr],
+                expanded ? 'text-meta' : 'text-center text-[10px] leading-tight',
+              )}
+            >
+              {abbr}
+            </span>
+            {SKILLS.filter((skill) => skill.ability === abbr).map((skill) => (
+              <NavButton
+                key={skill.id}
+                expanded={expanded}
+                label={skill.name}
+                level={levelForXp(skills[skill.id].xp)}
+                running={runningId === skill.id}
+                active={currentPage === skill.id}
+                onClick={() => setCurrentPage(skill.id)}
+                icon={<SkillIcon id={skill.id} />}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-pressed={expanded}
+        aria-label={expanded ? 'Collapse skill list' : 'Expand skill list'}
+        className="mx-2 mt-2 flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-meta text-parchment hover:bg-brown"
+      >
+        {expanded ? <PanelLeftClose size={18} aria-hidden /> : <PanelLeftOpen size={18} aria-hidden />}
+        {expanded && <span>Collapse</span>}
+      </button>
     </aside>
+  )
+}
+
+function NavButton({
+  expanded,
+  label,
+  level,
+  running = false,
+  active,
+  onClick,
+  icon,
+}: {
+  expanded: boolean
+  label: string
+  level?: number
+  running?: boolean
+  active: boolean
+  onClick: () => void
+  icon: ReactNode
+}) {
+  const button = (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      aria-label={
+        expanded
+          ? undefined
+          : `${label}${level != null ? `, level ${level}` : ''}${running ? ', running' : ''}`
+      }
+      className={cx(
+        'relative flex rounded-lg text-parchment transition-colors',
+        active ? 'bg-crimson' : 'hover:bg-brown',
+        expanded ? 'w-full items-center gap-2 px-2 py-1.5' : 'h-12 w-10 flex-col items-center justify-center',
+      )}
+    >
+      <span className="relative">
+        {icon}
+        {running && <span className="absolute -right-1 -top-1 h-2 w-2 animate-pulse rounded-full bg-sage" />}
+      </span>
+      {running && <span className="sr-only">running</span>}
+      {expanded ? (
+        <>
+          <span className="min-w-0 flex-1 truncate text-left text-body">{label}</span>
+          {level != null && <span className="text-meta text-gold">{level}</span>}
+        </>
+      ) : (
+        level != null && <span className="text-[10px] leading-none text-gold" aria-hidden>{level}</span>
+      )}
+    </button>
+  )
+  if (expanded) return button
+  return (
+    <Tooltip content={label} side="right">
+      {button}
+    </Tooltip>
   )
 }

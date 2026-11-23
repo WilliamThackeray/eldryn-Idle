@@ -1,5 +1,8 @@
 import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { resetLoadCatchup } from '../../hooks/useGameLoop'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
 import { flushSave, useGameStore } from '../../store/gameStore'
 import {
   bindSlot,
@@ -50,71 +53,69 @@ export function MainMenuPage({ onStart }: MainMenuPageProps) {
           {SLOTS.map((slot) => {
             const summary = summaries[slot - 1]
             return (
-              <section key={slot} aria-label={`Save slot ${slot}`} className="rounded-lg border border-brown/40 bg-panel p-4">
-                <h2 className="text-sm uppercase tracking-wide text-sage">Slot {slot}</h2>
+              <Card key={slot} aria-label={`Save slot ${slot}`} className="flex flex-col">
+                <p className="text-meta uppercase tracking-wide text-muted">Slot {slot}</p>
                 {summary ? (
                   <>
-                    <p className="mt-2 text-xl font-bold text-gold">{summary.characterName}</p>
-                    <p className="text-sm">{summary.className}</p>
-                    <p className="mt-2 text-sm text-sage">Class Level {summary.classLevel}</p>
-                    <p className="text-sm text-sage">Total level {summary.totalLevel}</p>
-                    <p className="mt-2 text-xs text-parchment/60">Last played {formatPlayed(summary.lastPlayed)}</p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink text-card text-gold" aria-hidden>
+                        {summary.className.slice(0, 1)}
+                      </span>
+                      <div>
+                        <p className="text-card font-bold text-gold">{summary.characterName}</p>
+                        <p className="text-body text-parchment">
+                          {summary.className} · Level {summary.classLevel}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-meta text-muted">Last played {formatPlayed(summary.lastPlayed)}</p>
                     {confirming === slot ? (
                       <div className="mt-4 space-y-2">
-                        <p className="text-sm">Delete {summary.characterName}?</p>
+                        <p className="text-body">Delete {summary.characterName}?</p>
                         <div className="flex gap-2">
-                          <button
-                            type="button"
+                          <Button
+                            size="sm"
+                            variant="danger"
                             onClick={() => {
                               deleteSlot(localStorage, slot)
                               setConfirming(null)
                               setTick((value) => value + 1)
                             }}
-                            className="rounded-lg bg-crimson px-3 py-1.5 text-sm text-parchment"
                           >
                             Confirm delete
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirming(null)}
-                            className="rounded-lg bg-brown px-3 py-1.5 text-sm"
-                          >
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => setConfirming(null)}>
                             Cancel
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void continueSlot(slot, onStart)}
-                          className="rounded-lg bg-sage px-3 py-1.5 text-sm text-ink hover:bg-gold"
-                        >
+                      <div className="mt-4 flex items-center gap-2">
+                        <Button size="sm" onClick={() => void continueSlot(slot, onStart)}>
                           Continue
-                        </button>
+                        </Button>
                         <button
                           type="button"
+                          aria-label={`Delete ${summary.characterName}`}
                           onClick={() => setConfirming(slot)}
-                          className="rounded-lg bg-brown px-3 py-1.5 text-sm hover:bg-crimson"
+                          className="rounded-lg p-2 text-muted hover:bg-brown hover:text-parchment"
                         >
-                          Delete
+                          <Trash2 size={16} aria-hidden />
                         </button>
                       </div>
                     )}
                   </>
                 ) : (
-                  <>
-                    <p className="mt-2 text-parchment/60">Empty</p>
-                    <button
-                      type="button"
-                      onClick={() => setCreating(slot)}
-                      className="mt-4 rounded-lg bg-sage px-3 py-1.5 text-sm text-ink hover:bg-gold"
-                    >
-                      New Character
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => setCreating(slot)}
+                    className="mt-4 flex flex-1 flex-col items-start rounded-lg border border-dashed border-line px-3 py-6 text-left hover:border-gold"
+                  >
+                    <span className="text-card font-semibold text-gold">New Character</span>
+                    <span className="text-meta text-muted">Empty slot</span>
+                  </button>
                 )}
-              </section>
+              </Card>
             )
           })}
         </div>

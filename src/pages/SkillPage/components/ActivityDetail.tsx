@@ -1,107 +1,132 @@
-import { ProgressBar } from '../../../components/ProgressBar'
-
-interface ActivityDetailProps {
-  title: string
-  description: string
-  xpGain: number
-  xpMultiplierLabel: string | null
-  intervalSeconds: string
-  requiredLevel: number
-  dc: number
-  successPercent: number
-  bonus: number
-  details: string[]
-  needsMaterials: boolean
-  locked: boolean
-  active: boolean
-  progress: number
-  onStart: () => void
-  onStop: () => void
-  secondaryLabel?: string | null
-  secondaryDisabled?: boolean
-  onSecondary?: (() => void) | null
-}
+import { Button } from '../../../components/ui/Button'
+import { Collapsible } from '../../../components/ui/Collapsible'
+import { ItemChip } from '../../../components/ui/ItemChip'
+import { StatTile } from '../../../components/ui/StatTile'
+import type { ActivityDef } from '../../../data/activities'
+import { SKILLS } from '../../../data/skills'
+import type { GameEvent, SkillEvent } from '../../../engine/advance'
+import { formatXp } from '../present'
 
 export function ActivityDetail({
-  title,
-  description,
-  xpGain,
-  xpMultiplierLabel,
-  intervalSeconds,
-  requiredLevel,
-  dc,
-  successPercent,
+  activity,
   bonus,
-  details,
-  needsMaterials,
-  locked,
-  active,
-  progress,
+  successPct,
+  dc,
+  xpLabel,
+  xpBreakdown,
+  intervalLabel,
+  requiredLabel,
+  lockedReason,
+  inputs,
+  outputs,
+  running,
   onStart,
   onStop,
-  secondaryLabel = null,
-  secondaryDisabled = false,
-  onSecondary = null,
-}: ActivityDetailProps) {
+  secondary,
+  log,
+}: {
+  activity: ActivityDef | null
+  bonus: number
+  successPct: number
+  dc: number
+  xpLabel: string
+  xpBreakdown: string
+  intervalLabel: string
+  requiredLabel: string
+  lockedReason: string | null
+  inputs: { name: string; owned: number; needed: number; note?: string }[]
+  outputs: { name: string; note?: string }[]
+  running: boolean
+  onStart: () => void
+  onStop: () => void
+  secondary: { label: string; ready: boolean; reason: string | null; onClick: () => void } | null
+  log: GameEvent[]
+}) {
   return (
-    <aside className="rounded-lg border border-brown/40 bg-panel p-5 shadow-lg lg:sticky lg:top-4">
-      <h2 className="mb-2 text-2xl font-bold text-gold">{title}</h2>
-      <p className="mb-4 text-parchment/90">{description}</p>
-
-      <dl className="mb-4 grid grid-cols-2 gap-3 text-sm">
-        <Stat label="Bonus" value={bonus >= 0 ? `+${bonus}` : String(bonus)} />
-        <Stat label="Success" value={`${successPercent}%`} />
-        <Stat label="DC" value={String(dc)} />
-        <Stat label="XP" value={`+${xpGain}`} />
-        <Stat label="Interval" value={intervalSeconds} />
-        <Stat label="Required" value={`Lv ${requiredLevel}`} />
-      </dl>
-      {xpMultiplierLabel && <p className="mb-4 text-sm text-sage">{xpMultiplierLabel}</p>}
-
-      {details.length > 0 && (
-        <ul className="mb-4 space-y-1 text-sm text-sage">
-          {details.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      )}
-
-      {active && <ProgressBar progress={progress} className="mb-4 h-2.5" label={`${title} progress`} />}
-
-      {locked ? (
-        <p className="text-sm text-parchment/70">Requires level {requiredLevel}</p>
-      ) : needsMaterials && !active ? (
-        <p className="text-sm text-parchment/70">Need materials</p>
+    <div className="space-y-3 rounded-lg border border-line bg-panel p-4 text-parchment">
+      {activity == null ? (
+        <p className="text-body text-muted">Select an activity.</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={active ? onStop : onStart}
-            className="rounded-lg bg-crimson px-4 py-2 text-parchment transition-colors hover:bg-brown"
-          >
-            {active ? 'Stop' : 'Start'}
-          </button>
-          {secondaryLabel && onSecondary && (
-            <button
-              type="button"
-              disabled={secondaryDisabled}
-              onClick={onSecondary}
-              className="rounded-lg border border-gold/50 px-4 py-2 text-gold transition-colors hover:bg-ink disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {secondaryLabel}
-            </button>
+        <>
+          <h2 className="text-card text-gold">{activity.name}</h2>
+          <p className="text-body text-muted">{activity.description}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile label="Bonus" value={bonus >= 0 ? `+${bonus}` : String(bonus)} />
+            <StatTile label="Success %" value={`${successPct}%`} />
+            <StatTile label="DC" value={dc} />
+            <StatTile label="XP" value={xpLabel} breakdown={xpBreakdown} />
+            <StatTile label="Interval" value={intervalLabel} />
+            <StatTile label="Required" value={requiredLabel} />
+          </div>
+          {inputs.length > 0 && (
+            <div className="space-y-1">
+              <h3 className="text-meta text-muted">Inputs</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {inputs.map((input) => (
+                  <ItemChip key={input.name} name={input.name} owned={input.owned} needed={input.needed} note={input.note} />
+                ))}
+              </div>
+            </div>
           )}
-        </div>
+          {outputs.length > 0 && (
+            <div className="space-y-1">
+              <h3 className="text-meta text-muted">Outputs</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {outputs.map((output) => (
+                  <ItemChip key={`${output.name}-${output.note ?? ''}`} name={output.name} note={output.note} />
+                ))}
+              </div>
+            </div>
+          )}
+          <Button
+            className="w-full"
+            variant={running ? 'danger' : 'primary'}
+            disabled={!running && lockedReason != null}
+            disabledReason={lockedReason ? `Requires ${lockedReason}` : undefined}
+            onClick={running ? onStop : onStart}
+          >
+            {running ? 'Stop' : 'Start'}
+          </Button>
+          {secondary && (
+            <Button
+              className="w-full"
+              variant="secondary"
+              disabled={!secondary.ready}
+              disabledReason={secondary.reason ?? undefined}
+              onClick={secondary.onClick}
+            >
+              {secondary.label}
+            </Button>
+          )}
+        </>
       )}
-    </aside>
+      <Collapsible title="Recent rolls" defaultOpen>
+        {log.length === 0 ? (
+          <p className="text-meta">No rolls yet.</p>
+        ) : (
+          <ul className="space-y-1 text-meta">
+            {[...log].reverse().map((event, index) => {
+              if (event.kind === 'materials') {
+                return <li key={`materials-${index}`}>Out of materials: {event.label}. Stopped.</li>
+              }
+              if (event.kind !== 'skill') return null
+              return (
+                <li key={`${event.activityId}-${index}`}>
+                  {rollLine(event)}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Collapsible>
+    </div>
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md bg-ink/50 px-3 py-2">
-      <dt className="text-xs uppercase tracking-wide text-sage/80">{label}</dt>
-      <dd className="font-semibold text-parchment">{value}</dd>
-    </div>
-  )
+function rollLine(event: SkillEvent): string {
+  const skill = SKILLS.find((entry) => entry.id === event.skillId)?.name ?? event.label
+  const items = event.items.map((item) => `${item.name} x${item.quantity}`).join(', ')
+  const gold = event.gold > 0 ? `+${event.gold} gp` : ''
+  const gains = [items, gold].filter(Boolean).join(' · ')
+  return `${skill}: roll ${event.roll} (${event.total} vs DC ${event.dc}) ${event.outcome} +${formatXp(event.xp)} XP${gains ? ` · ${gains}` : ''}`
 }

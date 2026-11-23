@@ -1,7 +1,8 @@
 import { historyCraftActivities } from '../historyContent'
 import { activity, drop } from './define'
+import { fillDisplay } from './display'
 
-export const historyActivities = [
+export const historyActivities = fillDisplay([
   activity({
     skillId: 'history',
     id: 'chronicles',
@@ -19,4 +20,7 @@ export const historyActivities = [
     requiredLevel: 20,
   }),
   ...historyCraftActivities,
-]
+], (def, index) => ({
+  category: def.id === 'chronicles' || def.id === 'lost-runes' ? 'Lore' : 'Bestiaries',
+  sortOrder: index,
+}))

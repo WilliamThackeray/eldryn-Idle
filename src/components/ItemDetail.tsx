@@ -9,6 +9,9 @@ import { equipPreview } from '../engine/equipPreview'
 import type { Inventory } from '../engine/inventory'
 import { sourcesOf, usesOf, type ItemLink } from '../engine/itemIndex'
 import { levelForXp } from '../engine/xp'
+import { itemStatLines } from './itemStatLines'
+import { Button } from './ui/Button'
+import { SubHeading } from './ui/SectionHeading'
 import type { SkillId } from '../data/skills'
 import type { SkillProgress } from '../types/game'
 
@@ -115,70 +118,70 @@ export function ItemDetail({
   const notProficient =
     Boolean(selected.gear?.weapon) && !isWeaponProficient(classId, itemId)
 
+  const qty = Math.min(sellQty, Math.max(1, owned))
+
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-3">
-        {selected.icon ? (
-          <img src={selected.icon} alt="" className="h-12 w-12 shrink-0 object-contain" />
-        ) : (
-          <Icon size={28} className="shrink-0 text-sage" />
-        )}
-        <div className="min-w-0">
-          <h2 className={`text-lg font-bold ${RARITY_TEXT[selected.rarity]}`}>{selected.name}</h2>
-          <p className="text-xs capitalize text-sage">
-            {selected.rarity} · {CATEGORY_LABEL[selected.category]}
-          </p>
-          {notProficient && <p className="text-xs text-crimson">Not proficient</p>}
+      <section>
+        <SubHeading title="Overview" />
+        <div className="flex items-start gap-3">
+          {selected.icon ? (
+            <img src={selected.icon} alt="" className="h-12 w-12 shrink-0 object-contain" />
+          ) : (
+            <Icon size={28} className="shrink-0 text-sage" />
+          )}
+          <div className="min-w-0">
+            <h2 className={`text-card font-bold ${RARITY_TEXT[selected.rarity]}`}>{selected.name}</h2>
+            <p className="text-meta capitalize text-muted">
+              {selected.rarity} · {CATEGORY_LABEL[selected.category]}
+            </p>
+            {notProficient && <p className="text-meta text-lack">Not proficient</p>}
+          </div>
         </div>
-      </div>
+        <p className="mt-2 text-body text-parchment">{selected.description}</p>
+        {mode === 'inventory' && (
+          <p className="mt-1 text-body text-muted">
+            Owned <span className="font-semibold text-gold">{owned}</span>
+          </p>
+        )}
+      </section>
 
-      <p className="text-sm text-parchment/80">{selected.description}</p>
-      {mode === 'inventory' && (
-        <p className="text-sm">
-          Owned: <span className="font-bold text-gold">{owned}</span>
-        </p>
-      )}
+      <StatLines itemId={itemId} />
 
       {mode === 'inventory' && onSell && onSellQtyChange && (
-        <div className="space-y-2 rounded border border-brown/40 p-3">
-          <div className="flex justify-between text-sm">
-            <span>Sell</span>
-            <span className="text-sage">{selected.sellValue} gp each</span>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={owned}
-            value={Math.min(sellQty, owned)}
-            onChange={(event) => onSellQtyChange(Number(event.target.value))}
-            className="w-full"
-          />
+        <section>
+          <SubHeading title="Sell" />
+          <p className="mb-2 text-meta text-muted">{selected.sellValue} gp each</p>
           <div className="flex items-center gap-2">
             <input
-              type="number"
+              type="range"
+              aria-label="Sell quantity"
               min={1}
               max={owned}
-              value={Math.min(sellQty, owned)}
+              value={qty}
+              onChange={(event) => onSellQtyChange(Number(event.target.value))}
+              className="min-w-0 flex-1"
+            />
+            <input
+              type="number"
+              aria-label="Sell amount"
+              min={1}
+              max={owned}
+              value={qty}
               onChange={(event) => {
                 const next = Number(event.target.value)
                 if (!Number.isFinite(next)) return
                 onSellQtyChange(Math.min(owned, Math.max(1, Math.floor(next))))
               }}
-              className="w-20 rounded border border-brown/40 bg-ink/50 px-2 py-1 text-sm"
+              className="w-16 rounded-lg border border-line bg-ink px-2 py-1 text-body text-parchment"
             />
-            <span className="text-sm text-parchment/70">= {sellPreview} gp</span>
+            <span className="w-16 text-right text-body text-gold">{sellPreview} gp</span>
           </div>
-          <button
-            type="button"
-            onClick={onSell}
-            className="w-full rounded-lg bg-sage px-3 py-1.5 text-sm text-ink transition-colors hover:bg-gold"
-          >
+          <Button className="mt-2 w-full" size="sm" onClick={onSell}>
             Sell
-          </button>
-        </div>
+          </Button>
+        </section>
       )}
-
-      <StatLines itemId={itemId} />
 
       {mode === 'inventory' && onUse && useLabel && (
         <div className="space-y-2 rounded border border-brown/40 p-3">
@@ -195,8 +198,9 @@ export function ItemDetail({
       )}
 
       {mode === 'inventory' && equippable && (
-        <div className="space-y-2 rounded border border-brown/40 p-3 text-sm">
-          {equipReason && <p className="text-crimson">{equipReason}</p>}
+        <section className="space-y-2 text-body">
+          <SubHeading title="Equip comparison" />
+          {equipReason && <p className="text-lack">{equipReason}</p>}
           <EquipBlock
             itemId={itemId}
             slot={preview?.slot ?? targetSlot(equipment, itemId)}
@@ -205,7 +209,7 @@ export function ItemDetail({
             disabled={isInDungeonOrQuest || equipReason != null}
             onEquip={() => onEquip?.()}
           />
-        </div>
+        </section>
       )}
 
       {mode === 'worn' && onUnequip && (
@@ -230,37 +234,11 @@ export function ItemDetail({
 }
 
 function StatLines({ itemId }: { itemId: ItemId }) {
-  const def = getItem(itemId)
-  if (!def) return null
-  const lines: string[] = []
-  if (def.heal != null) lines.push(`Heals ${def.heal} HP`)
-  const gear = def.gear
-  if (gear) {
-    if (gear.magicBonus) lines.push(`Magic +${gear.magicBonus}`)
-    if (gear.weapon) {
-      lines.push(
-        `Weapon ${gear.weapon.dice} ${gear.weapon.damageType}${
-          gear.weapon.versatileDice ? ` (versatile ${gear.weapon.versatileDice})` : ''
-        }`,
-      )
-      if (gear.weapon.properties.length) lines.push(`Properties: ${gear.weapon.properties.join(', ')}`)
-      lines.push(`Mastery: ${gear.weapon.mastery}`)
-    }
-    if (gear.armor) {
-      lines.push(
-        `Armor ${gear.armor.weightClass} · value ${gear.armor.armorValue}${
-          gear.armor.stealthDisadvantage ? ' · stealth disadvantage' : ''
-        }`,
-      )
-      if (gear.armor.strRequirement != null) lines.push(`Requires STR ${gear.armor.strRequirement}`)
-    }
-    if (gear.shield) lines.push('Shield +2 AC')
-    if (gear.material) lines.push(`Material: ${gear.material}`)
-  }
+  const lines = itemStatLines(itemId)
   if (lines.length === 0) return null
   return (
-    <div className="space-y-1 text-sm">
-      <h3 className="font-bold text-gold">Stats</h3>
+    <div className="space-y-1 text-body">
+      <SubHeading title="Stats" />
       <ul className="space-y-0.5 text-parchment/80">
         {lines.map((line) => (
           <li key={line}>{line}</li>
@@ -365,8 +343,8 @@ function LinkList({
 }) {
   if (links.length === 0) return null
   return (
-    <div className="space-y-1 text-sm">
-      <h3 className="font-bold text-gold">{title}</h3>
+    <div className="space-y-1 text-body">
+      <SubHeading title={title} />
       <ul className="space-y-1">
         {links.map((link, index) => (
           <li key={`${link.kind}-${index}-${link.label}`}>

@@ -167,7 +167,7 @@ test('rebirth resets class level, clears secondary, adds Echo, and scales cost',
   const secondCost = rebirthCost(1)
   expect(secondCost.gold).toBe(firstCost.gold * REBIRTH_COST_MULT)
 
-  const next = rebirth(base, 'wizard')
+  const next = rebirth(base, 'wizard') as typeof base
   expect(next.classId).toBe('wizard')
   expect(next.classXp).toBe(0)
   expect(next.secondaryClassId).toBeNull()

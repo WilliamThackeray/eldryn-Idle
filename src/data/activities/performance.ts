@@ -1,9 +1,10 @@
 import { ARMOR } from '../items/armor'
 import type { ItemId } from '../items'
 import { activity, drop, stack } from './define'
+import { fillDisplay } from './display'
 
 function minstrelGear() {
-  return ARMOR.filter((item) => item.id.startsWith('minstrel-')).map((item) => {
+  return ARMOR.filter((item) => item.id.startsWith('minstrel-')).map((item, index) => {
     const isChest = item.id.endsWith('-chest')
     return activity({
       skillId: 'performance',
@@ -13,13 +14,15 @@ function minstrelGear() {
       requiredLevel: 1,
       inputs: [stack('animal-scraps', isChest ? 2 : 1)],
       outputs: [drop(item.id as ItemId)],
+      category: 'Attire',
+      sortOrder: index,
     })
   })
 }
 
 const venueOutputs = [drop('rosin', 5, 10), drop('inspiration', 1, 1, 0.35)]
 
-export const performanceActivities = [
+export const performanceActivities = fillDisplay([
   activity({
     skillId: 'performance',
     id: 'local-music',
@@ -80,4 +83,7 @@ export const performanceActivities = [
     gold: { min: 8, max: 16 },
   }),
   ...minstrelGear(),
-]
+], (def, index) => ({
+  category: def.id.startsWith('craft-minstrel') ? 'Attire' : 'Venues',
+  sortOrder: index,
+}))

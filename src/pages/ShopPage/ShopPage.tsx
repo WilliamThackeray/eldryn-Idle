@@ -24,13 +24,39 @@ import {
 import { shopDiscountTotal, shopGoldCost } from '../../engine/social'
 import { levelForXp } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
+import { usePageTab } from '../../store/uiPrefs'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { Currency } from '../../components/ui/Currency'
+import { ItemChip } from '../../components/ui/ItemChip'
+import { PageLayout } from '../../components/ui/PageLayout'
+import { cx } from '../../components/ui/format'
+import type { AbilityAbbr } from '../../types/game'
 
 const SECTIONS: { id: ShopSection; label: string }[] = [
-  { id: 'general', label: 'General Store' },
+  { id: 'general', label: 'General' },
   { id: 'class', label: 'Class' },
   ...SKILLS.map((skill) => ({ id: skill.id as ShopSection, label: skill.name })),
   { id: 'combat', label: 'Combat' },
 ]
+
+const ABILITY_ORDER: AbilityAbbr[] = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+const ABILITY_TEXT: Record<AbilityAbbr, string> = {
+  STR: 'text-ability-str',
+  DEX: 'text-ability-dex',
+  CON: 'text-ability-con',
+  INT: 'text-ability-int',
+  WIS: 'text-ability-wis',
+  CHA: 'text-ability-cha',
+}
+
+function openUpgradeCount(section: ShopSection, owned: Record<string, number>): number {
+  return upgradesForSection(section).filter((upgrade) => {
+    const index = owned[upgrade.id]
+    const next = upgrade.tiers[index == null ? 0 : index + 1]
+    return next != null && next.effect.kind !== 'soon'
+  }).length
+}
 
 export function ShopPage() {
   const gold = useGameStore((state) => state.gold)
@@ -40,27 +66,50 @@ export function ShopPage() {
   const skills = useGameStore((state) => state.skills)
   const buyGood = useGameStore((state) => state.buyGood)
   const buyUpgrade = useGameStore((state) => state.buyUpgrade)
-  const [section, setSection] = useState<ShopSection>('general')
+  const [section, setSection] = usePageTab<ShopSection>(
+    'shop',
+    'general',
+    SECTIONS.map((entry) => entry.id),
+  )
 
   const sectionUpgrades = useMemo(() => upgradesForSection(section), [section])
   const discount = shopDiscountTotal(activePerks({ skills }), upgrades, shopDiscountFromUpgrades)
 
   return (
+    <PageLayout>
     <div className="grid grid-cols-1 gap-6 text-parchment lg:grid-cols-[220px_minmax(0,1fr)]">
       <nav className="space-y-1">
-        <h2 className="mb-2 text-xl font-bold text-gold">Shop</h2>
-        {SECTIONS.map((entry) => (
-          <button
+        <h2 className="mb-2 text-section font-bold text-gold">Shop</h2>
+        {SECTIONS.filter((entry) => entry.id === 'general' || entry.id === 'class').map((entry) => (
+          <SectionButton
             key={entry.id}
-            type="button"
+            label={entry.label}
+            count={openUpgradeCount(entry.id, upgrades)}
+            selected={section === entry.id}
             onClick={() => setSection(entry.id)}
-            className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-              section === entry.id ? 'bg-gold text-ink' : 'bg-panel text-parchment hover:bg-brown/40'
-            }`}
-          >
-            {entry.label}
-          </button>
+          />
         ))}
+        {ABILITY_ORDER.map((abbr) => (
+          <div key={abbr}>
+            <p className={cx('mb-1 mt-3 text-meta font-semibold', ABILITY_TEXT[abbr])}>{abbr}</p>
+            {SKILLS.filter((skill) => skill.ability === abbr).map((skill) => (
+              <SectionButton
+                key={skill.id}
+                label={skill.name}
+                count={openUpgradeCount(skill.id, upgrades)}
+                selected={section === skill.id}
+                onClick={() => setSection(skill.id)}
+              />
+            ))}
+          </div>
+        ))}
+        <p className="mb-1 mt-3 text-meta font-semibold text-gold">Combat</p>
+        <SectionButton
+          label="Combat"
+          count={openUpgradeCount('combat', upgrades)}
+          selected={section === 'combat'}
+          onClick={() => setSection('combat')}
+        />
       </nav>
 
       <div className="space-y-6">
@@ -74,22 +123,20 @@ export function ShopPage() {
                 if (!def || price == null) return null
                 const affordable = gold >= price
                 return (
-                  <article
-                    key={listing.itemId}
-                    className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-4"
-                  >
+                  <Card key={listing.itemId} className="flex flex-col gap-2">
                     <h4 className={`font-bold ${RARITY_TEXT[def.rarity]}`}>{def.name}</h4>
-                    <p className="text-sm text-parchment/80">{def.description}</p>
-                    <p className="text-sm text-sage">{price} gp</p>
-                    <button
-                      type="button"
+                    <p className="text-body text-muted">{def.description}</p>
+                    <Currency kind="gp" amount={price} />
+                    <Button
+                      size="sm"
+                      className="mt-auto"
                       disabled={!affordable}
+                      disabledReason={affordable ? undefined : `Need ${price} gp`}
                       onClick={() => buyGood(listing.itemId)}
-                      className="mt-auto rounded-lg bg-sage px-3 py-1 text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Buy
-                    </button>
-                  </article>
+                    </Button>
+                  </Card>
                 )
               })}
             </div>
@@ -124,6 +171,7 @@ export function ShopPage() {
         )}
       </div>
     </div>
+    </PageLayout>
   )
 }
 
@@ -192,14 +240,14 @@ function ClassShop({ discount }: { discount: number }) {
                     ) : (
                       <p className="text-xs text-sage">Ranks met.</p>
                     )}
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
                       disabled={!eligible}
+                      disabledReason={eligible ? undefined : multiclassReason(locked, isInDungeonOrQuest, gaps.length > 0, secondaryClassId != null, gold >= mCost.gold)}
                       onClick={() => buyMulticlass(entry.id)}
-                      className="rounded-lg bg-sage px-3 py-1 text-sm text-ink hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Multiclass
-                    </button>
+                    </Button>
                   </div>
                 }
               />
@@ -229,17 +277,25 @@ function ClassShop({ discount }: { discount: number }) {
                 clericFocus={rebirthFocus}
                 onClericFocus={setRebirthFocus}
                 footer={
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    className="mt-3"
                     disabled={locked}
+                    disabledReason={
+                      locked
+                        ? isInDungeonOrQuest
+                          ? 'Leave the dungeon or quest first'
+                          : 'Create a character first'
+                        : undefined
+                    }
                     onClick={() => {
                       setRebirthPick(entry.id)
                       setConfirmOpen(true)
                     }}
-                    className="mt-3 rounded-lg bg-crimson px-3 py-1 text-sm text-parchment hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Rebirth as {entry.name}
-                  </button>
+                  </Button>
                 }
               />
             )
@@ -344,21 +400,17 @@ function RebirthConfirm({
           <CostLines gold={gold} inventory={inventory} cost={cost} />
         </div>
         <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg bg-brown px-3 py-2 text-parchment hover:bg-crimson"
-          >
+          <Button variant="secondary" onClick={onCancel}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="danger"
             disabled={!affordable}
+            disabledReason={affordable ? undefined : 'Not enough gold or materials'}
             onClick={onConfirm}
-            className="rounded-lg bg-crimson px-3 py-2 text-parchment hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             Confirm Rebirth
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -402,46 +454,122 @@ function UpgradeCard({
   const disabled = maxed || soon || !affordable
 
   return (
-    <article className="flex flex-col gap-2 rounded-lg border border-brown/40 bg-panel p-4">
+    <Card variant={soon ? 'muted' : 'default'} className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <h4 className="font-bold text-gold">{upgrade.name}</h4>
-        <span className="text-sm text-sage">
-          {ownedCount}/{total}
+        <span className="text-meta text-muted" aria-label={`Tier ${ownedCount} of ${total}`}>
+          {Array.from({ length: total }, (_, index) => (
+            <span key={index} className={index < ownedCount ? 'text-gold' : 'text-muted'}>
+              {index < ownedCount ? '●' : '○'}
+            </span>
+          ))}
         </span>
       </div>
-      <p className="text-sm text-parchment/80">{upgrade.description}</p>
-      {soon && <p className="text-sm text-parchment/60">Coming soon</p>}
-      {maxed && !soon && <p className="text-sm text-sage">Maxed</p>}
+      <p className="text-body text-muted">{upgrade.description}</p>
+      {soon && <p className="text-meta text-muted">Coming soon</p>}
+      {maxed && !soon && <p className="text-meta text-sage">Maxed</p>}
       {next && !soon && (
-        <div className="space-y-1 text-sm">
-          <p className={gold >= goldCost ? 'text-sage' : 'text-red-300'}>{goldCost} gp</p>
-          {favorCost > 0 && (
-            <p className={favor >= favorCost ? 'text-sage' : 'text-red-300'}>{favorCost} Favor</p>
-          )}
-          {items.map((stack) => {
-            const def = getItem(stack.itemId)
-            const have = inventory[stack.itemId] ?? 0
-            return (
-              <p key={stack.itemId} className={have >= stack.quantity ? 'text-parchment' : 'text-red-300'}>
-                {def?.name ?? stack.itemId}: {have}/{stack.quantity}
-              </p>
-            )
-          })}
+        <div className="flex flex-wrap gap-2">
+          <Currency kind="gp" amount={goldCost} />
+          {favorCost > 0 && <Currency kind="favor" amount={favorCost} />}
+          {items.map((stack) => (
+            <ItemChip
+              key={stack.itemId}
+              name={getItem(stack.itemId)?.name ?? stack.itemId}
+              owned={inventory[stack.itemId] ?? 0}
+              needed={stack.quantity}
+            />
+          ))}
           {requires && (
-            <p className={skillOk ? 'text-parchment/70' : 'text-red-300'}>
+            <p className={skillOk ? 'text-meta text-muted' : 'text-meta text-lack'}>
               Requires {requires.skillId} {requires.level}
             </p>
           )}
         </div>
       )}
-      <button
-        type="button"
+      <Button
+        size="sm"
+        className="mt-auto"
         disabled={disabled}
+        disabledReason={buyBlockReason({
+          maxed,
+          soon,
+          skillOk,
+          requires,
+          gold,
+          goldCost,
+          favor,
+          favorCost,
+          hasItems,
+        })}
         onClick={onBuy}
-        className="mt-auto rounded-lg bg-sage px-3 py-1 text-ink transition-colors hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
       >
         Buy
-      </button>
-    </article>
+      </Button>
+    </Card>
   )
+}
+
+function SectionButton({
+  label,
+  count,
+  selected,
+  onClick,
+}: {
+  label: string
+  count: number
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        'flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-body',
+        selected ? 'bg-gold text-ink' : 'text-parchment hover:bg-panel',
+      )}
+    >
+      <span>{label}</span>
+      <span className={cx('text-meta', selected ? 'text-ink' : 'text-muted')}>{count}</span>
+    </button>
+  )
+}
+
+function multiclassReason(
+  locked: boolean,
+  inRun: boolean,
+  hasGaps: boolean,
+  hasSecondary: boolean,
+  hasGold: boolean,
+): string {
+  if (inRun) return 'Leave the dungeon or quest first'
+  if (locked) return 'Create a character first'
+  if (hasSecondary) return 'Secondary class already set'
+  if (hasGaps) return 'Ability ranks not met'
+  if (!hasGold) return 'Not enough gold or materials'
+  return 'Not enough gold or materials'
+}
+
+function buyBlockReason(input: {
+  maxed: boolean
+  soon: boolean
+  skillOk: boolean
+  requires: { skillId: string; level: number } | undefined
+  gold: number
+  goldCost: number
+  favor: number
+  favorCost: number
+  hasItems: boolean
+}): string | undefined {
+  if (!input.maxed && !input.soon && input.skillOk && input.gold >= input.goldCost && input.favor >= input.favorCost && input.hasItems) {
+    return undefined
+  }
+  if (input.maxed) return 'Maxed'
+  if (input.soon) return 'Coming soon'
+  if (!input.skillOk && input.requires) return `Requires ${input.requires.skillId} ${input.requires.level}`
+  if (input.gold < input.goldCost) return `Need ${input.goldCost} gp`
+  if (input.favor < input.favorCost) return 'Not enough Favor'
+  if (!input.hasItems) return 'Missing materials'
+  return 'Cannot buy'
 }

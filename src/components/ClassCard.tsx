@@ -6,6 +6,7 @@ import {
   type ClericFocus,
 } from '../data/classes'
 import type { AbilityAbbr } from '../types/game'
+import { Chip } from './ui/Badge'
 
 function Stars({ n }: { n: 1 | 2 | 3 }) {
   return (
@@ -16,19 +17,36 @@ function Stars({ n }: { n: 1 | 2 | 3 }) {
   )
 }
 
-function formatModifiers(
-  mods: Partial<Record<AbilityAbbr, number>>,
-  focus: ClericFocus | null,
-): string {
-  const parts = (Object.entries(mods) as [AbilityAbbr, number][])
-    .filter(([, value]) => value !== 0)
-    .map(([abbr, value]) => {
-      const pct = Math.round(value * 100)
-      const sign = pct > 0 ? '+' : ''
-      return `${sign}${pct}% ${abbr}`
-    })
-  if (focus) parts.push(`+10% ${focus} focus`)
-  return parts.join(' · ')
+const ABILITY_TONE: Record<AbilityAbbr, 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'> = {
+  STR: 'str',
+  DEX: 'dex',
+  CON: 'con',
+  INT: 'int',
+  WIS: 'wis',
+  CHA: 'cha',
+}
+
+function ModifierChips({
+  mods,
+  focus,
+}: {
+  mods: Partial<Record<AbilityAbbr, number>>
+  focus: ClericFocus | null
+}) {
+  const parts = (Object.entries(mods) as [AbilityAbbr, number][]).filter(([, value]) => value !== 0)
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {parts.map(([abbr, value]) => {
+        const pct = Math.round(value * 100)
+        return (
+          <Chip key={abbr} tone={ABILITY_TONE[abbr]}>
+            {pct > 0 ? `+${pct}` : pct}% {abbr}
+          </Chip>
+        )
+      })}
+      {focus && <Chip tone={ABILITY_TONE[focus]}>+10% {focus} focus</Chip>}
+    </div>
+  )
 }
 
 export function ClassCard({
@@ -57,9 +75,8 @@ export function ClassCard({
       </div>
       <p className="text-sm text-parchment">{entry.role}</p>
       <p className="mt-1 text-sm text-parchment/70">{entry.playstyle}</p>
-      <p className="mt-2 text-sm text-sage">
-        Hit Die 1d{entry.hitDie} · {formatModifiers(entry.xpModifiers, focus)}
-      </p>
+      <p className="mt-2 text-body text-muted">Hit Die 1d{entry.hitDie}</p>
+      <ModifierChips mods={entry.xpModifiers} focus={focus} />
       {entry.spellcasting.casterType !== 'none' && (
         <p className="mt-1 text-sm text-sage">
           Tradition: {TRADITION_LABEL[entry.spellcasting.tradition]}
@@ -72,8 +89,8 @@ export function ClassCard({
 
   return (
     <div
-      className={`rounded-lg border p-4 ${
-        selected ? 'border-gold bg-ink/60' : 'border-brown/40 bg-panel'
+      className={`rounded-lg border bg-panel p-4 ${
+        selected ? 'border-gold ring-2 ring-gold' : 'border-line'
       } ${disabled ? 'opacity-60' : ''}`}
     >
       {onSelect ? (

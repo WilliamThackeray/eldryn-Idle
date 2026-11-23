@@ -11,7 +11,10 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { ItemDetail } from '../../components/ItemDetail'
-import { RARITY_TEXT } from '../../components/rarity'
+import { RARITY_BORDER, RARITY_TEXT } from '../../components/rarity'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { PageLayout, SidePanel } from '../../components/ui/PageLayout'
+import { cx } from '../../components/ui/format'
 import { getItem, type ItemCategory, type ItemId } from '../../data/items'
 import { BIOMES, CREATURE_TYPES, getMonster, type BiomeId, type CreatureType } from '../../data/monsters'
 import { activePerks } from '../../engine/abilities'
@@ -69,19 +72,31 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const [dragItemId, setDragItemId] = useState<ItemId | null>(null)
   const [useBiome, setUseBiome] = useState<BiomeId>('forest')
   const [useType, setUseType] = useState<CreatureType>('beast')
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<'name' | 'rarity' | 'category' | 'quantity'>('name')
 
   const activeTab = inventoryTabs.find((tab) => tab.id === activeTabId) ?? inventoryTabs[0]
 
   const shown = useMemo(() => {
     if (!activeTab) return []
-    return activeTab.itemIds.flatMap((id) => {
+    const rarityRank = ['common', 'uncommon', 'rare', 'very-rare', 'legendary', 'artifact']
+    const needle = query.trim().toLowerCase()
+    const rows = activeTab.itemIds.flatMap((id) => {
       const quantity = inventory[id] ?? 0
       if (quantity <= 0) return []
       const def = getItem(id)
       if (!def) return []
+      if (needle && !def.name.toLowerCase().includes(needle)) return []
       return [{ id, quantity, def }]
     })
-  }, [activeTab, inventory])
+    rows.sort((a, b) => {
+      if (sort === 'quantity') return b.quantity - a.quantity || a.def.name.localeCompare(b.def.name)
+      if (sort === 'category') return a.def.category.localeCompare(b.def.category) || a.def.name.localeCompare(b.def.name)
+      if (sort === 'rarity') return rarityRank.indexOf(b.def.rarity) - rarityRank.indexOf(a.def.rarity) || a.def.name.localeCompare(b.def.name)
+      return a.def.name.localeCompare(b.def.name)
+    })
+    return rows
+  }, [activeTab, inventory, query, sort])
 
   const selected = selectedId ? getItem(selectedId) : undefined
   const owned = selectedId ? (inventory[selectedId] ?? 0) : 0
@@ -145,7 +160,8 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+    <PageLayout>
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap gap-2">
           {inventoryTabs.map((tab) => {
@@ -188,9 +204,10 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
                   setActiveTabId(tab.id)
                   setDragItemId(null)
                 }}
-                className={`rounded-lg px-3 py-1 ${
-                  selectedTab ? 'bg-gold text-ink' : 'bg-panel text-parchment ring-1 ring-brown/40'
-                }`}
+                className={cx(
+                  'rounded-full px-3 py-1 text-body font-semibold',
+                  selectedTab ? 'bg-crimson text-parchment' : 'bg-panel text-parchment hover:bg-brown',
+                )}
               >
                 {tab.name}
               </button>
@@ -198,10 +215,31 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
           })}
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            aria-label="Search items"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            className="min-w-0 flex-1 rounded-lg border border-line bg-ink px-3 py-1.5 text-body text-parchment"
+          />
+          <select
+            aria-label="Sort items"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as typeof sort)}
+            className="rounded-lg border border-line bg-ink px-2 py-1.5 text-body text-parchment"
+          >
+            <option value="name">Name</option>
+            <option value="rarity">Rarity</option>
+            <option value="category">Category</option>
+            <option value="quantity">Quantity</option>
+          </select>
+        </div>
+
         {shown.length === 0 ? (
-          <p className="text-parchment/70">No items.</p>
+          <EmptyState text={query.trim() ? 'No matches.' : 'Drag items here'} />
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
             {shown.map((entry) => {
               const Icon = CATEGORY_ICON[entry.def.category] ?? Package
               const selectedCard = selectedId === entry.id
@@ -227,19 +265,21 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
                     setDragItemId(null)
                   }}
                   onClick={() => setSelectedId(entry.id)}
-                  className={`flex cursor-pointer flex-col gap-1 rounded-lg border bg-panel p-3 ${
-                    selectedCard ? 'border-gold' : 'border-brown/40 hover:border-gold/60'
-                  }`}
+                  className={cx(
+                    'relative flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border bg-panel p-2',
+                    RARITY_BORDER[entry.def.rarity],
+                    selectedCard && 'ring-2 ring-gold',
+                  )}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    {entry.def.icon ? (
-                      <img src={entry.def.icon} alt="" className="h-10 w-10 shrink-0 object-contain" />
-                    ) : (
-                      <Icon size={18} className="shrink-0 text-sage" />
-                    )}
-                    <span className="text-sm text-parchment">x{entry.quantity}</span>
-                  </div>
-                  <h3 className={`text-sm font-bold leading-tight ${RARITY_TEXT[entry.def.rarity]}`}>
+                  <span className="absolute right-1 top-1 rounded bg-ink px-1 text-meta text-parchment">
+                    {entry.quantity}
+                  </span>
+                  {entry.def.icon ? (
+                    <img src={entry.def.icon} alt="" className="h-8 w-8 object-contain" />
+                  ) : (
+                    <Icon size={20} className="text-muted" aria-hidden />
+                  )}
+                  <h3 className={cx('line-clamp-2 text-center text-meta font-semibold', RARITY_TEXT[entry.def.rarity])}>
                     {entry.def.name}
                   </h3>
                 </article>
@@ -249,7 +289,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
         )}
       </div>
 
-      <aside className="sticky top-0 h-fit rounded-lg border border-brown/40 bg-panel p-4">
+      <SidePanel className="rounded-lg border border-line bg-panel p-4">
         <ItemDetail
           itemId={selectedId}
           owned={owned}
@@ -315,7 +355,8 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
             else activateSocialItem(selectedId)
           }}
         />
-      </aside>
+      </SidePanel>
     </div>
+    </PageLayout>
   )
 }

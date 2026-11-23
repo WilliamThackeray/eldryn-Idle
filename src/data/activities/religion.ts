@@ -1,9 +1,10 @@
 import { ARMOR } from '../items/armor'
 import type { ItemId } from '../items'
 import { activity, drop, stack } from './define'
+import { fillDisplay } from './display'
 
 function vestments() {
-  return ARMOR.filter((item) => item.id.startsWith('vestment-')).map((item) => {
+  return ARMOR.filter((item) => item.id.startsWith('vestment-')).map((item, index) => {
     const isChest = item.id.endsWith('-chest')
     return activity({
       skillId: 'religion',
@@ -13,13 +14,15 @@ function vestments() {
       requiredLevel: 1,
       inputs: [stack('forest-herbs', isChest ? 2 : 1)],
       outputs: [drop(item.id as ItemId)],
+      category: 'Attire',
+      sortOrder: index,
     })
   })
 }
 
 const holyWater = [drop('holy-water', 5, 10)]
 
-export const religionActivities = [
+export const religionActivities = fillDisplay([
   activity({
     skillId: 'religion',
     id: 'village-shrine',
@@ -63,4 +66,12 @@ export const religionActivities = [
     outputs: [drop('blessed-parchment')],
   }),
   ...vestments(),
-]
+], (def, index) => ({
+  category:
+    def.id === 'village-shrine' || def.id === 'town-temple' || def.id === 'cathedral'
+      ? 'Worship'
+      : def.id === 'craft-holy-symbol' || def.id === 'craft-blessed-parchment'
+        ? 'Crafting'
+        : 'Attire',
+  sortOrder: index,
+}))

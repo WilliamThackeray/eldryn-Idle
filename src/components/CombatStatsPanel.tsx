@@ -6,6 +6,7 @@ import type { Equipment } from '../engine/equipment'
 import type { Bestiaries } from '../engine/history'
 import type { Inventory } from '../engine/inventory'
 import type { SpellLoadout } from '../engine/spells'
+import { StatTile } from './ui/StatTile'
 import {
   computeCombatStats,
   type CombatStats,
@@ -22,6 +23,7 @@ interface CombatStatsPanelProps {
   monster?: MonsterDef | null
   compact?: boolean
   bestiaries?: Bestiaries
+  showMatchup?: boolean
 }
 
 function formatSigned(value: number, digits = 0): string {
@@ -34,6 +36,25 @@ function formatBreakdown(label: string, stat: StatBreakdown, format: (n: number)
   if (stat.parts.length === 0) return `${label} ${format(stat.value)}`
   const parts = stat.parts.map((part) => `${part.label} ${formatSigned(part.value, 2)}`).join(' · ')
   return `${label} ${format(stat.value)} = ${parts}`
+}
+
+function CompactStat({
+  label,
+  stat,
+  display,
+  format,
+}: {
+  label: string
+  stat: StatBreakdown
+  display: string
+  format?: (n: number) => string
+}) {
+  return (
+    <div>
+      <div className="text-xs text-sage">{label}</div>
+      <StatHover label={label} stat={stat} display={display} format={format} />
+    </div>
+  )
 }
 
 function StatHover({
@@ -71,6 +92,7 @@ export function CombatStatsPanel({
   monster = null,
   compact = false,
   bestiaries,
+  showMatchup = true,
 }: CombatStatsPanelProps) {
   if (!classId) {
     return (
@@ -89,69 +111,27 @@ export function CombatStatsPanel({
   const flat = stats.damageFlat.value
 
   return (
-    <div className={`rounded-lg border border-brown/40 bg-panel p-4 text-sm ${compact ? 'space-y-2' : 'space-y-3'}`}>
+    <div className={`rounded-lg border border-line bg-panel ${compact ? 'space-y-2 p-4 text-sm' : 'space-y-3 p-5'}`}>
       <h3 className="font-bold text-gold">{compact ? 'Combat' : 'Combat Stats'}</h3>
-      <dl className={`grid gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
-        <div>
-          <dt className="text-xs text-sage">To-hit</dt>
-          <dd>
-            <StatHover
-              label="To-hit"
-              stat={stats.toHit}
-              display={formatSigned(stats.toHit.value)}
-              format={formatSigned}
-            />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-sage">Damage</dt>
-          <dd>
-            <StatHover
-              label="Damage flat"
-              stat={stats.damageFlat}
-              display={`${dice}${flat ? ` ${formatSigned(flat)}` : ''}`}
-              format={formatSigned}
-            />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-sage">Interval</dt>
-          <dd>
-            <StatHover
-              label="Interval"
-              stat={stats.intervalSec}
-              display={`${stats.intervalSec.value.toFixed(1)}s`}
-              format={(n) => `${n.toFixed(2)}s`}
-            />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-sage">AC</dt>
-          <dd>
-            <StatHover label="AC" stat={stats.ac} display={String(stats.ac.value)} format={formatSigned} />
-          </dd>
-        </div>
-        {!compact && (
+      <div className={`grid ${compact ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-3 sm:grid-cols-3'}`}>
+        {compact ? (
           <>
-            <div>
-              <dt className="text-xs text-sage">Max HP</dt>
-              <dd>
-                <StatHover label="Max HP" stat={stats.maxHp} display={String(stats.maxHp.value)} />
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-sage">Crit</dt>
-              <dd>
-                <StatHover
-                  label="Crit"
-                  stat={stats.critRange}
-                  display={stats.critRange.parts[0]?.label ?? '20'}
-                />
-              </dd>
-            </div>
+            <CompactStat label="To-hit" stat={stats.toHit} display={formatSigned(stats.toHit.value)} format={formatSigned} />
+            <CompactStat label="Damage" stat={stats.damageFlat} display={`${dice}${flat ? ` ${formatSigned(flat)}` : ''}`} format={formatSigned} />
+            <CompactStat label="Interval" stat={stats.intervalSec} display={`${stats.intervalSec.value.toFixed(1)}s`} format={(n) => `${n.toFixed(2)}s`} />
+            <CompactStat label="AC" stat={stats.ac} display={String(stats.ac.value)} format={formatSigned} />
+          </>
+        ) : (
+          <>
+            <StatTile label="To-hit" value={formatSigned(stats.toHit.value)} breakdown={formatBreakdown('To-hit', stats.toHit, formatSigned)} />
+            <StatTile label="Damage" value={`${dice}${flat ? ` ${formatSigned(flat)}` : ''}`} breakdown={formatBreakdown('Damage flat', stats.damageFlat, formatSigned)} />
+            <StatTile label="Interval" value={`${stats.intervalSec.value.toFixed(1)}s`} breakdown={formatBreakdown('Interval', stats.intervalSec, (n) => `${n.toFixed(2)}s`)} />
+            <StatTile label="AC" value={stats.ac.value} breakdown={formatBreakdown('AC', stats.ac, formatSigned)} />
+            <StatTile label="Max HP" value={stats.maxHp.value} breakdown={formatBreakdown('Max HP', stats.maxHp, String)} />
+            <StatTile label="Crit" value={stats.critRange.parts[0]?.label ?? '20'} breakdown={formatBreakdown('Crit', stats.critRange, String)} />
           </>
         )}
-      </dl>
+      </div>
 
       {!compact && stats.resistances.value.length > 0 && (
         <p className="text-xs text-parchment/80">
@@ -159,7 +139,7 @@ export function CombatStatsPanel({
         </p>
       )}
 
-      {stats.matchup && (
+      {showMatchup && stats.matchup && (
         <div className="space-y-1 border-t border-brown/40 pt-2 text-xs">
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             <span>

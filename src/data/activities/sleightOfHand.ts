@@ -1,6 +1,7 @@
 import { activity, drop, stack } from './define'
+import { fillDisplay } from './display'
 
-export const sleightOfHandActivities = [
+export const sleightOfHandActivities = fillDisplay([
   activity({ skillId: 'sleightOfHand', id: 'trap-small', name: 'Trap Small Animals', description: 'Set snares for small game.', requiredLevel: 1, outputs: [drop('small-animal'), drop('animal-scraps')] }),
   activity({ skillId: 'sleightOfHand', id: 'trap-fowl', name: 'Trap Air Fowl', description: 'Net birds on the wing.', requiredLevel: 20, outputs: [drop('air-fowl'), drop('animal-scraps')] }),
   activity({ skillId: 'sleightOfHand', id: 'trap-medium', name: 'Trap Medium Animals', description: 'Set traps for wolves, boar, and the like.', requiredLevel: 30, outputs: [drop('medium-animal'), drop('animal-scraps')] }),
@@ -32,4 +33,13 @@ export const sleightOfHandActivities = [
     inputs: [stack('gem')],
     outputs: [drop('necklace')],
   }),
-]
+], (def, index) => ({
+  category: def.id.startsWith('trap-')
+    ? 'Trapping'
+    : def.id.startsWith('pickpocket-')
+      ? 'Pickpocketing'
+      : def.id.startsWith('lockpick-')
+        ? 'Lockpicking'
+        : 'Jewelcrafting',
+  sortOrder: index,
+}))

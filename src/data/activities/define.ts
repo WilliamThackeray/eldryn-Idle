@@ -36,6 +36,9 @@ interface Spec {
   renownRequired?: number
   requiresQuest?: string
   baseIntervalMs?: number
+  category?: string
+  group?: string
+  sortOrder?: number
 }
 
 export function activity(spec: Spec): ActivityDef {
@@ -60,6 +63,9 @@ export function activity(spec: Spec): ActivityDef {
     favor: spec.favor,
     renownRequired: spec.renownRequired,
     requiresQuest: spec.requiresQuest,
+    category: spec.category,
+    group: spec.group,
+    sortOrder: spec.sortOrder,
     kind,
   }
 }

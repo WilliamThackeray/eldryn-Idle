@@ -3,7 +3,33 @@ import type { GearMaterial, ItemId } from '../items'
 import { WEAPONS } from '../items/weapons'
 import { MATERIAL_LEVEL } from '../../engine/config'
 import { activity, drop, stack } from './define'
+import { fillDisplay } from './display'
 import type { ActivityDef } from './types'
+
+const TIER_NAME: Record<GearMaterial, string> = {
+  iron: 'Iron',
+  steel: 'Steel',
+  silvered: 'Silvered',
+  mithral: 'Mithral',
+  adamantine: 'Adamantine',
+}
+
+const TIER_RANK: Record<GearMaterial, number> = {
+  iron: 0,
+  steel: 1,
+  silvered: 2,
+  mithral: 3,
+  adamantine: 4,
+}
+
+const SMELT_BARS = new Set([
+  'smith-iron',
+  'smith-steel',
+  'smith-silver',
+  'smith-gold',
+  'smith-mithral',
+  'smith-adamantine',
+])
 
 const slag = [drop('slag')]
 
@@ -30,6 +56,13 @@ function barCount(itemId: string, slot?: string): number {
   return 2
 }
 
+function smithSection(item: (typeof WEAPONS)[number] | (typeof ARMOR)[number], tier: string) {
+  if (item.gear?.shield || item.id.includes('shield')) return { group: `${tier} / Shields`, section: 2 }
+  if (item.gear?.weapon) return { group: `${tier} / Weapons`, section: 0 }
+  const set = item.name.replace(/ (Helmet|Chest|Chaps|Gauntlets|Boots)$/, '')
+  return { group: `${tier} / Armor / ${set}`, section: 1 }
+}
+
 function smithMetalGear(): ActivityDef[] {
   const recipes: ActivityDef[] = []
   for (const item of [...WEAPONS, ...ARMOR]) {
@@ -37,6 +70,8 @@ function smithMetalGear(): ActivityDef[] {
     if (!material) continue
     const bars = barCount(item.id, item.gear?.slot)
     const barId = BAR_FOR[material]
+    const tier = TIER_NAME[material]
+    const { group, section } = smithSection(item, tier)
     recipes.push(
       activity({
         skillId: 'athletics',
@@ -46,6 +81,9 @@ function smithMetalGear(): ActivityDef[] {
         requiredLevel: MATERIAL_LEVEL[material],
         inputs: [stack(barId, bars)],
         outputs: [drop(item.id as ItemId)],
+        category: 'Smithing',
+        group,
+        sortOrder: TIER_RANK[material] * 10000 + section * 1000 + recipes.length,
       }),
     )
   }
@@ -59,13 +97,16 @@ function smithMetalGear(): ActivityDef[] {
         requiredLevel: MATERIAL_LEVEL[tip.material],
         inputs: [stack(BAR_FOR[tip.material])],
         outputs: [drop(tip.id, 10)],
+        category: 'Smithing',
+        group: `${TIER_NAME[tip.material]} / Ammo/Other`,
+        sortOrder: TIER_RANK[tip.material] * 10000 + 3 * 1000 + recipes.length,
       }),
     )
   }
   return recipes
 }
 
-export const athleticsActivities = [
+export const athleticsActivities = fillDisplay([
   activity({ skillId: 'athletics', id: 'mine-iron', name: 'Mine Iron', description: 'Work a surface vein of iron.', requiredLevel: 1, outputs: [drop('iron-ore'), drop('mica-chip', 1, 1, 0.25), drop('sulfur', 1, 1, 0.25)], rareTable: [drop('coal', 1, 1, 0.05)] }),
   activity({ skillId: 'athletics', id: 'mine-coal', name: 'Mine Coal', description: 'Dig coal for the forge.', requiredLevel: 15, outputs: [drop('coal'), drop('mica-chip', 1, 1, 0.25), drop('sulfur', 1, 1, 0.25)] }),
   activity({ skillId: 'athletics', id: 'mine-silver', name: 'Mine Silver', description: 'Follow a silver vein.', requiredLevel: 30, outputs: [drop('silver-ore'), drop('mica-chip', 1, 1, 0.25), drop('sulfur', 1, 1, 0.25)] }),
@@ -79,4 +120,7 @@ export const athleticsActivities = [
   activity({ skillId: 'athletics', id: 'smith-mithral', name: 'Smith Mithral Bar', description: 'Smelt mithral ore into a bar.', requiredLevel: 60, inputs: [stack('mithral-ore')], outputs: [drop('mithral-bar')], byproducts: slag }),
   activity({ skillId: 'athletics', id: 'smith-adamantine', name: 'Smith Adamantine Bar', description: 'Smelt adamantine ore into a bar.', requiredLevel: 80, inputs: [stack('adamantine-ore')], outputs: [drop('adamantine-bar')], byproducts: slag }),
   ...smithMetalGear(),
-]
+], (def, index) => ({
+  category: def.id.startsWith('mine-') ? 'Mining' : SMELT_BARS.has(def.id) ? 'Smelting' : 'Smithing',
+  sortOrder: index,
+}))
