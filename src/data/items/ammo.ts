@@ -11,6 +11,7 @@ export const AMMO = [
     sellValue: 1,
     tags: ['ammo', 'bow'],
     gear: { slot: 'ammo', magicBonus: 0 },
+    icon: '/Assets/IronheadArrow.svg',
   },
   {
     id: 'bolts',

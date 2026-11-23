@@ -441,14 +441,17 @@ export const WEAPONS = [
     category: 'simple',
     range: 'ranged',
   }),
-  weapon('shortbow', 'Shortbow', 'A compact bow.', 25, {
-    dice: '1d6',
-    damageType: 'piercing',
-    properties: ['ammunition', 'two-handed'],
-    mastery: 'vex',
-    category: 'simple',
-    range: 'ranged',
-  }),
+  {
+    ...weapon('shortbow', 'Shortbow', 'A compact bow.', 25, {
+      dice: '1d6',
+      damageType: 'piercing',
+      properties: ['ammunition', 'two-handed'],
+      mastery: 'vex',
+      category: 'simple',
+      range: 'ranged',
+    }),
+    icon: '/Assets/BasicShortbow.svg',
+  },
   weapon('longbow', 'Longbow', 'A tall hunting bow.', 50, {
     dice: '1d8',
     damageType: 'piercing',
