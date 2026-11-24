@@ -59,7 +59,7 @@ test('XP uses the skill check and ability modifiers', () => {
     roll: 10,
     total: 12,
     dc: 10,
-    outcome: 'success',
+    tier: 'standard',
     xp: 13,
   })
   expect(result.state.skills.mining.xp).toBe(13)
@@ -120,14 +120,14 @@ test('a critical doubles outputs and rolls the rare table', () => {
   // After the crit d20: skip mica, skip sulfur, hit rare coal, skip rare quartz.
   const result = advance(doing('mining', 'mine-iron'), 6000, scripted(0.95, 0.99, 0.99, 0, 0.99))
 
-  expect(result.log[0]).toMatchObject({ outcome: 'critical' })
+  expect(result.log[0]).toMatchObject({ tier: 'exceptional' })
   expect(result.state.inventory).toEqual({ 'iron-ore': 2, coal: 2 })
 })
 
 test('a failed craft consumes every input and grants nothing', () => {
   const result = advance(doing('smithing', 'smith-steel', { 'iron-ore': 1, coal: 1 }), 6000, scripted(0.2))
 
-  expect(result.log[0]).toMatchObject({ outcome: 'fail', items: [] })
+  expect(result.log[0]).toMatchObject({ tier: 'fail', items: [] })
   expect(result.state.inventory).toEqual({})
   expect(result.state.skills.smithing.xp).toBeGreaterThan(0)
   expect(result.state.activeAction).not.toBeNull()
@@ -136,7 +136,7 @@ test('a failed craft consumes every input and grants nothing', () => {
 test('a fumble can grant the byproduct after spending inputs', () => {
   const result = advance(doing('smithing', 'smith-steel', { 'iron-ore': 1, coal: 1 }), 6000, scripted(0, 0))
 
-  expect(result.log[0]).toMatchObject({ outcome: 'fumble' })
+  expect(result.log[0]).toMatchObject({ tier: 'fumble' })
   expect(result.state.inventory).toEqual({ slag: 1 })
 })
 
@@ -167,9 +167,36 @@ test('the action stops once inputs run out', () => {
 test('pickpocketing adds gold', () => {
   const result = advance(doing('thievery', 'pickpocket-peasant'), 6000, scripted(0.45, 0))
 
-  expect(result.log[0]).toMatchObject({ outcome: 'success', gold: 2, items: [] })
+  expect(result.log[0]).toMatchObject({ tier: 'standard', gold: 2, items: [] })
   expect(result.state.gold).toBe(2)
   expect(result.state.inventory).toEqual({})
+})
+
+test('a fine smithing check produces a fine longsword, not extra swords', () => {
+  const result = advance(doing('smithing', 'smith-longsword', { 'iron-bar': 3 }), 6000, scripted(0.6, 0.99))
+  expect(result.log[0]).toMatchObject({ tier: 'fine' })
+  expect(result.state.inventory).toEqual({ 'longsword@fine': 1 })
+})
+
+test('enchanting keeps the consumed weapon quality', () => {
+  const result = advance(
+    doing('enchanting', 'enchant-longsword-plus1', {
+      'longsword@fine': 1,
+      'arcane-dust': 5,
+      'cut-quartz': 1,
+      sulfur: 1,
+    }),
+    6000,
+    scripted(0.45, 0.99),
+  )
+  expect(result.state.inventory['longsword@fine+1']).toBe(1)
+  expect(result.state.inventory['longsword@fine']).toBeUndefined()
+})
+
+test('a fine mining check multiplies ore and does not mint a quality item', () => {
+  const result = advance(doing('mining', 'mine-iron'), 6000, scripted(0.6, 0.99, 0.99, 0, 0.99))
+  expect(result.state.inventory['iron-ore']).toBe(2)
+  expect(result.state.inventory['iron-ore@fine']).toBeUndefined()
 })
 
 test('cooking turns a raw fish into a meal', () => {

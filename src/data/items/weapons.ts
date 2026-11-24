@@ -17,6 +17,7 @@ function weapon(
     stackable: true,
     sellValue: Math.max(1, Math.floor(buyPrice / 2)),
     tags: ['weapon'],
+    qualityKind: 'gear-weapon',
     gear: {
       slot: 'mainHand',
       material,

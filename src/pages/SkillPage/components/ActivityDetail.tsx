@@ -1,17 +1,51 @@
+import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Collapsible } from '../../../components/ui/Collapsible'
 import { ItemChip } from '../../../components/ui/ItemChip'
 import { StatTile } from '../../../components/ui/StatTile'
+import { Tooltip } from '../../../components/ui/Tooltip'
 import type { ActivityDef } from '../../../data/activities'
 import { SKILLS } from '../../../data/skills'
 import type { GameEvent, SkillEvent } from '../../../engine/advance'
+import type { BonusPart, QualityTier } from '../../../engine/skillCheck'
 import { formatXp } from '../present'
+
+const TIER_TONE: Record<QualityTier, 'quality-fail' | 'quality-fumble' | 'quality-standard' | 'quality-fine' | 'quality-masterwork' | 'quality-exceptional'> = {
+  fail: 'quality-fail',
+  fumble: 'quality-fumble',
+  standard: 'quality-standard',
+  fine: 'quality-fine',
+  masterwork: 'quality-masterwork',
+  exceptional: 'quality-exceptional',
+}
+
+const TIER_LABEL: Record<QualityTier, string> = {
+  fail: 'Fail',
+  fumble: 'Fumble',
+  standard: 'Standard',
+  fine: 'Fine',
+  masterwork: 'Masterwork',
+  exceptional: 'Exceptional',
+}
+
+const BAR: { key: string; label: string; className: string; pick: (odds: Record<QualityTier, number>) => number }[] = [
+  { key: 'fail', label: 'Fail', className: 'bg-crimson', pick: (odds) => odds.fail + odds.fumble },
+  { key: 'standard', label: 'Standard', className: 'bg-brown', pick: (odds) => odds.standard },
+  { key: 'fine', label: 'Fine', className: 'bg-sage', pick: (odds) => odds.fine },
+  { key: 'masterwork', label: 'Masterwork', className: 'bg-gold', pick: (odds) => odds.masterwork },
+  { key: 'exceptional', label: 'Exceptional', className: 'bg-ability-dex', pick: (odds) => odds.exceptional },
+]
+
+function formatPct(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`
+}
 
 export function ActivityDetail({
   activity,
-  bonus,
-  successPct,
-  dc,
+  checkLine,
+  checkParts,
+  odds,
   xpLabel,
   xpBreakdown,
   intervalLabel,
@@ -26,9 +60,9 @@ export function ActivityDetail({
   log,
 }: {
   activity: ActivityDef | null
-  bonus: number
-  successPct: number
-  dc: number
+  checkLine: string
+  checkParts: BonusPart[]
+  odds: Record<QualityTier, number> | null
   xpLabel: string
   xpBreakdown: string
   intervalLabel: string
@@ -50,10 +84,14 @@ export function ActivityDetail({
         <>
           <h2 className="text-card text-gold">{activity.name}</h2>
           <p className="text-body text-muted">{activity.description}</p>
+          <Tooltip
+            content={checkParts.map((part) => `${part.label} ${part.value >= 0 ? '+' : ''}${part.value}`).join(' · ')}
+            className="w-full"
+          >
+            <p className="text-body text-parchment">{checkLine}</p>
+          </Tooltip>
+          {odds && <OddsBar odds={odds} />}
           <div className="grid grid-cols-2 gap-2">
-            <StatTile label="Bonus" value={bonus >= 0 ? `+${bonus}` : String(bonus)} />
-            <StatTile label="Success %" value={`${successPct}%`} />
-            <StatTile label="DC" value={dc} />
             <StatTile label="XP" value={xpLabel} breakdown={xpBreakdown} />
             <StatTile label="Interval" value={intervalLabel} />
             <StatTile label="Required" value={requiredLabel} />
@@ -111,7 +149,10 @@ export function ActivityDetail({
               }
               if (event.kind !== 'skill') return null
               return (
-                <li key={`${event.activityId}-${index}`}>
+                <li
+                  key={`${event.activityId}-${index}`}
+                  className={event.tier === 'exceptional' ? 'animate-quality-flash rounded px-1' : undefined}
+                >
                   {rollLine(event)}
                 </li>
               )
@@ -123,10 +164,48 @@ export function ActivityDetail({
   )
 }
 
-function rollLine(event: SkillEvent): string {
+function rollLine(event: SkillEvent) {
   const skill = SKILLS.find((entry) => entry.id === event.skillId)?.name ?? event.label
   const items = event.items.map((item) => `${item.name} x${item.quantity}`).join(', ')
   const gold = event.gold > 0 ? `+${event.gold} gp` : ''
   const gains = [items, gold].filter(Boolean).join(' · ')
-  return `${skill}: roll ${event.roll} (${event.total} vs DC ${event.dc}) ${event.outcome} +${formatXp(event.xp)} XP${gains ? ` · ${gains}` : ''}`
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <span>
+        {skill}: d20 {event.roll} ({event.total} vs DC {event.dc})
+      </span>
+      <Badge tone={TIER_TONE[event.tier]}>{TIER_LABEL[event.tier]}</Badge>
+      <span>
+        +{formatXp(event.xp)} XP{gains ? ` · ${gains}` : ''}
+      </span>
+    </span>
+  )
+}
+
+function OddsBar({ odds }: { odds: Record<QualityTier, number> }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex h-3 overflow-hidden rounded bg-ink">
+        {BAR.map((segment) => {
+          const pct = segment.pick(odds)
+          if (pct <= 0) return null
+          return (
+            <div
+              key={segment.key}
+              className={segment.className}
+              style={{ width: `${pct}%` }}
+              title={`${segment.label} ${formatPct(pct)}`}
+            />
+          )
+        })}
+      </div>
+      <p className="flex flex-wrap gap-x-2 text-meta text-muted">
+        {BAR.map((segment) => (
+          <span key={segment.key}>
+            {segment.label} {formatPct(segment.pick(odds))}
+          </span>
+        ))}
+      </p>
+    </div>
+  )
 }

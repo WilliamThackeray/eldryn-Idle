@@ -20,6 +20,7 @@ function skilling(
     stackable: true,
     sellValue,
     tags: ['skilling'],
+    qualityKind: 'skilling-gear',
     gear: {
       slot,
       magicBonus: magicBonusForRarity('common'),

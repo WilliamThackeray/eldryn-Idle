@@ -40,21 +40,63 @@ export const ABILITY_AGGREGATION: AbilityAggregation = 'average'
 export const DC_BASE = 10
 export const DC_LEVEL_DIVISOR = 10
 
-/** Skill Checks: a natural 20 doubles items, rolls the rare table, and grants +50% XP. */
-export const CRITICAL_XP_MULTIPLIER = 1.5
-export const CRITICAL_ITEM_MULTIPLIER = 2
+/**
+ * Skill check tiers by margin (total − DC).
+ * standard is 0 through STANDARD, fine through FINE, masterwork above that.
+ * A natural 20 is exceptional only when total ≥ DC. A natural 1 is always a fumble.
+ */
+export const QUALITY_MARGIN_STANDARD = 4
+export const QUALITY_MARGIN_FINE = 9
 
-/** Skill Checks: a success grants the activity's normal items and XP. */
-export const SUCCESS_XP_MULTIPLIER = 1
-export const SUCCESS_ITEM_MULTIPLIER = 1
+/** XP: standard / fine / masterwork / exceptional, then fail and fumble. */
+export const QUALITY_XP_MULTIPLIER = {
+  standard: 1,
+  fine: 1.1,
+  masterwork: 1.25,
+  exceptional: 1.5,
+  fail: 0.5,
+  fumble: 0.25,
+} as const
 
-/** Skill Checks: a miss grants 50% XP and no items. */
-export const FAIL_XP_MULTIPLIER = 0.5
-export const FAIL_ITEM_MULTIPLIER = 0
+/** Gathering yield. Exceptional is ×2 plus the rare table. Fail and fumble grant nothing. */
+export const GATHER_YIELD_MULTIPLIER = {
+  standard: 1,
+  fine: 1.5,
+  masterwork: 2,
+  exceptional: 2,
+  fail: 0,
+  fumble: 0,
+} as const
+
+/** Weapons: to-hit and damage. Exceptional uses the masterwork bonus plus a family property. */
+export const WEAPON_QUALITY_BONUS = { standard: 0, fine: 1, masterwork: 2, exceptional: 2 } as const
+
+/** Armor: flat AC added per worn piece before the slot-share floor. Five pieces of +0.4 = +2. */
+export const ARMOR_QUALITY_AC = { standard: 0, fine: 0.2, masterwork: 0.4, exceptional: 0.4 } as const
+
+export const JEWELRY_QUALITY_MULT = { standard: 1, fine: 1.25, masterwork: 1.5, exceptional: 1.5 } as const
+export const FOOD_QUALITY_MULT = { standard: 1, fine: 1.25, masterwork: 1.5, exceptional: 1.5 } as const
+export const POTION_QUALITY_MULT = { standard: 1, fine: 1.25, masterwork: 1.5, exceptional: 1.5 } as const
+
+/** Chance a reagent is not consumed. Exceptional matches masterwork; no extra property. */
+export const REAGENT_SAVE_CHANCE = { standard: 0, fine: 0.1, masterwork: 0.2, exceptional: 0.2 } as const
+
+/** Skilling-gear skill bonuses. Fine and up floor, then bump a 0 to +1. */
+export const SKILLING_QUALITY_MULT = { standard: 1, fine: 1.25, masterwork: 1.5, exceptional: 1.5 } as const
+
+export const QUALITY_SELL_MULTIPLIER = { standard: 1, fine: 1.25, masterwork: 1.5, exceptional: 2 } as const
+
+/** Exceptional light weapons: attackSpeedPct points (5 = 5% faster). */
+export const EXCEPTIONAL_SWIFT_SPEED_PCT = 5
+export const PIERCING_SHOT_AC = 2
+
+export const EXCEPTIONAL_ARMOR_RESIST = {
+  light: 'piercing',
+  medium: 'slashing',
+  heavy: 'bludgeoning',
+} as const
 
 /** Skill Checks: a natural 1 grants 25% XP, no items, and a small byproduct chance. */
-export const FUMBLE_XP_MULTIPLIER = 0.25
-export const FUMBLE_ITEM_MULTIPLIER = 0
 export const FUMBLE_BYPRODUCT_CHANCE = 0.25
 
 /**

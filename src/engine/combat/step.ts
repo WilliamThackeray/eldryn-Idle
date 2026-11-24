@@ -473,7 +473,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       }
     }
     const resolveSummonKill = (killed: boolean) => {
-      if (!killed) return null
+      if (!killed || !monster) return null
       return onKill({
         fight,
         monster,

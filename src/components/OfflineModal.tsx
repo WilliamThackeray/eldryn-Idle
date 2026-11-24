@@ -1,5 +1,6 @@
+import { baseItemId, getItem, qualityLabel, qualityOf } from '../data/items'
 import { SKILLS } from '../data/skills'
-import type { OfflineReport } from '../engine/advance'
+import type { ItemGain, OfflineReport } from '../engine/advance'
 import { useGameStore } from '../store/gameStore'
 
 export function OfflineModal() {
@@ -62,9 +63,24 @@ export function OfflineModal() {
           <p className="text-sm">No items gained.</p>
         ) : (
           <ul className="space-y-1 text-sm">
-            {report.items.map((item) => (
-              <li key={item.id}>
-                {item.name} ×{item.quantity}
+            {groupByQuality(report.items).map((group) => (
+              <li key={group.base}>
+                {group.rows.length === 1 && !qualityLabel(qualityOf(group.rows[0].id)) ? (
+                  <>
+                    {group.rows[0].name} ×{group.rows[0].quantity}
+                  </>
+                ) : (
+                  <>
+                    {group.name}
+                    <ul className="ml-4">
+                      {group.rows.map((row) => (
+                        <li key={row.id}>
+                          {qualityLabel(qualityOf(row.id)) ?? 'Standard'} ×{row.quantity}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -99,6 +115,21 @@ function formatDuration(ms: number): string {
   if (hours > 0) return `${hours}h ${minutes}m`
   if (minutes > 0) return `${minutes}m ${secs}s`
   return `${secs}s`
+}
+
+function groupByQuality(items: ItemGain[]): { base: string; name: string; rows: ItemGain[] }[] {
+  const groups = new Map<string, ItemGain[]>()
+  for (const item of items) {
+    const base = baseItemId(item.id)
+    const rows = groups.get(base) ?? []
+    rows.push(item)
+    groups.set(base, rows)
+  }
+  return [...groups.entries()].map(([base, rows]) => ({
+    base,
+    name: getItem(base)?.name ?? rows[0]?.name ?? base,
+    rows,
+  }))
 }
 
 function formatXp(xp: number): string {

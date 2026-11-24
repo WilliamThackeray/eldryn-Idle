@@ -2,7 +2,7 @@ import type { TradeSkillId } from '../skills'
 import type { ItemId } from '../items'
 
 export interface ItemStack {
-  itemId: ItemId
+  itemId: string
   quantity: number
 }
 

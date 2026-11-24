@@ -46,6 +46,7 @@ function armorSet(spec: {
     stackable: true,
     sellValue: sellFromBuy(spec.pieceBuy),
     tags: ['armor', spec.weightClass],
+    qualityKind: 'gear-armor',
     gear: {
       slot,
       material: spec.material,
@@ -87,6 +88,7 @@ function casterSet(spec: {
     stackable: true,
     sellValue: sellFromBuy(spec.pieceBuy),
     tags: ['armor', 'light', 'caster'],
+    qualityKind: 'gear-armor',
     gear: {
       slot,
       magicBonus: magicBonusForRarity('common'),

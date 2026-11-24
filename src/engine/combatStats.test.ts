@@ -46,6 +46,29 @@ test('computeCombatStats to-hit and AC match combat helpers', () => {
   expect(stats.ac.value).toBe(playerArmorClass(fight!, equipment, dex))
 })
 
+test('a masterwork longsword shows +2 to hit and damage', () => {
+  const skills = initialSkillProgress()
+  const classXp = xpForLevel(1)
+  const plain = computeCombatStats({
+    skills,
+    equipment: withPieces({ mainHand: 'longsword' }),
+    classId: 'fighter',
+    classXp,
+    inventory: {},
+  })
+  const master = computeCombatStats({
+    skills,
+    equipment: withPieces({ mainHand: 'longsword@masterwork' }),
+    classId: 'fighter',
+    classXp,
+    inventory: {},
+  })
+  expect(master.toHit.value - plain.toHit.value).toBe(2)
+  expect(master.damageFlat.value - plain.damageFlat.value).toBe(2)
+  expect(master.toHit.parts.some((part) => part.value === 2)).toBe(true)
+  expect(master.damageFlat.parts.some((part) => part.value === 2)).toBe(true)
+})
+
 test('steel longsword raises to-hit by 1 over iron', () => {
   const skills = initialSkillProgress()
   const classXp = xpForLevel(15)

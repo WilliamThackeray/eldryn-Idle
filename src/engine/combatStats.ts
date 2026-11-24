@@ -1,5 +1,5 @@
 import { getClass, isWeaponProficient, type ClassId } from '../data/classes'
-import { getItem, type DamageType, type GearMaterial } from '../data/items'
+import { getItem, qualityOf, type DamageType, type GearMaterial } from '../data/items'
 import type { MonsterDef } from '../data/monsters'
 import type { TradeSkillId } from '../data/skills'
 import { getSpell, type SpellId } from '../data/spells'
@@ -27,6 +27,7 @@ import {
   skillLevel,
 } from './combat/state'
 import {
+  ARMOR_QUALITY_AC,
   ARMOR_SLOT_SHARE,
   DEX_SPEED_PER_MOD,
   MATERIAL_FLAT_BONUS,
@@ -180,8 +181,9 @@ function armorBreakdown(equipment: Equipment, dexMod: number): StatBreakdown {
     const material = gear?.material ? MATERIAL_FLAT_BONUS[gear.material] : 0
     const piece = armor.armorValue + material
     const share = ARMOR_SLOT_SHARE[slot]
-    armorSum += piece * share
-    terms.push(`${slot} ${piece.toFixed(1)}`)
+    const qualityAc = ARMOR_QUALITY_AC[qualityOf(equipment[slot] ?? '')]
+    armorSum += piece * share + qualityAc
+    terms.push(qualityAc ? `${slot} ${piece.toFixed(1)}+${qualityAc}` : `${slot} ${piece.toFixed(1)}`)
     if (heaviest === 'none' || rank[armor.weightClass] > rank[heaviest]) heaviest = armor.weightClass
   }
   const floored = Math.floor(armorSum)
@@ -229,7 +231,7 @@ function expectedWeaponSwing(input: {
     input.classId,
     bestiaryBonus(input.bestiaries, input.monster.creatureType),
   )
-  const pHit = hitChance(toHit, input.monster.ac)
+  const pHit = hitChance(toHit, input.monster.ac - item.ignoreAc)
   const critFloor = critThreshold(item.critRange)
   const pCrit = (21 - critFloor) / 20
   const pHitNonCrit = Math.max(0, pHit - pCrit)

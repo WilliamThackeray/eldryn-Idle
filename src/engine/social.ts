@@ -229,7 +229,7 @@ export function withInspirationReroll(
   first: SkillCheckResult,
   reroll: () => SkillCheckResult,
 ): { check: SkillCheckResult; spent: number } {
-  const pass = first.outcome === 'success' || first.outcome === 'critical'
+  const pass = first.tier !== 'fail' && first.tier !== 'fumble'
   if (pass || inspiration < 1) return { check: first, spent: 0 }
   return { check: reroll(), spent: 1 }
 }

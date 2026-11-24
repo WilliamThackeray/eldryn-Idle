@@ -1,14 +1,15 @@
 import type { ItemStack } from '../data/activities/types'
 import {
   getItem,
+  qualityOf,
   type DamageType,
   type GearBlock,
   type GearMaterial,
-  type ItemId,
   type ItemStats,
 } from '../data/items'
 import type { TradeSkillId } from '../data/skills'
 import {
+  ARMOR_QUALITY_AC,
   ARMOR_SLOT_SHARE,
   ATTUNEMENT_LIMIT,
   HEAVY_ARMOR_INTERVAL_FACTOR,
@@ -42,7 +43,7 @@ export type EquipmentSlot =
   | 'food'
   | 'potion'
 
-export type Equipment = Record<EquipmentSlot, ItemId | null>
+export type Equipment = Record<EquipmentSlot, string | null>
 
 export interface EquipmentSet {
   name: string
@@ -171,6 +172,8 @@ export interface TotalItemStats {
   saveBonus: number
   maxHp: number
   critRange: number
+  critDiceBonus: number
+  ignoreAc: number
   attackSpeedPct: number
   resistances: DamageType[]
   skillXpPct: Partial<Record<TradeSkillId, number>>
@@ -189,6 +192,8 @@ function emptyTotalStats(): TotalItemStats {
     saveBonus: 0,
     maxHp: 0,
     critRange: 0,
+    critDiceBonus: 0,
+    ignoreAc: 0,
     attackSpeedPct: 0,
     resistances: [],
     skillXpPct: {},
@@ -221,7 +226,7 @@ export function gearSkillBonus(
 }
 
 /** Occupied slots only. Used for per-skill and combat loadouts. */
-export type EquipmentSnapshot = Partial<Record<EquipmentSlot, ItemId>>
+export type EquipmentSnapshot = Partial<Record<EquipmentSlot, string>>
 
 /**
  * Equip items named in the snapshot without clearing unnamed slots.
@@ -307,6 +312,8 @@ export function totalItemStats(equipment: Equipment): TotalItemStats {
       total.saveBonus += stats.saveBonus ?? 0
       total.maxHp += stats.maxHp ?? 0
       total.critRange += stats.critRange ?? 0
+      total.critDiceBonus += stats.critDiceBonus ?? 0
+      total.ignoreAc += stats.ignoreAc ?? 0
       total.attackSpeedPct += stats.attackSpeedPct ?? 0
       total.spellAttack += stats.spellAttack ?? 0
       total.spellSaveDc += stats.spellSaveDc ?? 0
@@ -393,7 +400,7 @@ export function applyStartingKit(kit: readonly ItemStack[]): { inventory: Invent
 export function equip(
   equipment: Equipment,
   inventory: Inventory,
-  itemId: ItemId,
+  itemId: string,
   classLevel: number,
 ): { equipment: Equipment; inventory: Inventory } | null {
   if (canEquip(equipment, itemId, classLevel) != null) return null
@@ -452,7 +459,8 @@ export function armorClass(equipment: Equipment, dexMod: number): number {
     const armor = gear?.armor
     if (!armor) continue
     const piece = armor.armorValue + materialBonus(gear?.material)
-    armorSum += piece * ARMOR_SLOT_SHARE[slot as ArmorShareSlot]
+    const qualityAc = ARMOR_QUALITY_AC[qualityOf(equipment[slot] ?? '')]
+    armorSum += piece * ARMOR_SLOT_SHARE[slot as ArmorShareSlot] + qualityAc
     if (heaviest === 'none' || WEIGHT_RANK[armor.weightClass] > WEIGHT_RANK[heaviest]) {
       heaviest = armor.weightClass
     }

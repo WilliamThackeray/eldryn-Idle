@@ -3,7 +3,8 @@ import { Package, type LucideIcon } from 'lucide-react'
 import { RARITY_TEXT } from './rarity'
 import type { ClassId } from '../data/classes'
 import { isWeaponProficient } from '../data/classes'
-import { getItem, type ItemCategory, type ItemId } from '../data/items'
+import { getItem, qualityLabel, qualityOf, type ItemCategory } from '../data/items'
+import { Badge } from './ui/Badge'
 import { canEquip, targetSlot, type Equipment, type EquipmentSlot } from '../engine/equipment'
 import { equipPreview } from '../engine/equipPreview'
 import type { Inventory } from '../engine/inventory'
@@ -50,7 +51,7 @@ const SLOT_LABEL: Record<EquipmentSlot, string> = {
 }
 
 interface ItemDetailProps {
-  itemId: ItemId | null
+  itemId: string | null
   owned: number
   equipment: Equipment
   inventory: Inventory
@@ -131,7 +132,22 @@ export function ItemDetail({
             <Icon size={28} className="shrink-0 text-sage" />
           )}
           <div className="min-w-0">
-            <h2 className={`text-card font-bold ${RARITY_TEXT[selected.rarity]}`}>{selected.name}</h2>
+            <h2 className={`flex flex-wrap items-center gap-2 text-card font-bold ${RARITY_TEXT[selected.rarity]}`}>
+              {selected.name}
+              {qualityLabel(qualityOf(itemId)) && (
+                <Badge
+                  tone={
+                    qualityOf(itemId) === 'fine'
+                      ? 'quality-fine'
+                      : qualityOf(itemId) === 'masterwork'
+                        ? 'quality-masterwork'
+                        : 'quality-exceptional'
+                  }
+                >
+                  {qualityLabel(qualityOf(itemId))}
+                </Badge>
+              )}
+            </h2>
             <p className="text-meta capitalize text-muted">
               {selected.rarity} · {CATEGORY_LABEL[selected.category]}
             </p>
@@ -233,7 +249,7 @@ export function ItemDetail({
   )
 }
 
-function StatLines({ itemId }: { itemId: ItemId }) {
+function StatLines({ itemId }: { itemId: string }) {
   const lines = itemStatLines(itemId)
   if (lines.length === 0) return null
   return (
@@ -256,7 +272,7 @@ function EquipBlock({
   disabled,
   onEquip,
 }: {
-  itemId: ItemId
+  itemId: string
   slot: EquipmentSlot | null
   equipment: Equipment
   preview: ReturnType<typeof equipPreview>

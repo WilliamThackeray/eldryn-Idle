@@ -21,6 +21,16 @@ export function rollGold(drop: GoldDrop | undefined, rng: Rng, multiplier: numbe
   return rollQuantity(drop.min, drop.max, rng) * multiplier
 }
 
+/** Floor, then a seeded roll for the fraction. A whole multiplier does not roll. */
+export function scaleQuantity(quantity: number, multiplier: number, rng: Rng): number {
+  if (!(quantity > 0) || !(multiplier > 0)) return 0
+  const scaled = quantity * multiplier
+  const whole = Math.floor(scaled)
+  const frac = scaled - whole
+  if (frac === 0) return whole
+  return whole + (rng() < frac ? 1 : 0)
+}
+
 function rollQuantity(min: number, max: number, rng: Rng): number {
   if (max <= min) return min
   return min + Math.floor(rng() * (max - min + 1))

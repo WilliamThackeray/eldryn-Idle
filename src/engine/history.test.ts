@@ -47,16 +47,16 @@ test('Vol. X adds +1 to the skill-check total', () => {
   expect(tomeCheckBonus({ mining: 10 }, 'mining')).toBe(1)
   const without = skillCheck({
     rng: () => 0.45,
-    abilityModifier: 0,
-    skillLevel: 1,
-    requiredLevel: 1,
+    dc: 10,
+    parts: [{ label: 'Mining', value: 2 }],
   })
   const withTome = skillCheck({
     rng: () => 0.45,
-    abilityModifier: 0,
-    skillLevel: 1,
-    requiredLevel: 1,
-    checkBonus: tomeCheckBonus({ mining: 10 }, 'mining'),
+    dc: 10,
+    parts: [
+      { label: 'Mining', value: 2 },
+      { label: 'History', value: tomeCheckBonus({ mining: 10 }, 'mining') },
+    ],
   })
   expect(withTome.total).toBe(without.total + 1)
 })

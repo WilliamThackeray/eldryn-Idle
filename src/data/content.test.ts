@@ -3,7 +3,7 @@ import { sourcesOf } from '../engine/itemIndex'
 import { ACTIVITIES, activitiesFor, getActivity } from './activities'
 import { CLASSES, TRADITION_REAGENT } from './classes'
 import { themedItemFor, TOME_SKILLS } from './historyContent'
-import { ITEMS, isItemId, type ItemId } from './items'
+import { ITEMS, getItem, isItemId, type ItemId } from './items'
 import { TOME_VOLUME_LEVELS } from './items/knowledge'
 import { MONSTERS } from './monsters'
 import { GENERAL_GOODS, SHOP_UPGRADES } from './shop'
@@ -206,7 +206,7 @@ test('weaving flax chain makes a linen robe with caster stats', () => {
     inputs: [{ itemId: 'linen-cloth', quantity: 2 }],
     outputs: [{ itemId: 'linen-chest' }],
   })
-  const robe = ITEMS.find((item) => item.id === 'linen-chest')
+  const robe = getItem('linen-chest')
   expect(robe?.gear?.stats).toMatchObject({
     spellAttack: 1,
     spellSaveDc: 1,
@@ -219,7 +219,7 @@ test('every trade skill except vitality has at least two skilling-gear pieces wi
   for (const skill of SKILLS) {
     if (skill.id === 'vitality') continue
     const pieces = ITEMS.filter((item) => {
-      const stats = item.gear?.stats
+      const stats = getItem(item.id)?.gear?.stats
       if (!stats) return false
       return (stats.skillCheck?.[skill.id] ?? 0) > 0 || (stats.skillXpPct?.[skill.id] ?? 0) > 0
     })
@@ -235,7 +235,7 @@ test('every summon is craftable and every essence drops somewhere', () => {
     ACTIVITIES.flatMap((activity) => activity.outputs.map((entry) => entry.itemId)),
   )
   for (const item of ITEMS) {
-    if (item.gear?.slot !== 'summon') continue
+    if (getItem(item.id)?.gear?.slot !== 'summon') continue
     expect(produced.has(item.id as ItemId), item.id).toBe(true)
   }
   const drops = new Set(MONSTERS.flatMap((monster) => monster.lootTable.map((entry) => entry.itemId)))

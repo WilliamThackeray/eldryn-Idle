@@ -11,6 +11,7 @@ import { POTIONS } from './potions'
 import { SKILLING_GEAR } from './skillingGear'
 import { SUMMONS } from './summons'
 import { WEAPONS } from './weapons'
+import { applyQuality, bindItemCatalog, bindItemLookup, parseItemId } from './quality'
 import type { ItemDef } from './types'
 
 export type {
@@ -27,6 +28,7 @@ export type {
   WeaponGear,
   WeaponMastery,
   WeaponProperty,
+  QualityKind,
 } from './types'
 export {
   ARMOR_WEIGHT_CLASSES,
@@ -38,7 +40,20 @@ export {
   WEAPON_MASTERIES,
   WEAPON_PROPERTIES,
   magicBonusForRarity,
+  QUALITY_KINDS,
 } from './types'
+export {
+  applyQuality,
+  baseItemId,
+  qualityKindOf,
+  qualityLabel,
+  qualityOf,
+  reagentSaveChance,
+  stampsQualityItem,
+  withQuality,
+  ITEM_QUALITIES,
+} from './quality'
+export type { ItemQuality } from './quality'
 
 export const ITEMS = [
   ...MATERIALS,
@@ -58,11 +73,19 @@ export const ITEMS = [
 export type ItemId = (typeof ITEMS)[number]['id']
 
 const BY_ID = new Map<string, ItemDef>(ITEMS.map((item) => [item.id, item]))
+bindItemCatalog((id) => BY_ID.has(id))
+bindItemLookup((id) => BY_ID.get(id))
 
-export function isItemId(id: string): id is ItemId {
-  return BY_ID.has(id)
+export function isItemId(id: string): boolean {
+  return getItem(id) != null
 }
 
 export function getItem(id: string): ItemDef | undefined {
-  return BY_ID.get(id)
+  const direct = BY_ID.get(id)
+  if (direct) return direct
+  const parsed = parseItemId(id)
+  const enchantedId = parsed.enchant > 0 ? `${parsed.stem}+${parsed.enchant}` : ''
+  const base = (enchantedId && BY_ID.get(enchantedId)) || BY_ID.get(parsed.stem)
+  if (!base) return undefined
+  return applyQuality(base, id)
 }

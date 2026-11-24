@@ -9,6 +9,7 @@ import {
   type Equipment,
 } from './equipment'
 import { skillCheck } from './skillCheck'
+import type { Inventory } from './inventory'
 import { initialSkillProgress } from '../data/skills'
 import type { Rng } from './rng'
 
@@ -48,7 +49,7 @@ test('empty loadout changes nothing', () => {
 
 test('switching skill loadouts restores the right gear', () => {
   let equipment: Equipment = emptyEquipment()
-  let inventory: Record<string, number> = {
+  let inventory: Inventory = {
     'smiths-gauntlets': 1,
     'miners-helm': 1,
   }
@@ -76,17 +77,13 @@ test("Smith's Gauntlets raise gearSkillBonus and the skill check total", () => {
   // 0.45 → d20 face 10
   const bareCheck = skillCheck({
     rng: scripted(0.45),
-    abilityModifier: 0,
-    skillLevel: 1,
-    requiredLevel: 1,
-    checkBonus: 0,
+    dc: 10,
+    parts: [{ label: 'Smithing', value: 2 }],
   })
   const gearedCheck = skillCheck({
     rng: scripted(0.45),
-    abilityModifier: 0,
-    skillLevel: 1,
-    requiredLevel: 1,
-    checkBonus: gearSkillBonus(geared, 'smithing'),
+    dc: 10,
+    parts: [{ label: 'Smithing', value: 2 }, { label: "Smith's Gauntlets", value: gearSkillBonus(geared, 'smithing') }],
   })
   expect(gearedCheck.total).toBe(bareCheck.total + 1)
 })

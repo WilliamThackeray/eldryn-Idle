@@ -168,7 +168,8 @@ export function resolvePlayerAttack(input: {
 
   const autoMiss = natural === 1
   const crit = !autoMiss && natural >= critFloor
-  const hit = !autoMiss && (crit || total >= monster.ac)
+  const targetAc = monster.ac - (itemStats?.ignoreAc ?? 0)
+  const hit = !autoMiss && (crit || total >= targetAc)
   const intervalSec = (fight.playerIntervalMs / 1000).toFixed(2)
   let line = `${input.labelPrefix}${intervalSec}s. to hit: ${total}${bardicNote} - ${hit ? 'hits' : 'misses'}.`
 
@@ -201,7 +202,7 @@ export function resolvePlayerAttack(input: {
 
   const diceNotation = input.unarmedOverride?.dice ?? damageDice(equipment)
   const dtype = input.unarmedOverride?.damageType ?? damageTypeOf(equipment)
-  const brutal = effectTotal(activePerks({ skills }), 'brutalCritDice')
+  const brutal = effectTotal(activePerks({ skills }), 'brutalCritDice') + (itemStats?.critDiceBonus ?? 0)
   const parts = rollDamageParts(diceNotation, rng, crit, crit ? brutal : 0)
   const hitCtx = {
     ...sigCtx,

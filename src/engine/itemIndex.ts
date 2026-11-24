@@ -1,7 +1,7 @@
 import { ACTIVITIES } from '../data/activities'
 import { CLASSES, TRADITION_REAGENT } from '../data/classes'
 import { DUNGEONS } from '../data/dungeons'
-import type { ItemId } from '../data/items'
+import { baseItemId, type ItemId } from '../data/items'
 import { MONSTERS } from '../data/monsters'
 import { QUESTS } from '../data/quests'
 import { GENERAL_GOODS } from '../data/shop'
@@ -169,10 +169,10 @@ function index(): ItemIndex {
   return cached
 }
 
-export function sourcesOf(itemId: ItemId): ItemLink[] {
-  return index().sources.get(itemId) ?? []
+export function sourcesOf(itemId: string): ItemLink[] {
+  return index().sources.get(baseItemId(itemId) as ItemId) ?? []
 }
 
-export function usesOf(itemId: ItemId): ItemLink[] {
-  return index().uses.get(itemId) ?? []
+export function usesOf(itemId: string): ItemLink[] {
+  return index().uses.get(baseItemId(itemId) as ItemId) ?? []
 }

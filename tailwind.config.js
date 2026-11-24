@@ -39,6 +39,15 @@ export default {
           cha: '#F4AC45',
         },
       },
+      keyframes: {
+        'quality-flash': {
+          '0%': { backgroundColor: '#7EB6D955' },
+          '100%': { backgroundColor: 'transparent' },
+        },
+      },
+      animation: {
+        'quality-flash': 'quality-flash 0.9s ease-out 1',
+      },
       fontSize: {
         page: ['1.5rem', { lineHeight: '2rem', fontWeight: '700' }],
         section: ['1.125rem', { lineHeight: '1.75rem', fontWeight: '700' }],

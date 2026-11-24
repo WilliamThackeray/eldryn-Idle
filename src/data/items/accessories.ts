@@ -17,6 +17,7 @@ function accessory(
     stackable: true,
     sellValue,
     tags,
+    qualityKind: tags.includes('jewelry') ? 'jewelry' : 'none',
     gear: {
       slot,
       magicBonus: magicBonusForRarity('common'),
@@ -41,6 +42,7 @@ function jeweled(
     stackable: true,
     sellValue,
     tags: ['jewelry'],
+    qualityKind: 'jewelry',
     gear: {
       slot,
       magicBonus: magicBonusForRarity('uncommon'),

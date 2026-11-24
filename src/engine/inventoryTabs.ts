@@ -1,11 +1,11 @@
-import { isItemId, type ItemId } from '../data/items'
+import { isItemId } from '../data/items'
 import { BASE_INVENTORY_TABS, MAX_INVENTORY_TABS } from './config'
 import type { Inventory } from './inventory'
 
 export interface InventoryTab {
   id: string
   name: string
-  itemIds: ItemId[]
+  itemIds: string[]
 }
 
 export function defaultInventoryTabs(count = BASE_INVENTORY_TABS): InventoryTab[] {
@@ -29,14 +29,14 @@ export function renameTab(tabs: InventoryTab[], tabId: string, name: string): In
   )
 }
 
-function withoutItem(tabs: InventoryTab[], itemId: ItemId): InventoryTab[] {
+function withoutItem(tabs: InventoryTab[], itemId: string): InventoryTab[] {
   return tabs.map((tab) => ({
     ...tab,
     itemIds: tab.itemIds.filter((id) => id !== itemId),
   }))
 }
 
-export function moveItemToTab(tabs: InventoryTab[], itemId: ItemId, toTabId: string): InventoryTab[] {
+export function moveItemToTab(tabs: InventoryTab[], itemId: string, toTabId: string): InventoryTab[] {
   const cleared = withoutItem(tabs, itemId)
   return cleared.map((tab) =>
     tab.id === toTabId ? { ...tab, itemIds: [...tab.itemIds, itemId] } : tab,
@@ -46,8 +46,8 @@ export function moveItemToTab(tabs: InventoryTab[], itemId: ItemId, toTabId: str
 export function reorderItem(
   tabs: InventoryTab[],
   tabId: string,
-  itemId: ItemId,
-  beforeItemId: ItemId,
+  itemId: string,
+  beforeItemId: string,
 ): InventoryTab[] {
   if (itemId === beforeItemId) return tabs
   return tabs.map((tab) => {
@@ -61,8 +61,8 @@ export function reorderItem(
   })
 }
 
-function idsOnTabs(tabs: InventoryTab[]): Set<ItemId> {
-  const seen = new Set<ItemId>()
+function idsOnTabs(tabs: InventoryTab[]): Set<string> {
+  const seen = new Set<string>()
   for (const tab of tabs) for (const id of tab.itemIds) seen.add(id)
   return seen
 }
@@ -75,9 +75,9 @@ export function placeIncoming(
 ): InventoryTab[] {
   if (tabs.length === 0) return tabs
   const placed = idsOnTabs(tabs)
-  const newcomers: ItemId[] = []
-  for (const [id, qty] of Object.entries(after) as [ItemId, number][]) {
-    if (qty > 0 && !placed.has(id)) newcomers.push(id)
+  const newcomers: string[] = []
+  for (const [id, qty] of Object.entries(after)) {
+    if ((qty ?? 0) > 0 && !placed.has(id)) newcomers.push(id)
   }
   if (newcomers.length === 0) return tabs
   return tabs.map((tab, index) =>
@@ -108,7 +108,7 @@ export function normalizeInventoryTabs(
         typeof record.name === 'string' && record.name.trim()
           ? record.name.trim().slice(0, 16)
           : tabDefaultName(id)
-      const itemIds: ItemId[] = []
+      const itemIds: string[] = []
       if (Array.isArray(record.itemIds)) {
         for (const itemId of record.itemIds) {
           if (typeof itemId === 'string' && isItemId(itemId)) itemIds.push(itemId)
@@ -119,7 +119,7 @@ export function normalizeInventoryTabs(
     }
   }
 
-  const overflow: ItemId[] = []
+  const overflow: string[] = []
   if (Array.isArray(raw) && raw.length > MAX_INVENTORY_TABS) {
     for (const entry of raw.slice(MAX_INVENTORY_TABS)) {
       if (!entry || typeof entry !== 'object') continue

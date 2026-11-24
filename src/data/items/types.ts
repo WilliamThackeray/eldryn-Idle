@@ -100,7 +100,23 @@ export interface ItemStats {
   spellSaveDc?: number
   /** 0–1 chance not to spend spell components. */
   componentSaveChance?: number
+  /** Extra weapon dice added on a critical hit (Brutal). */
+  critDiceBonus?: number
+  /** Flat AC ignored by this weapon (Piercing Shot). */
+  ignoreAc?: number
 }
+
+export const QUALITY_KINDS = [
+  'gear-weapon',
+  'gear-armor',
+  'jewelry',
+  'food',
+  'potion',
+  'reagent',
+  'skilling-gear',
+  'none',
+] as const
+export type QualityKind = (typeof QUALITY_KINDS)[number]
 
 export interface SummonStats {
   hp: number
@@ -139,6 +155,10 @@ export interface ItemDef {
   icon?: string
   /** HP restored when eaten from the food slot in combat. */
   heal?: number
+  /** Potion strength. Quality multiplies it. */
+  potency?: number
+  /** How a successful check stamps this item. Omitted kinds are inferred. */
+  qualityKind?: QualityKind
 }
 
 export function magicBonusForRarity(rarity: ItemRarity): number {

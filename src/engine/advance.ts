@@ -1,6 +1,15 @@
-import { getActivity } from '../data/activities'
+import { getActivity, type ActivityDef } from '../data/activities'
+import type { ItemStack } from '../data/activities/types'
 import type { ClassId } from '../data/classes'
-import { getItem } from '../data/items'
+import {
+  getItem,
+  qualityKindOf,
+  qualityOf,
+  reagentSaveChance,
+  stampsQualityItem,
+  withQuality,
+  type ItemQuality,
+} from '../data/items'
 import { getMonster } from '../data/monsters'
 import { intervalBonus } from '../data/shop'
 import { getSkill, SKILLS, type TradeSkillId } from '../data/skills'
@@ -11,13 +20,10 @@ import {
   type CombatAction,
   type CombatFight,
 } from './combat'
-import { OFFLINE_CAP_MS, RESPAWN_MS } from './config'
-import { resolveRollMode } from './dice'
+import { GATHER_YIELD_MULTIPLIER, OFFLINE_CAP_MS, RESPAWN_MS } from './config'
 import {
   applySkillLoadout,
   emptyEquipment,
-  gearRollMode,
-  gearSkillBonus,
   heavyArmorIntervalMultiplier,
   totalItemStats,
   type Equipment,
@@ -27,7 +33,6 @@ import {
   discountTomeInputs,
   noteYieldPct,
   tickBuffs,
-  tomeCheckBonus,
   tomeSpeedBonus,
   tomeXpPct,
   type ActiveBuff,
@@ -35,14 +40,21 @@ import {
   type Tomes,
 } from './history'
 import { intervalMs } from './interval'
-import { hasItems, removeItems, addItems, type Inventory } from './inventory'
-import { rollGold, rollLoot } from './loot'
+import { addItems, hasItems, removalPlan, removeItems, type Inventory } from './inventory'
+import { rollGold, rollLoot, scaleQuantity } from './loot'
 import { applyNoticeEvents, type NoticeBoard } from './noticeBoard'
 import type { Rng } from './rng'
 import { applyEvents, syncLevels, type QuestProgress } from './quest'
-import { skillCheck, type SkillCheckOutcome, type SkillCheckResult } from './skillCheck'
 import {
-  activityHasAdvantage,
+  activityBonusParts,
+  activityRollMode,
+  checkDc,
+  checkPassed,
+  skillCheck,
+  type QualityTier,
+  type SkillCheckResult,
+} from './skillCheck'
+import {
   grantFavor,
   renownGain,
   type Bounty,
@@ -110,7 +122,7 @@ export interface SkillEvent {
   roll: number
   total: number
   dc: number
-  outcome: SkillCheckOutcome
+  tier: QualityTier
   xp: number
   items: ItemGain[]
   gold: number
@@ -250,6 +262,33 @@ function gainedItems(beforeItems: Inventory, afterItems: Inventory): ItemGain[] 
   })
 }
 
+function enchantQuality(activity: ActivityDef, taken: ItemStack[]): ItemQuality | null {
+  if (activity.skillId !== 'enchanting') return null
+  for (const stack of taken) {
+    const kind = qualityKindOf(getItem(stack.itemId))
+    if (kind === 'gear-weapon' || kind === 'gear-armor' || kind === 'jewelry' || kind === 'skilling-gear') {
+      return qualityOf(stack.itemId)
+    }
+  }
+  return null
+}
+
+function stampOutput(
+  stack: ItemStack,
+  activity: ActivityDef,
+  tier: QualityTier,
+  preserved: ItemQuality | null,
+  rng: Rng,
+): ItemStack {
+  if (preserved) return { ...stack, itemId: withQuality(stack.itemId, preserved) }
+  if (stampsQualityItem(Boolean(activity.inputs?.length), getItem(stack.itemId))) {
+    const quality: ItemQuality =
+      tier === 'fine' || tier === 'masterwork' || tier === 'exceptional' ? tier : 'standard'
+    return { ...stack, itemId: withQuality(stack.itemId, quality) }
+  }
+  return { ...stack, quantity: scaleQuantity(stack.quantity, GATHER_YIELD_MULTIPLIER[tier], rng) }
+}
+
 export function onActivityComplete(
   state: AdvanceState,
   action: SkillAction,
@@ -265,15 +304,29 @@ export function onActivityComplete(
   if (inputs.length && !hasItems(state.inventory, inputs)) return state
 
   // TODO(design): confirm inputs are spent on failures and fumbles.
-  let inventory = inputs.length ? removeItems(state.inventory, inputs) : state.inventory
-  const multiplier = check.itemMultiplier
-  let stacks = [
-    ...rollLoot(activity.outputs, rng, multiplier),
-    ...(check.rareRoll ? rollLoot(activity.rareTable, rng, multiplier) : []),
-    ...(check.byproduct ? rollLoot(activity.byproducts, rng, 1) : []),
-  ]
-  let goldGain = rollGold(activity.gold, rng, multiplier)
-  const favorGain = rollGold(activity.favor, rng, multiplier)
+  const planned = inputs.length ? removalPlan(state.inventory, inputs) : []
+  if (inputs.length && !planned) return state
+  let inventory = planned ? removeItems(state.inventory, inputs) : state.inventory
+  const preserved = enchantQuality(activity, planned ?? [])
+  if (planned) {
+    for (const stack of planned) {
+      const save = reagentSaveChance(stack.itemId)
+      if (save > 0 && rng() < save) inventory = addItems(inventory, [stack])
+    }
+  }
+  const passed = checkPassed(check.tier)
+  let stacks = passed
+    ? [
+        ...rollLoot(activity.outputs, rng, 1).map((stack) => stampOutput(stack, activity, check.tier, preserved, rng)),
+        ...(check.rareRoll
+          ? rollLoot(activity.rareTable, rng, 1).map((stack) => stampOutput(stack, activity, check.tier, preserved, rng))
+          : []),
+      ]
+    : []
+  if (check.byproduct) stacks = [...stacks, ...rollLoot(activity.byproducts, rng, 1)]
+  const yieldMult = GATHER_YIELD_MULTIPLIER[check.tier]
+  let goldGain = passed ? scaleQuantity(rollGold(activity.gold, rng, 1), yieldMult, rng) : 0
+  const favorGain = passed ? scaleQuantity(rollGold(activity.favor, rng, 1), yieldMult, rng) : 0
   const ability = getSkill(action.skillId).ability
   const perks = activePerks(state)
   const yieldPct =
@@ -298,7 +351,7 @@ export function onActivityComplete(
   const isVenue =
     action.skillId === 'performance' &&
     !action.activityId.startsWith('craft-') &&
-    (check.outcome === 'success' || check.outcome === 'critical')
+    passed
   const renown = isVenue ? renownGain(state.renown ?? 0, 1) : (state.renown ?? 0)
   return { ...state, inventory, gold: state.gold + goldGain, favor, renown }
 }
@@ -414,18 +467,12 @@ export function advance(
 
     remaining -= need
     progress = 0
-    const modeSources: Array<'advantage' | 'disadvantage'> = []
-    const gearMode = gearRollMode(skill.id, equipment)
-    if (gearMode === 'advantage') modeSources.push('advantage')
-    if (gearMode === 'disadvantage') modeSources.push('disadvantage')
-    if (activityHasAdvantage(activeBuffs, skill.id)) modeSources.push('advantage')
+    const checkState = { skills, equipment, tomes, activeBuffs }
     const check = skillCheck({
       rng,
-      mode: resolveRollMode(modeSources),
-      abilityModifier: deriveAbilities(skills).find((ability) => ability.abbr === skill.ability)?.modifier ?? 0,
-      skillLevel: levelForXp(skills[skill.id].xp),
-      requiredLevel: acting.requiredLevel,
-      checkBonus: tomeCheckBonus(tomes, skill.id) + gearSkillBonus(equipment, skill.id),
+      mode: activityRollMode(checkState, skill.id),
+      dc: checkDc(acting.requiredLevel),
+      parts: activityBonusParts(checkState, skill.id),
     })
     const xp = applyXpModifiers(
       acting.baseXp * check.xpMultiplier,
@@ -471,7 +518,7 @@ export function advance(
       roll: check.roll,
       total: check.total,
       dc: check.dc,
-      outcome: check.outcome,
+      tier: check.tier,
       xp,
       items: gainedItems(beforeItems, inventory),
       gold: Math.max(0, gold - beforeGold),

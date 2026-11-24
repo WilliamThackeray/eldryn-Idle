@@ -15,7 +15,7 @@ import { RARITY_BORDER, RARITY_TEXT } from '../../components/rarity'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageLayout, SidePanel } from '../../components/ui/PageLayout'
 import { cx } from '../../components/ui/format'
-import { getItem, type ItemCategory, type ItemId } from '../../data/items'
+import { getItem, qualityLabel, qualityOf, type ItemCategory } from '../../data/items'
 import { BIOMES, CREATURE_TYPES, getMonster, type BiomeId, type CreatureType } from '../../data/monsters'
 import { activePerks } from '../../engine/abilities'
 import { sellItems } from '../../engine/inventory'
@@ -32,6 +32,12 @@ const SOCIAL_USE = new Set([
   'rumor',
   'intel',
 ])
+
+const QUALITY_PIP = {
+  fine: 'bg-sage',
+  masterwork: 'bg-gold',
+  exceptional: 'bg-ability-dex',
+} as const
 
 const CATEGORY_ICON: Record<ItemCategory, LucideIcon> = {
   material: Hammer,
@@ -65,11 +71,11 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const reorderInventoryItem = useGameStore((state) => state.reorderInventoryItem)
 
   const [activeTabId, setActiveTabId] = useState(() => inventoryTabs[0]?.id ?? 'tab-1')
-  const [selectedId, setSelectedId] = useState<ItemId | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingTabId, setEditingTabId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [sellQty, setSellQty] = useState(1)
-  const [dragItemId, setDragItemId] = useState<ItemId | null>(null)
+  const [dragItemId, setDragItemId] = useState<string | null>(null)
   const [useBiome, setUseBiome] = useState<BiomeId>('forest')
   const [useType, setUseType] = useState<CreatureType>('beast')
   const [query, setQuery] = useState('')
@@ -198,7 +204,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
                 }}
                 onDrop={(event) => {
                   event.preventDefault()
-                  const itemId = (event.dataTransfer.getData('text/item-id') || dragItemId) as ItemId | ''
+                  const itemId = event.dataTransfer.getData('text/item-id') || dragItemId || ''
                   if (!itemId) return
                   moveInventoryItem(itemId, tab.id)
                   setActiveTabId(tab.id)
@@ -259,7 +265,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
                   onDrop={(event) => {
                     event.preventDefault()
                     event.stopPropagation()
-                    const itemId = (event.dataTransfer.getData('text/item-id') || dragItemId) as ItemId | ''
+                    const itemId = event.dataTransfer.getData('text/item-id') || dragItemId || ''
                     if (!itemId || !activeTab || itemId === entry.id) return
                     reorderInventoryItem(activeTab.id, itemId, entry.id)
                     setDragItemId(null)
@@ -274,6 +280,15 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
                   <span className="absolute right-1 top-1 rounded bg-ink px-1 text-meta text-parchment">
                     {entry.quantity}
                   </span>
+                  {qualityLabel(qualityOf(entry.id)) && (
+                    <span
+                      className={cx(
+                        'absolute left-1 top-1 h-2.5 w-2.5 rounded-full',
+                        QUALITY_PIP[qualityOf(entry.id) as 'fine' | 'masterwork' | 'exceptional'],
+                      )}
+                      title={qualityLabel(qualityOf(entry.id)) ?? undefined}
+                    />
+                  )}
                   {entry.def.icon ? (
                     <img src={entry.def.icon} alt="" className="h-8 w-8 object-contain" />
                   ) : (

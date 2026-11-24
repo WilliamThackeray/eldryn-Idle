@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { getItem } from '../data/items'
 import { addItems, hasItems, nextCount, removeItems, sellItems } from './inventory'
 
 test('removeItems is all-or-nothing for a multi-item recipe', () => {
@@ -49,6 +50,26 @@ test('selling a stack adds gold from sellValue and removes the items', () => {
 
   expect(sold.gold).toBe(10 + 4 * 2)
   expect(sold.inventory).toEqual({ coal: 1 })
+})
+
+test('recipes consume the lowest quality first', () => {
+  const mixed = { longsword: 1, 'longsword@fine': 1, 'longsword@masterwork': 1 }
+  expect(hasItems(mixed, [{ itemId: 'longsword', quantity: 3 }])).toBe(true)
+  expect(removeItems(mixed, [{ itemId: 'longsword', quantity: 1 }])).toEqual({
+    'longsword@fine': 1,
+    'longsword@masterwork': 1,
+  })
+  expect(removeItems(mixed, [{ itemId: 'longsword', quantity: 2 }])).toEqual({
+    'longsword@masterwork': 1,
+  })
+  expect(removeItems({ 'longsword@fine': 1 }, [{ itemId: 'longsword@fine', quantity: 1 }])).toEqual({})
+})
+
+test('sell price scales by quality', () => {
+  const base = getItem('longsword')!.sellValue
+  const master = getItem('longsword@masterwork')!
+  expect(master.sellValue).toBe(Math.max(1, Math.floor(base * 1.5)))
+  expect(sellItems({ 'longsword@masterwork': 1 }, 0, 'longsword@masterwork').gold).toBe(master.sellValue)
 })
 
 test('sell price multiplier floors the bonus', () => {

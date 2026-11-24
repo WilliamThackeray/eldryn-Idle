@@ -683,7 +683,7 @@ export function applyEvents(
     }
 
     if (event.kind === 'skill') {
-      if (event.outcome !== 'success' && event.outcome !== 'critical') continue
+      if (event.tier === 'fail' || event.tier === 'fumble') continue
       const activity = getActivity(event.skillId, event.activityId)
       for (const [questId, run] of Object.entries(next)) {
         if (run.done) continue

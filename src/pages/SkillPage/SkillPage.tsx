@@ -22,11 +22,17 @@ import { SKILLS, type TradeSkillId } from '../../data/skills'
 import { activePerks, deriveAbilities, effectTotal } from '../../engine/abilities'
 import { actionIntervalMs, activityIntervalMs } from '../../engine/advance'
 import { totalItemStats } from '../../engine/equipment'
-import { tomeCheckBonus, tomeSpeedBonus, tomeXpPct } from '../../engine/history'
+import { tomeSpeedBonus, tomeXpPct } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
 import { activityUnlocked } from '../../engine/quest'
-import { checkDc, successChance } from '../../engine/skillCheck'
-import { levelForXp, proficiency, progressToNext, tier } from '../../engine/xp'
+import {
+  activityBonusParts,
+  activityRollMode,
+  checkDc,
+  formatCheckLine,
+  qualityOdds,
+} from '../../engine/skillCheck'
+import { levelForXp, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
 import { useUiPrefs } from '../../store/uiPrefs'
 import { ActivityCard } from './components/ActivityCard'
@@ -58,6 +64,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const equipment = useGameStore((state) => state.equipment)
   const upgrades = useGameStore((state) => state.upgrades)
   const tomes = useGameStore((state) => state.tomes)
+  const activeBuffs = useGameStore((state) => state.activeBuffs)
   const bestiaries = useGameStore((state) => state.bestiaries)
   const activeAction = useGameStore((state) => state.activeAction)
   const classId = useGameStore((state) => state.classId)
@@ -80,11 +87,11 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const skill = SKILLS.find((entry) => entry.id === skillId)
   const ability = skill?.ability
   const derived = deriveAbilities(skills).find((entry) => entry.abbr === ability)
-  const modifier = derived?.modifier ?? 0
   const rank = derived?.rank
-  const checkBonus = tomeCheckBonus(tomes, skillId)
-  const gearBonus = totalItemStats(equipment).skillCheck[skillId] ?? 0
-  const bonus = modifier + proficiency(tier(level)) + checkBonus + gearBonus
+  const checkState = { skills, equipment, tomes, activeBuffs }
+  const checkParts = activityBonusParts(checkState, skillId)
+  const rollMode = activityRollMode(checkState, skillId)
+  const checkBonus = checkParts.find((part) => part.label === 'History')?.value ?? 0
   const classMods = modifiersFor(classId, clericFocus)
   const className = classId ? getClass(classId).name : null
   const tomePct = tomeXpPct(tomes, skillId)
@@ -214,7 +221,8 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   }
 
   function renderCard(activity: ActivityDef) {
-    const success = Math.round(successChance(bonus, checkDc(activity.requiredLevel)) * 100)
+    const odds = qualityOdds(checkState, activity)
+    const success = Math.round(100 - odds.fail - odds.fumble)
     const runningThis = running?.activityId === activity.id
     const interval = intervalOf(activity)
     return (
@@ -235,7 +243,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
 
   const detailFor = (activity: ActivityDef) => {
     const dc = checkDc(activity.requiredLevel)
-    const successPct = Math.round(successChance(bonus, dc) * 100)
+    const odds = qualityOdds(checkState, activity)
     const mult = 1 + classFrac + tomePct
     const parts = [
       `Base ${formatXp(activity.xp)}`,
@@ -247,7 +255,9 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
     if (activity.renownRequired != null) required.push(`Renown ${activity.renownRequired}`)
     return {
       dc,
-      successPct,
+      odds,
+      checkLine: formatCheckLine(checkParts, dc, rollMode),
+      checkParts,
       xpLabel: formatXp(activity.xp),
       xpBreakdown: parts.join(' · '),
       requiredLabel: required.join(' · '),
@@ -291,9 +301,9 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
       side={
         <ActivityDetail
           activity={selected}
-          bonus={bonus}
-          successPct={detail?.successPct ?? 0}
-          dc={detail?.dc ?? 0}
+          checkLine={detail?.checkLine ?? ''}
+          checkParts={detail?.checkParts ?? []}
+          odds={detail?.odds ?? null}
           xpLabel={detail?.xpLabel ?? ''}
           xpBreakdown={detail?.xpBreakdown ?? ''}
           intervalLabel={detail ? formatInterval(intervalOf(selected!)) : ''}

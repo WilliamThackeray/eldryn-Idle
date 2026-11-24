@@ -22,6 +22,12 @@ type Tone =
   | 'int'
   | 'wis'
   | 'cha'
+  | 'quality-fail'
+  | 'quality-fumble'
+  | 'quality-standard'
+  | 'quality-fine'
+  | 'quality-masterwork'
+  | 'quality-exceptional'
 
 const TONE: Record<Tone, string> = {
   neutral: 'bg-raised text-parchment',
@@ -44,6 +50,12 @@ const TONE: Record<Tone, string> = {
   int: 'bg-ink text-ability-int',
   wis: 'bg-ink text-ability-wis',
   cha: 'bg-ink text-ability-cha',
+  'quality-fail': 'bg-ink text-crimson',
+  'quality-fumble': 'bg-ink text-lack',
+  'quality-standard': 'bg-ink text-parchment',
+  'quality-fine': 'bg-ink text-sage',
+  'quality-masterwork': 'bg-ink text-gold',
+  'quality-exceptional': 'bg-ink text-ability-dex',
 }
 
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
