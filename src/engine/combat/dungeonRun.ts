@@ -19,9 +19,11 @@ import { addItems, removeItems, type Inventory } from '../inventory'
 import { rollGold, rollLoot } from '../loot'
 import type { Rng } from '../rng'
 import { longRest, shortRest } from '../rest'
-import { progressBounty, rareSpawnBuff, type Bounty } from '../social'
+import { applyReward, claimBounty, noteCullKill, type ActiveContract, type BountyPayout } from '../bounties'
+import { rareSpawnBuff } from '../social'
 import { applyCombatXp } from '../multiclass'
 import { mergeLoot, recoverAmmo } from './attack'
+import { monsterProfile } from './monsterMods'
 import {
   type CombatFight,
   computeMonsterIntervalMs,
@@ -120,7 +122,7 @@ export function advanceDungeonNodes(input: {
   casting: boolean
   modifiers?: Partial<Record<AbilityAbbr, number>>
   stopWhenOutOfFood?: boolean
-  bounty?: Bounty | null
+  bounty?: ActiveContract[]
   favor?: number
   activeBuffs?: ActiveBuff[]
 }): {
@@ -131,7 +133,7 @@ export function advanceDungeonNodes(input: {
   stop: boolean
   questStepComplete: string | null
   monster: MonsterDef | null
-  bounty: Bounty | null
+  bounty: ActiveContract[]
   favor: number
 } {
   const { fight, equipment, rng, trace, casting } = input
@@ -141,7 +143,7 @@ export function advanceDungeonNodes(input: {
   const echoes = input.echoes ?? 0
   const hasSecondary = input.hasSecondary === true
   let skills = input.skills
-  let bounty = input.bounty ?? null
+  let bounty = input.bounty ?? []
   let favor = input.favor ?? 0
   const dungeon = getDungeon(fight.dungeonId ?? '')
   if (!dungeon) {
@@ -183,12 +185,6 @@ export function advanceDungeonNodes(input: {
     secondaryClassXp = gained.secondaryClassXp
     fight.kills += 1
     pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
-    const progressed = progressBounty(bounty, monster.id, inventory, favor, fight.goldGained, rng)
-    bounty = progressed.bounty
-    inventory = progressed.inventory
-    favor = progressed.favor
-    fight.goldGained = progressed.goldGained
-    if (progressed.completed) pushLog(fight, 'Bounty complete.', trace)
   }
 
   // Guard against infinite cleave chains.
@@ -449,7 +445,8 @@ export function onKill(input: {
   activeClassId: ClassId
   casting: boolean
   stopWhenOutOfFood?: boolean
-  bounty?: Bounty | null
+  bounty?: ActiveContract[]
+  payout?: BountyPayout
   favor?: number
   activeBuffs?: ActiveBuff[]
 }): {
@@ -460,14 +457,14 @@ export function onKill(input: {
   stop: boolean
   questStepComplete: string | null
   monster: MonsterDef | null
-  bounty: Bounty | null
+  bounty: ActiveContract[]
   favor: number
 } {
   const { fight, monster, equipment, rng, trace } = input
   let inventory = recoverAmmo(input.inventory, equipment, fight.ammoSpent)
   fight.ammoSpent = 0
   let skills = input.skills
-  let bounty = input.bounty ?? null
+  let bounty = input.bounty ?? []
   let favor = input.favor ?? 0
   const hasSecondary = input.hasSecondary === true
   const echoes = input.echoes ?? 0
@@ -493,14 +490,44 @@ export function onKill(input: {
   fight.nextAttackAdvantage = false
   fight.monsterNextDisadvantage = false
 
-  pushLog(fight, `${monster.name} defeated. +${monster.xp} class XP.`, trace)
+  const foe = fight.displayName ?? monster.name
+  pushLog(fight, `${foe} defeated. +${monster.xp} class XP.`, trace)
   fight.killsThisTick = [...(fight.killsThisTick ?? []), monster.id]
-  const progressed = progressBounty(bounty, monster.id, inventory, favor, fight.goldGained, rng)
-  bounty = progressed.bounty
-  inventory = progressed.inventory
-  favor = progressed.favor
-  fight.goldGained = progressed.goldGained
-  if (progressed.completed) pushLog(fight, 'Bounty complete.', trace)
+
+  if (fight.kind === 'bounty' && fight.contractId) {
+    const claimed = claimBounty(bounty, fight.contractId)
+    bounty = claimed.contracts
+    if (input.payout) {
+      input.payout.marks += claimed.marks
+      inventory = applyReward(input.payout, claimed.reward, inventory)
+      if (claimed.reward.kind === 'item') {
+        fight.lootGained = mergeLoot(fight.lootGained, [
+          { itemId: claimed.reward.itemId, quantity: claimed.reward.qty },
+        ])
+      }
+    }
+    pushLog(fight, `Bounty: ${foe} brought in. +${claimed.marks} Marks.`, trace)
+    return {
+      inventory,
+      classXp,
+      secondaryClassXp,
+      skills,
+      stop: true,
+      questStepComplete: null,
+      monster,
+      bounty,
+      favor,
+    }
+  }
+
+  if ((fight.kind ?? 'hunt') === 'hunt' && fight.dungeonId == null && fight.questId == null) {
+    const noted = noteCullKill(bounty, monster.id, 'hunt')
+    bounty = noted.contracts
+    if (input.payout && noted.marks > 0) {
+      input.payout.marks += noted.marks
+      pushLog(fight, `Bounty: Cull complete. +${noted.marks} Marks.`, trace)
+    }
+  }
 
   const inDungeon = fight.dungeonId != null
   if (!inDungeon) {
@@ -590,11 +617,17 @@ export function respawnMonster(
 ) {
   fight.phase = 'fight'
   fight.restProgressMs = 0
-  fight.monsterHp = monster.hp
-  fight.monsterMaxHp = monster.hp
+  const profile = monsterProfile(monster, fight.monsterMods)
+  fight.monsterHp = profile.hp
+  fight.monsterMaxHp = profile.hp
   fight.openingDone = false
   fight.playerIntervalMs = computePlayerIntervalMs(skills, equipment, casting)
-  fight.monsterIntervalMs = computeMonsterIntervalMs(monster, false)
+  fight.monsterIntervalMs = profile.intervalMs
+  fight.poisonDice = null
+  fight.poisonLeft = 0
+  fight.toHitPenalty = 0
+  fight.toHitPenaltyLeft = 0
+  fight.undoIntervalBonus = 0
   fight.playerProgressMs = 0
   fight.monsterProgressMs = 0
   fight.frightenAttacksLeft = rng ? rollFrightenAttacks(activeBuffs, rng) : 0

@@ -9,6 +9,7 @@ import { MONSTERS } from './monsters'
 import { GENERAL_GOODS, SHOP_UPGRADES } from './shop'
 import { SKILLS } from './skills'
 import { SPELLS } from './spells'
+import { BOUNTY_REWARD_TABLE } from './lodge'
 
 test('item ids are unique and gold is a counter, not an item', () => {
   const ids = ITEMS.map((item) => item.id)
@@ -244,6 +245,15 @@ test('every summon is craftable and every essence drops somewhere', () => {
   const drops = new Set(MONSTERS.flatMap((monster) => monster.lootTable.map((entry) => entry.itemId)))
   for (const essence of ['fire-essence', 'earth-essence', 'shadow-essence'] as const) {
     expect(drops.has(essence), essence).toBe(true)
+  }
+})
+
+test('bounty reward items are never required recipe inputs', () => {
+  const inputs = new Set(
+    ACTIVITIES.flatMap((activity) => (activity.inputs ?? []).map((stack) => stack.itemId)),
+  )
+  for (const row of BOUNTY_REWARD_TABLE) {
+    if (row.kind === 'item') expect(inputs.has(row.itemId), row.itemId).toBe(false)
   }
 })
 

@@ -32,8 +32,15 @@ import { ItemChip } from '../../components/ui/ItemChip'
 import { PageLayout } from '../../components/ui/PageLayout'
 import { ProgressBar } from '../../components/ProgressBar'
 import { TabPanel, Tabs } from '../../components/ui/Tabs'
+import { BountyBoard } from './BountyBoard'
 
-export function MileCampPage() {
+export function MileCampPage({
+  focus = null,
+  onFocusConsumed,
+}: {
+  focus?: { kind: 'mile-camp'; tab: 'bounties' } | null
+  onFocusConsumed?: () => void
+} = {}) {
   const inventory = useGameStore((s) => s.inventory)
   const favor = useGameStore((s) => s.favor)
   const questProgress = useGameStore((s) => s.questProgress)
@@ -47,11 +54,17 @@ export function MileCampPage() {
   const rerollNotice = useGameStore((s) => s.rerollNotice)
   const refreshNoticeBoard = useGameStore((s) => s.refreshNoticeBoard)
   const [checkQuestId, setCheckQuestId] = useState<string | null>(null)
-  const [tab, setTab] = usePageTab('mile-camp', 'people', ['people', 'board', 'log'] as const)
+  const [tab, setTab] = usePageTab('mile-camp', 'people', ['people', 'board', 'bounties', 'log'] as const)
 
   useEffect(() => {
     refreshNoticeBoard()
   }, [refreshNoticeBoard])
+
+  useEffect(() => {
+    if (focus?.kind !== 'mile-camp') return
+    setTab(focus.tab)
+    onFocusConsumed?.()
+  }, [focus, onFocusConsumed, setTab])
 
   const refreshIn = Math.max(0, NOTICE_BOARD_MS - (Date.now() - noticeBoard.refreshedAt))
 
@@ -70,15 +83,17 @@ export function MileCampPage() {
         name="mile-camp"
         label="Mile-Camp"
         value={tab}
-        onChange={(id) => setTab(id as 'people' | 'board' | 'log')}
+        onChange={(id) => setTab(id as 'people' | 'board' | 'bounties' | 'log')}
         tabs={[
           { id: 'people', label: 'People' },
           { id: 'board', label: 'Notice Board' },
+          { id: 'bounties', label: 'Bounty Board' },
           { id: 'log', label: 'Quest Log' },
         ]}
       />
 
       <TabPanel name="mile-camp" id={tab} active>
+      {tab === 'bounties' && <BountyBoard />}
       {tab === 'people' && (
       <section className="space-y-4">
         {NPCS.map((npc) => {

@@ -14,7 +14,8 @@ import { initialSkillProgress, isSkillId, SKILLS, type TradeSkillId } from '../d
 import type { ActiveAction, CombatFight } from '../engine/advance'
 import type { ActiveBuff, BuffEffect } from '../engine/history'
 import { emptyNoticeBoard, type NoticeBoard } from '../engine/noticeBoard'
-import type { Bounty } from '../engine/social'
+import { emptyBountyBoard, type ActiveContract, type BountyBoard, type RewardRoll } from '../engine/bounties'
+import { isMonsterModId, type MonsterModId } from '../engine/combat/monsterMods'
 import { emptyQuestProgress, emptyQuestRun, type QuestProgress, type QuestRun } from '../engine/quest'
 import { emptySignatureRuntime } from '../engine/signatures'
 import {
@@ -97,8 +98,17 @@ export interface SaveData {
   favor: number
   /** Performance renown. */
   renown: number
-  /** Active bounty, if any. */
-  bounty: Bounty | null
+  /** Spendable Hunter's Marks. */
+  marks: number
+  /** Lifetime Marks. Spending does not lower this. Hunter Renown is derived from it. */
+  marksLifetime: number
+  bountyBoard: BountyBoard
+  contracts: ActiveContract[]
+  pinnedContractId: string | null
+  ownedTitles: string[]
+  equippedTitleId: string | null
+  extraBoardSlot: boolean
+  extraActiveContract: boolean
 }
 
 export function createInitialSave(): SaveData {
@@ -135,7 +145,15 @@ export function createInitialSave(): SaveData {
     activeBuffs: [],
     favor: 0,
     renown: 0,
-    bounty: null,
+    marks: 0,
+    marksLifetime: 0,
+    bountyBoard: emptyBountyBoard(),
+    contracts: [],
+    pinnedContractId: null,
+    ownedTitles: [],
+    equippedTitleId: null,
+    extraBoardSlot: false,
+    extraActiveContract: false,
   }
 }
 
@@ -222,7 +240,15 @@ export function normalizeSave(raw: unknown): SaveData {
     activeBuffs: readActiveBuffs(source.activeBuffs),
     favor: readGold(source.favor),
     renown: readGold(source.renown),
-    bounty: readBounty(source.bounty),
+    marks: readGold(source.marks),
+    marksLifetime: readGold(source.marksLifetime),
+    bountyBoard: readBountyBoard(source.bountyBoard),
+    contracts: readContracts(source.contracts),
+    pinnedContractId: typeof source.pinnedContractId === 'string' ? source.pinnedContractId : null,
+    ownedTitles: readIdList(source.ownedTitles),
+    equippedTitleId: typeof source.equippedTitleId === 'string' ? source.equippedTitleId : null,
+    extraBoardSlot: source.extraBoardSlot === true,
+    extraActiveContract: source.extraActiveContract === true,
   }
 }
 
@@ -249,13 +275,60 @@ function migrateForgedWrit(inventory: Inventory): Inventory {
   return next
 }
 
-function readBounty(value: unknown): Bounty | null {
+function readReward(value: unknown): RewardRoll {
+  if (!isRecord(value)) return { kind: 'none' }
+  if (value.kind === 'bait') return { kind: 'bait' }
+  if (value.kind === 'title' && typeof value.titleId === 'string') return { kind: 'title', titleId: value.titleId }
+  if (value.kind === 'item' && typeof value.itemId === 'string' && isItemId(value.itemId)) {
+    const qty = finite(value.qty)
+    return { kind: 'item', itemId: value.itemId, qty: Math.max(1, Math.floor(qty ?? 1)) }
+  }
+  return { kind: 'none' }
+}
+
+function readContract(value: unknown): ActiveContract | null {
   if (!isRecord(value)) return null
-  if (typeof value.monsterId !== 'string' || !getMonster(value.monsterId)) return null
-  const need = finite(value.need)
-  const have = finite(value.have)
-  if (need == null || need <= 0 || have == null || have < 0) return null
-  return { monsterId: value.monsterId, need: Math.floor(need), have: Math.floor(have) }
+  if (value.kind !== 'cull' && value.kind !== 'bounty') return null
+  if (typeof value.id !== 'string' || typeof value.monsterId !== 'string' || !getMonster(value.monsterId)) return null
+  if (typeof value.biome !== 'string' || !isBiomeId(value.biome)) return null
+  const tier = finite(value.tier)
+  if (tier == null || tier < 1 || tier > 5) return null
+  const modifiers = Array.isArray(value.modifiers)
+    ? value.modifiers.filter((mod): mod is MonsterModId => typeof mod === 'string' && isMonsterModId(mod))
+    : []
+  return {
+    id: value.id,
+    kind: value.kind,
+    monsterId: value.monsterId,
+    biome: value.biome,
+    tier: Math.floor(tier) as ActiveContract['tier'],
+    marks: Math.max(0, Math.floor(finite(value.marks) ?? 0)),
+    need: Math.max(1, Math.floor(finite(value.need) ?? 1)),
+    have: Math.max(0, Math.floor(finite(value.have) ?? 0)),
+    name: typeof value.name === 'string' ? value.name : '',
+    modifiers,
+    reward: readReward(value.reward),
+  }
+}
+
+function readContracts(value: unknown): ActiveContract[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const contract = readContract(entry)
+    return contract ? [contract] : []
+  })
+}
+
+function readBountyBoard(value: unknown): BountyBoard {
+  if (!isRecord(value)) return emptyBountyBoard()
+  const refreshedAt = finite(value.refreshedAt) ?? 0
+  const baitBiome = typeof value.baitBiome === 'string' && isBiomeId(value.baitBiome) ? value.baitBiome : null
+  return {
+    refreshedAt,
+    offers: readContracts(value.offers),
+    baitBiome,
+    baitCharges: Math.max(0, Math.floor(finite(value.baitCharges) ?? 0)),
+  }
 }
 
 function readTomes(value: unknown): Record<TradeSkillId, number> {
@@ -732,6 +805,18 @@ function readCombat(value: unknown): CombatFight | null {
     frightenAttacksLeft: Math.max(0, Math.floor(finite(value.frightenAttacksLeft) ?? 0)),
     killsThisTick: [],
     dungeonClearedThisTick: null,
+    kind: value.kind === 'lair' || value.kind === 'bounty' ? value.kind : 'hunt',
+    lairId: typeof value.lairId === 'string' ? value.lairId : null,
+    contractId: typeof value.contractId === 'string' ? value.contractId : null,
+    displayName: typeof value.displayName === 'string' ? value.displayName : null,
+    monsterMods: Array.isArray(value.monsterMods)
+      ? value.monsterMods.filter((mod): mod is MonsterModId => typeof mod === 'string' && isMonsterModId(mod))
+      : [],
+    poisonDice: typeof value.poisonDice === 'string' ? value.poisonDice : null,
+    poisonLeft: Math.max(0, Math.floor(finite(value.poisonLeft) ?? 0)),
+    toHitPenalty: Math.max(0, Math.floor(finite(value.toHitPenalty) ?? 0)),
+    toHitPenaltyLeft: Math.max(0, Math.floor(finite(value.toHitPenaltyLeft) ?? 0)),
+    undoIntervalBonus: Math.max(0, finite(value.undoIntervalBonus) ?? 0),
   }
 }
 

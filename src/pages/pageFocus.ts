@@ -7,3 +7,5 @@ export type PageFocus =
   | { kind: 'dungeon'; dungeonId: string }
   | { kind: 'spell'; spellId: string }
   | { kind: 'quest'; questId: string }
+  | { kind: 'combat-tab'; tab: 'hunting' | 'lairs' | 'dungeons' | 'bounties' }
+  | { kind: 'mile-camp'; tab: 'bounties' }

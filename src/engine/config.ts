@@ -252,9 +252,56 @@ export const RUMOR_RARE_CHANCE = 0.25
 export const FRIGHTEN_CHANCE = 0.5
 export const FRIGHTEN_ATTACKS = 3
 export const FRIGHTEN_DAMAGE_PCT = 0.75
-export const BOUNTY_KILLS = 5
-export const BOUNTY_GOLD = 25
-export const BOUNTY_FAVOR = 5
+/** Hunter's Lodge board. Refresh is wall-clock and includes offline time. */
+export const BOUNTY_BOARD_SLOTS = 3
+export const BOUNTY_REFRESH_MS = 4 * 60 * 60 * 1000
+export const BOUNTY_ACTIVE_MAX = 2
+
+/** Cull kill counts and Marks by content tier. TODO(design): tune. */
+export const BOUNTY_CULL_MIN: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 8, 2: 12, 3: 16, 4: 20, 5: 24 }
+export const BOUNTY_CULL_MAX: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 15, 2: 22, 3: 28, 4: 36, 5: 44 }
+export const BOUNTY_CULL_MARKS: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 8, 2: 14, 3: 22, 4: 32, 5: 44 }
+export const BOUNTY_HUNT_MARKS: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 20, 2: 34, 3: 52, 4: 74, 5: 100 }
+export const BOUNTY_MARKS_PER_MOD = 8
+
+/** Named-bounty modifiers. Reused later by bosses and lairs. */
+export const MOD_FRENZY_SPEED = 0.25
+export const MOD_ARMORED_AC = 3
+export const MOD_REGEN_PCT = 0.02
+export const MOD_VENOM_DICE = '1d4'
+export const MOD_VENOM_INTERVALS = 3
+export const MOD_ENRAGE_HP = 0.5
+export const MOD_ENRAGE_DAMAGE = 0.5
+export const MOD_ELUSIVE_HIT = 0.1
+export const MOD_HULKING_HP = 0.5
+export const MOD_HULKING_DICE = 1
+
+/** Lair action schedule and saves. */
+export const LAIR_WEB_EVERY = 3
+export const LAIR_WEB_SLOW = 0.5
+export const LAIR_ROCKS_EVERY = 4
+export const LAIR_ROCKS_DC = 13
+export const LAIR_ROCKS_DICE = '2d6'
+export const LAIR_SPORES_EVERY = 3
+export const LAIR_SPORES_DC = 13
+export const LAIR_SPORES_HIT = 2
+export const LAIR_SPORES_INTERVALS = 3
+
+/** Marks spent at the Hunter's Lodge. TODO(design): tune. */
+export const LODGE_BAIT_MARKS = 10
+export const LODGE_REROLL_MARKS = 5
+export const LODGE_BOARD_MARKS = 40
+export const LODGE_ACTIVE_MARKS = 80
+export const LODGE_GEAR_MARKS = 25
+export const LODGE_SUMMON_MARKS = 30
+export const LODGE_TITLE_MARKS = 15
+
+/**
+ * Lifetime Marks for Renown ranks 1–10. Roughly quadratic.
+ * TODO(design): tune.
+ */
+// TODO(design): tune. Roughly quadratic; rank 1 is one tier-I named bounty.
+export const RENOWN_MARKS = [15, 60, 135, 240, 375, 540, 735, 960, 1215, 1500] as const
 
 /** Notice Board refresh interval (wall-clock, includes offline). */
 export const NOTICE_BOARD_MS = 4 * 60 * 60 * 1000

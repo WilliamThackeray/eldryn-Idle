@@ -67,4 +67,6 @@ export interface MonsterDef {
   tier?: Tier
   /** Rare spawn candidate for Rumor buffs. */
   rare?: boolean
+  /** Hidden from Monster Hunting. Fought only from a lair. */
+  lairOnly?: boolean
 }

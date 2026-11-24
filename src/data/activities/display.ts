@@ -18,7 +18,7 @@ export const SKILL_TABS: Partial<Record<TradeSkillId, readonly string[]>> = {
   foraging: ['Foraging', 'Plots'],
   fishing: ['Fishing'],
   hunting: ['Trapping', 'Tracking', 'Butchering', 'Husbandry'],
-  commerce: ['Trade', 'Rumors', 'Schemes', 'Debts'],
+  commerce: ['Trade', 'Rumors', 'Schemes'],
   performance: ['Venues'],
   binding: ['Pacts'],
 }

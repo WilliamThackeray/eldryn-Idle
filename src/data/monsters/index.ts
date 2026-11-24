@@ -1,5 +1,6 @@
 import { scrollLootForMonster } from '../scrollLoot'
 import { tierForBiome } from '../tiers'
+import { LAIR_MONSTERS } from '../lairs'
 import { FOREST_MONSTERS } from './forest'
 import { HILLS_MONSTERS } from './hills'
 import { QUEST_MONSTERS } from './quest'
@@ -17,6 +18,7 @@ export type {
 export { BIOMES, CREATURE_SIZES, CREATURE_TYPES, HUNT_BIOMES } from './types'
 
 export const MONSTERS: MonsterDef[] = [
+  ...LAIR_MONSTERS,
   ...FOREST_MONSTERS,
   ...HILLS_MONSTERS,
   ...SWAMP_MONSTERS,
@@ -38,7 +40,7 @@ export function getMonster(id: string): MonsterDef | undefined {
 }
 
 export function monstersForBiome(biome: BiomeId): MonsterDef[] {
-  return MONSTERS.filter((monster) => monster.biomes.includes(biome))
+  return MONSTERS.filter((monster) => !monster.lairOnly && monster.biomes.includes(biome))
 }
 
 export function isBiomeId(value: string): value is BiomeId {

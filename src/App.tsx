@@ -72,12 +72,20 @@ function App() {
             {currentPage === 'monsterHunting' && (
               <CombatPage
                 focus={
-                  pageFocus?.kind === 'monster' || pageFocus?.kind === 'dungeon' ? pageFocus : null
+                  pageFocus?.kind === 'monster' || pageFocus?.kind === 'dungeon' || pageFocus?.kind === 'combat-tab'
+                    ? pageFocus
+                    : null
                 }
+                onFocusConsumed={() => setPageFocus(null)}
+                onOpenBoard={() => navigate('mile-camp', { kind: 'mile-camp', tab: 'bounties' })}
+              />
+            )}
+            {currentPage === 'mile-camp' && (
+              <MileCampPage
+                focus={pageFocus?.kind === 'mile-camp' ? pageFocus : null}
                 onFocusConsumed={() => setPageFocus(null)}
               />
             )}
-            {currentPage === 'mile-camp' && <MileCampPage />}
             {currentPage === 'character' && (
               <CharacterPage
                 focus={pageFocus?.kind === 'spell' ? pageFocus : null}

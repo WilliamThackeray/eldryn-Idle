@@ -64,7 +64,7 @@ export function deliverPool(
 
 export function killPool(): { monsterId: string }[] {
   return MONSTERS.filter(
-    (m) => !m.rare && m.biomes.some((b) => (HUNT_BIOMES as readonly string[]).includes(b)),
+    (m) => !m.rare && !m.lairOnly && m.biomes.some((b) => (HUNT_BIOMES as readonly string[]).includes(b)),
   ).map((m) => ({ monsterId: m.id }))
 }
 

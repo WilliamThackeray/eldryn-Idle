@@ -47,15 +47,6 @@ export const commerceActivities = fillDisplay(
     }),
     activity({
       skillId: 'commerce',
-      id: 'debt-collection',
-      name: 'Debt Collection',
-      description: 'Collect a debt that someone hoped you’d forget.',
-      requiredLevel: 15,
-      gold: { min: 3, max: 6 },
-      outputs: [drop('bounty-contract', 1, 1, 0.4)],
-    }),
-    activity({
-      skillId: 'commerce',
       id: 'petition-guilds',
       name: 'Petition the Guilds',
       description: 'Spend a Trade Contract for a Letter of Introduction.',
@@ -80,9 +71,7 @@ export const commerceActivities = fillDisplay(
         ? 'Schemes'
         : def.id === 'tavern-gossip' || def.id === 'read-the-market'
           ? 'Rumors'
-          : def.id === 'debt-collection'
-            ? 'Debts'
-            : 'Trade',
+          : 'Trade',
     sortOrder: index,
   }),
 )

@@ -15,6 +15,7 @@ import { forEachSignature, hasSignature, tryBardicInspiration } from '../signatu
 import { spendLowestSlot, usesSpellLoop } from '../spells'
 import { levelForXp, proficiency, tier } from '../xp'
 import { applyHitMasteries } from './masteries'
+import { modifiedAc } from './monsterMods'
 import {
   abilityModMap,
   abilityScoreMap,
@@ -155,7 +156,7 @@ export function resolvePlayerAttack(input: {
       fight.signature.bardicUses,
       natural,
       total,
-      monster.ac,
+      modifiedAc(monster, fight.monsterMods, fight.toHitPenaltyLeft > 0 ? fight.toHitPenalty : 0),
       classTier,
       rng,
     )
@@ -168,7 +169,9 @@ export function resolvePlayerAttack(input: {
 
   const autoMiss = natural === 1
   const crit = !autoMiss && natural >= critFloor
-  const targetAc = monster.ac - (itemStats?.ignoreAc ?? 0)
+  const targetAc =
+    modifiedAc(monster, fight.monsterMods, fight.toHitPenaltyLeft > 0 ? fight.toHitPenalty : 0) -
+    (itemStats?.ignoreAc ?? 0)
   const hit = !autoMiss && (crit || total >= targetAc)
   const intervalSec = (fight.playerIntervalMs / 1000).toFixed(2)
   let line = `${input.labelPrefix}${intervalSec}s. to hit: ${total}${bardicNote} - ${hit ? 'hits' : 'misses'}.`

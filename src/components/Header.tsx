@@ -50,6 +50,10 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
   const inventory = useGameStore((state) => state.inventory)
   const gold = useGameStore((state) => state.gold)
   const favor = useGameStore((state) => state.favor)
+  const marksLifetime = useGameStore((state) => state.marksLifetime)
+  const marks = useGameStore((state) => state.marks)
+  const contracts = useGameStore((state) => state.contracts)
+  const pinnedContractId = useGameStore((state) => state.pinnedContractId)
   const activeAction = useGameStore((state) => state.activeAction)
   const activeBuffs = useGameStore((state) => state.activeBuffs)
   const combat = useGameStore((state) => state.combat)
@@ -159,6 +163,15 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
             })}
           </div>
         )}
+        {pinnedContractId && contracts.some((contract) => contract.id === pinnedContractId) && (
+          <button
+            type="button"
+            onClick={() => onNavigate('monsterHunting', { kind: 'combat-tab', tab: 'bounties' })}
+            className="border-l border-line pl-3 text-meta text-rarity-rare hover:underline"
+          >
+            {contractPinLabel(contracts.find((contract) => contract.id === pinnedContractId)!)}
+          </button>
+        )}
         {pinnedQuest && pinnedStage && 'check' in pinnedStage && (
           <button
             type="button"
@@ -185,6 +198,7 @@ export function Header({ title, currentPage, setCurrentPage, onNavigate, onMainM
         )}
         <Currency kind="gp" amount={gold} />
         <Currency kind="favor" amount={favor} />
+        {marksLifetime > 0 && <Currency kind="marks" amount={marks} />}
 
         <Tooltip content={abilityTip}>
           <button
@@ -278,6 +292,13 @@ function MenuItem({ children, onClick }: { children: ReactNode; onClick: () => v
       {children}
     </button>
   )
+}
+
+function contractPinLabel(contract: { kind: string; have: number; need: number; name: string; monsterId: string }): string {
+  if (contract.kind === 'cull') {
+    return `Cull ${getMonster(contract.monsterId)?.name ?? contract.monsterId} ${contract.have}/${contract.need}`
+  }
+  return contract.name
 }
 
 function jumpObjective(

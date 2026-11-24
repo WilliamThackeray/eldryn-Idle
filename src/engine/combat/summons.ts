@@ -4,6 +4,7 @@ import { applyDamageModifiers, applyTriangle, triangleNote } from '../damage'
 import { rollD20, rollDamageParts } from '../dice'
 import type { Equipment } from '../equipment'
 import type { Rng } from '../rng'
+import { modifiedAc } from './monsterMods'
 import { type CombatFight, pushLog } from './state'
 
 export type SummonSlotId = 'summon1' | 'summon2'
@@ -46,7 +47,7 @@ export function resolveSummonAttack(input: {
   const natural = rollD20(rng)
   const total = natural + summon.toHit
   const autoMiss = natural === 1
-  const hit = !autoMiss && (natural === 20 || total >= monster.ac)
+  const hit = !autoMiss && (natural === 20 || total >= modifiedAc(monster, fight.monsterMods, fight.toHitPenaltyLeft > 0 ? fight.toHitPenalty : 0))
   let line = `${summon.name}: to hit ${total} - ${hit ? 'hits' : 'misses'}.`
   if (!hit) {
     pushLog(fight, line, trace)

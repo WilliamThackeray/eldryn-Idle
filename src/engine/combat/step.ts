@@ -1,5 +1,7 @@
 import { getMonster } from '../../data/monsters'
-import { QUICKENED_INTERVAL_FACTOR } from '../config'
+import { abandonContract, emptyPayout } from '../bounties'
+import { MOD_FRENZY_SPEED, QUICKENED_INTERVAL_FACTOR } from '../config'
+import { roll } from '../dice'
 import { emptyEquipment } from '../equipment'
 import { bestiaryBonus, tomeXpPct } from '../history'
 import { damageVsTypePct } from '../social'
@@ -11,7 +13,8 @@ import { resolvePlayerAttack } from './attack'
 import { tickRest } from './restTick'
 import { onKill } from './dungeonRun'
 import { tryAutoEat } from './food'
-import { resolveMonsterAttacks } from './monsterTurn'
+import { resolveLairActions } from './lairActions'
+import { applyPlayerDamage, resolveMonsterAttacks } from './monsterTurn'
 import { runOpening } from './opening'
 import { resolveSpellCast } from './spellcasting'
 import { resolveSummonAttack, summonOf } from './summons'
@@ -61,7 +64,8 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     monster ? damageVsTypePct(input.activeBuffs, monster.creatureType) : 0
   let gold = input.gold
   let favor = input.favor ?? 0
-  let bounty = input.bounty ?? null
+  let bounty = input.contracts ?? []
+  const payout = emptyPayout()
   let classXp = input.classXp
   let secondaryClassXp = input.secondaryClassXp ?? 0
   const echoes = input.echoes ?? 0
@@ -84,7 +88,10 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   const withSocial = <T extends CombatAdvanceResult>(result: T): T => ({
     ...result,
     favor,
-    bounty,
+    contracts: bounty,
+    marksGained: payout.marks,
+    titlesGained: payout.titles,
+    baitGained: payout.bait,
     secondaryClassXp,
     killsThisTick: fight.killsThisTick,
     dungeonCleared: fight.dungeonClearedThisTick,
@@ -93,6 +100,11 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
   const finishDefeat = (): CombatAdvanceResult => {
     inventory = recoverAmmo(inventory, equipment, fight.ammoSpent)
     fight.ammoSpent = 0
+    // TODO(design): chance to lose gear on death (all combat)
+    if (fight.kind === 'bounty' && fight.contractId) {
+      bounty = abandonContract(bounty, fight.contractId)
+      pushLog(fight, 'Bounty: the contract is lost.', trace)
+    }
     flushGold()
     return withSocial({
       fight: null,
@@ -189,6 +201,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         bestiaryBonus: monsterBestiary(),
         intelDamagePct: monsterIntel(),
         bounty,
+        payout,
         favor,
         activeBuffs: input.activeBuffs,
       })
@@ -235,7 +248,11 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       }
       fight.playerIntervalMs = nextInterval
     }
-    fight.monsterIntervalMs = computeMonsterIntervalMs(monster, fight.slowActive)
+    let monsterInterval = computeMonsterIntervalMs(monster, fight.slowActive)
+    if (fight.monsterMods.includes('frenzied')) {
+      monsterInterval = Math.max(1, Math.floor(monsterInterval * (1 - MOD_FRENZY_SPEED)))
+    }
+    fight.monsterIntervalMs = monsterInterval
     fight.summon1IntervalMs = summonOf(equipment, 'summon1')?.intervalMs ?? 0
     fight.summon2IntervalMs = summonOf(equipment, 'summon2')?.intervalMs ?? 0
 
@@ -296,7 +313,31 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
     // Resolve player first when simultaneous
     if (playerReady) {
       fight.playerProgressMs = 0
+      if (fight.undoIntervalBonus > 0) {
+        fight.playerIntervalMs = Math.max(1, Math.floor(fight.playerIntervalMs / (1 + fight.undoIntervalBonus)))
+        fight.undoIntervalBonus = 0
+      }
       fight.playerIntervalCount += 1
+      if (fight.poisonLeft > 0 && fight.poisonDice && monster) {
+        const venom = Math.max(0, roll(fight.poisonDice, input.rng))
+        pushLog(fight, `Bounty: Venomous: ${venom} poison.`, trace)
+        fight.poisonLeft -= 1
+        const poisoned = applyPlayerDamage({
+          fight,
+          amount: venom,
+          damageType: 'poison',
+          skills,
+          activeClassId: input.activeClassId,
+          classXp,
+          rng: input.rng,
+          trace,
+          modifiers,
+          equipment,
+          xpExtra: vitalityXpExtra,
+        })
+        skills = poisoned.skills
+        if (poisoned.defeated) return finishDefeat()
+      }
 
       const eaten = tryAutoEat({
         fight,
@@ -379,6 +420,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
             casting,
             stopWhenOutOfFood: input.stopWhenOutOfFood,
             bounty,
+            payout,
             favor,
             activeBuffs: input.activeBuffs,
           })
@@ -454,6 +496,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
               casting,
               stopWhenOutOfFood: input.stopWhenOutOfFood,
               bounty,
+              payout,
               favor,
               activeBuffs: input.activeBuffs,
             })
@@ -471,6 +514,23 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
           }
         }
       }
+      if (monster && fight.phase === 'fight' && fight.monsterHp > 0 && fight.lairId) {
+        const lair = resolveLairActions({
+          fight,
+          monster,
+          skills,
+          activeClassId: input.activeClassId,
+          classXp,
+          rng: input.rng,
+          trace,
+          modifiers,
+          equipment,
+          xpExtra: vitalityXpExtra,
+        })
+        skills = lair.skills
+        if (lair.defeated) return finishDefeat()
+      }
+      if (fight.toHitPenaltyLeft > 0) fight.toHitPenaltyLeft -= 1
     }
     const resolveSummonKill = (killed: boolean) => {
       if (!killed || !monster) return null
@@ -493,6 +553,7 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         casting,
         stopWhenOutOfFood: input.stopWhenOutOfFood,
         bounty,
+        payout,
         favor,
         activeBuffs: input.activeBuffs,
       })

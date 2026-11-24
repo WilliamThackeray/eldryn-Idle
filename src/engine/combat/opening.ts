@@ -6,7 +6,7 @@ import type { Equipment } from '../equipment'
 import type { ActiveBuff } from '../history'
 import type { Inventory } from '../inventory'
 import type { Rng } from '../rng'
-import type { Bounty } from '../social'
+import type { ActiveContract, BountyPayout } from '../bounties'
 import { doOpeningAttacks, resolvePlayerAttack } from './attack'
 import { onKill } from './dungeonRun'
 import type { CombatFight } from './state'
@@ -28,7 +28,8 @@ export function runOpening(input: {
   stopWhenOutOfFood?: boolean
   bestiaryBonus?: number
   intelDamagePct?: number
-  bounty?: Bounty | null
+  bounty?: ActiveContract[]
+  payout?: BountyPayout
   favor?: number
   activeBuffs?: ActiveBuff[]
 }): {
@@ -38,12 +39,12 @@ export function runOpening(input: {
   monster: MonsterDef
   action: 'proceed' | 'ammo' | 'quest' | 'defeat' | 'loop'
   questStepComplete: string | null
-  bounty: Bounty | null
+  bounty: ActiveContract[]
   favor: number
 } {
   const { fight, trace } = input
   let { inventory, classXp, skills, monster } = input
-  let bounty = input.bounty ?? null
+  let bounty = input.bounty ?? []
   let favor = input.favor ?? 0
   const opened = doOpeningAttacks({
     fight,
@@ -80,6 +81,7 @@ export function runOpening(input: {
       casting: input.casting,
       stopWhenOutOfFood: input.stopWhenOutOfFood,
       bounty,
+      payout: input.payout,
       favor,
       activeBuffs: input.activeBuffs,
     })
@@ -145,6 +147,7 @@ export function runOpening(input: {
         casting: input.casting,
         stopWhenOutOfFood: input.stopWhenOutOfFood,
         bounty,
+        payout: input.payout,
         favor,
         activeBuffs: input.activeBuffs,
       })

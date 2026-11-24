@@ -21,6 +21,18 @@ import { beginDungeonFight, createFight } from '../engine/combat'
 import { maybeRareSwap } from '../engine/combat/dungeonRun'
 import { SPELL_INTERVAL_SEC } from '../engine/config'
 import { consumeEntryItem } from '../engine/dungeon'
+import {
+  abandonContract,
+  acceptOffer,
+  activeContractMax,
+  boardSlotCount,
+  buyLodge,
+  emptyBountyBoard,
+  refreshBountyBoard,
+  renownRank,
+  unlockedHuntBiomes,
+} from '../engine/bounties'
+import { getLair } from '../data/lairs'
 import { refreshIfDue, rerollBoard, turnInNotice } from '../engine/noticeBoard'
 import {
   acceptQuest,
@@ -59,7 +71,6 @@ import {
   applyTradeContract,
   sellPriceMultiplier,
   shopDiscountTotal,
-  startBounty,
 } from '../engine/social'
 import {
   appendInventoryTab,
@@ -133,6 +144,15 @@ interface GameStore extends SaveData {
   turnInNotice: (offerId: string) => void
   rerollNotice: () => void
   refreshNoticeBoard: (now?: number) => void
+  acceptContract: (offerId: string) => void
+  abandonContract: (contractId: string) => void
+  pinContract: (contractId: string | null) => void
+  rerollBounties: () => void
+  refreshBountyBoard: (now?: number) => void
+  buyLodgeOffer: (offerId: string, biome?: BiomeId) => void
+  startLair: (lairId: string) => void
+  startBountyHunt: (contractId: string) => void
+  equipTitle: (titleId: string | null) => void
   questMessage: string | null
   readTome: (itemId: ItemId) => void
   readBestiary: (itemId: ItemId) => void
@@ -348,7 +368,12 @@ export const useGameStore = create<GameStore>()(
               gold: state.gold,
               favor: state.favor,
               renown: state.renown,
-              bounty: state.bounty,
+              marks: state.marks,
+              marksLifetime: state.marksLifetime,
+              contracts: state.contracts,
+              ownedTitles: state.ownedTitles,
+              equippedTitleId: state.equippedTitleId,
+              bountyBoard: state.bountyBoard,
               activeAction: state.activeAction,
               equipment: state.equipment,
               skillLoadouts: state.skillLoadouts,
@@ -402,7 +427,19 @@ export const useGameStore = create<GameStore>()(
             gold: result.state.gold,
             favor: result.state.favor ?? state.favor,
             renown: result.state.renown ?? state.renown,
-            bounty: result.state.bounty !== undefined ? result.state.bounty : state.bounty,
+            marks: result.state.marks ?? state.marks,
+            marksLifetime: result.state.marksLifetime ?? state.marksLifetime,
+            contracts: result.state.contracts ?? state.contracts,
+            ownedTitles: result.state.ownedTitles ?? state.ownedTitles,
+            equippedTitleId:
+              result.state.equippedTitleId !== undefined ? result.state.equippedTitleId : state.equippedTitleId,
+            bountyBoard: refreshBountyBoard(
+              result.state.bountyBoard ?? state.bountyBoard,
+              lastTick,
+              liveRng,
+              unlockedHuntBiomes(),
+              boardSlotCount(state.extraBoardSlot),
+            ),
             activeAction: result.state.activeAction,
             classXp: result.state.classXp ?? state.classXp,
             secondaryClassXp: result.state.secondaryClassXp ?? state.secondaryClassXp,
@@ -472,11 +509,6 @@ export const useGameStore = create<GameStore>()(
             const next = applyIntel(state.inventory, state.activeBuffs, options.creatureType)
             if (!next) return state
             return { ...withPlacedInventory(state, next.inventory), activeBuffs: next.activeBuffs }
-          }
-          if (itemId === 'bounty-contract') {
-            const next = startBounty(state.inventory, state.bounty, liveRng)
-            if (!next) return state
-            return { ...withPlacedInventory(state, next.inventory), bounty: next.bounty }
           }
           return state
         }),
@@ -825,6 +857,142 @@ export const useGameStore = create<GameStore>()(
             state.questProgress,
           ),
         })),
+      acceptContract: (offerId) =>
+        set((state) => {
+          const next = acceptOffer(
+            state.bountyBoard,
+            state.contracts,
+            offerId,
+            activeContractMax(state.extraActiveContract),
+          )
+          if (!next) return state
+          return { bountyBoard: next.board, contracts: next.active }
+        }),
+      abandonContract: (contractId) =>
+        set((state) => ({
+          contracts: abandonContract(state.contracts, contractId),
+          pinnedContractId: state.pinnedContractId === contractId ? null : state.pinnedContractId,
+        })),
+      pinContract: (contractId) => set({ pinnedContractId: contractId }),
+      rerollBounties: () =>
+        set((state) => {
+          const bought = buyLodge(
+            {
+              marks: state.marks,
+              board: state.bountyBoard,
+              extraBoard: state.extraBoardSlot,
+              extraActive: state.extraActiveContract,
+              inventory: state.inventory,
+              ownedTitles: state.ownedTitles,
+              equippedTitleId: state.equippedTitleId,
+            },
+            'reroll',
+            renownRank(state.marksLifetime),
+            liveRng,
+            unlockedHuntBiomes(),
+          )
+          if (!bought) return state
+          return { marks: bought.marks, bountyBoard: bought.board }
+        }),
+      refreshBountyBoard: (now = Date.now()) =>
+        set((state) => ({
+          bountyBoard: refreshBountyBoard(
+            state.bountyBoard ?? emptyBountyBoard(now),
+            now,
+            liveRng,
+            unlockedHuntBiomes(),
+            boardSlotCount(state.extraBoardSlot),
+          ),
+        })),
+      buyLodgeOffer: (offerId, biome) =>
+        set((state) => {
+          const bought = buyLodge(
+            {
+              marks: state.marks,
+              board: state.bountyBoard,
+              extraBoard: state.extraBoardSlot,
+              extraActive: state.extraActiveContract,
+              inventory: state.inventory,
+              ownedTitles: state.ownedTitles,
+              equippedTitleId: state.equippedTitleId,
+            },
+            offerId,
+            renownRank(state.marksLifetime),
+            liveRng,
+            unlockedHuntBiomes(),
+            biome,
+          )
+          if (!bought) return state
+          return {
+            marks: bought.marks,
+            bountyBoard: bought.board,
+            extraBoardSlot: bought.extraBoard,
+            extraActiveContract: bought.extraActive,
+            ...withPlacedInventory(state, bought.inventory),
+            ownedTitles: bought.ownedTitles,
+            equippedTitleId: bought.equippedTitleId,
+          }
+        }),
+      startLair: (lairId) =>
+        set((state) => {
+          if (!state.classId) return state
+          const lair = getLair(lairId)
+          if (!lair || renownRank(state.marksLifetime) < lair.renownRequired) return state
+          if (tierForBiome(lair.biome)?.zone.comingSoon) return state
+          const geared = applySkillLoadout(state.equipment, state.inventory, state.skillLoadouts.combat)
+          const fight = createFight({
+            monsterId: lair.monsterId,
+            biome: lair.biome,
+            skills: state.skills,
+            equipment: geared.equipment,
+            activeClassId: state.classId,
+            classXp: state.classXp,
+            rng: liveRng,
+            trace: true,
+            spellLoadout: state.spellLoadouts[state.classId],
+            activeBuffs: state.activeBuffs,
+            secondaryClassId: state.secondaryClassId,
+            knownSpellIds: state.knownSpells,
+            secondaryClassXp: state.secondaryClassXp,
+            kind: 'lair',
+            lairId: lair.id,
+          })
+          if (!fight) return state
+          return combatStart(state, geared, fight, lair.name)
+        }),
+      startBountyHunt: (contractId) =>
+        set((state) => {
+          if (!state.classId) return state
+          const contract = state.contracts.find((entry) => entry.id === contractId && entry.kind === 'bounty')
+          if (!contract) return state
+          const geared = applySkillLoadout(state.equipment, state.inventory, state.skillLoadouts.combat)
+          const fight = createFight({
+            monsterId: contract.monsterId,
+            biome: contract.biome,
+            skills: state.skills,
+            equipment: geared.equipment,
+            activeClassId: state.classId,
+            classXp: state.classXp,
+            rng: liveRng,
+            trace: true,
+            spellLoadout: state.spellLoadouts[state.classId],
+            activeBuffs: state.activeBuffs,
+            secondaryClassId: state.secondaryClassId,
+            knownSpellIds: state.knownSpells,
+            secondaryClassXp: state.secondaryClassXp,
+            kind: 'bounty',
+            contractId: contract.id,
+            displayName: contract.name,
+            monsterMods: contract.modifiers,
+          })
+          if (!fight) return state
+          return combatStart(state, geared, fight, `Hunting ${contract.name}`)
+        }),
+      equipTitle: (titleId) =>
+        set((state) => {
+          if (titleId && !state.ownedTitles.includes(titleId)) return state
+          return { equippedTitleId: titleId }
+        }),
     }),
     {
       name: 'idle_game_slot',
@@ -863,7 +1031,15 @@ export const useGameStore = create<GameStore>()(
         activeBuffs: state.activeBuffs,
         favor: state.favor,
         renown: state.renown,
-        bounty: state.bounty,
+        marks: state.marks,
+        marksLifetime: state.marksLifetime,
+        bountyBoard: state.bountyBoard,
+        contracts: state.contracts,
+        pinnedContractId: state.pinnedContractId,
+        ownedTitles: state.ownedTitles,
+        equippedTitleId: state.equippedTitleId,
+        extraBoardSlot: state.extraBoardSlot,
+        extraActiveContract: state.extraActiveContract,
       }),
       migrate: migrateSave,
       merge: (persistedState, currentState) => {
@@ -876,6 +1052,30 @@ export const useGameStore = create<GameStore>()(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function combatStart(
+  state: { inventory: Inventory; inventoryTabs: InventoryTab[] },
+  geared: { inventory: Inventory; equipment: import('../engine/equipment').Equipment },
+  fight: import('../engine/combat').CombatFight,
+  label: string,
+) {
+  return {
+    ...withPlacedInventory(state, geared.inventory),
+    equipment: geared.equipment,
+    combat: fight,
+    isInDungeonOrQuest: false,
+    activeAction: {
+      kind: 'combat' as const,
+      label,
+      monsterId: fight.monsterId,
+      biome: fight.biome,
+      baseIntervalMs: fight.playerIntervalMs,
+      progressMs: 0,
+      mode: 'hunt' as const,
+    },
+    log: [] as GameEvent[],
+  }
 }
 
 function withPlacedInventory(

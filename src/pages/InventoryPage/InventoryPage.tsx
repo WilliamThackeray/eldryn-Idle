@@ -28,7 +28,6 @@ const SOCIAL_USE = new Set([
   'trade-contract',
   'disguise-kit',
   'menace-trophy',
-  'bounty-contract',
   'rumor',
   'intel',
 ])

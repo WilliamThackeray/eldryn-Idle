@@ -1,10 +1,7 @@
-import { getMonster, MONSTERS, type BiomeId, type CreatureType } from '../data/monsters'
+import { type BiomeId, type CreatureType } from '../data/monsters'
 import type { TradeSkillId } from '../data/skills'
 import type { ActivePerk } from './abilities'
 import {
-  BOUNTY_FAVOR,
-  BOUNTY_GOLD,
-  BOUNTY_KILLS,
   DISGUISE_DURATION_MS,
   FRIGHTEN_CHANCE,
   INTEL_DAMAGE_PCT,
@@ -16,16 +13,8 @@ import {
   TRADE_CONTRACT_SELL_PCT,
 } from './config'
 import type { ActiveBuff } from './history'
-import { addItems, hasItems, removeItems, type Inventory } from './inventory'
-import { rollLoot } from './loot'
-import type { Rng } from './rng'
+import { hasItems, removeItems, type Inventory } from './inventory'
 import type { SkillCheckResult } from './skillCheck'
-
-export interface Bounty {
-  monsterId: string
-  need: number
-  have: number
-}
 
 export function grantFavor(current: number, gain: number, favorPct: number): number {
   if (!(gain > 0)) return current
@@ -144,47 +133,6 @@ export function applyIntel(
       effect: { type: 'damageVsType', creatureType, value: INTEL_DAMAGE_PCT },
       remainingMs: INTEL_DURATION_MS,
     }),
-  }
-}
-
-export function startBounty(
-  inventory: Inventory,
-  bounty: Bounty | null,
-  rng: Rng,
-): { inventory: Inventory; bounty: Bounty } | null {
-  if (bounty) return null
-  if (!hasItems(inventory, [{ itemId: 'bounty-contract', quantity: 1 }])) return null
-  const pick = MONSTERS[Math.floor(rng() * MONSTERS.length)]
-  if (!pick) return null
-  return {
-    inventory: removeItems(inventory, [{ itemId: 'bounty-contract', quantity: 1 }]),
-    bounty: { monsterId: pick.id, need: BOUNTY_KILLS, have: 0 },
-  }
-}
-
-export function progressBounty(
-  bounty: Bounty | null,
-  monsterId: string,
-  inventory: Inventory,
-  favor: number,
-  goldGained: number,
-  rng: Rng,
-): { bounty: Bounty | null; inventory: Inventory; favor: number; goldGained: number; completed: boolean } {
-  if (!bounty || bounty.monsterId !== monsterId) {
-    return { bounty, inventory, favor, goldGained, completed: false }
-  }
-  const have = bounty.have + 1
-  if (have < bounty.need) {
-    return { bounty: { ...bounty, have }, inventory, favor, goldGained, completed: false }
-  }
-  const monster = getMonster(bounty.monsterId)
-  const loot = monster ? rollLoot(monster.lootTable, rng, 1) : []
-  return {
-    bounty: null,
-    inventory: addItems(inventory, loot),
-    favor: favor + BOUNTY_FAVOR,
-    goldGained: goldGained + BOUNTY_GOLD,
-    completed: true,
   }
 }
 

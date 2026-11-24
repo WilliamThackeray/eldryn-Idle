@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getClass } from '../../data/classes'
+import { getTitle } from '../../data/lodge'
 import { BESTIARY_TYPES } from '../../data/historyContent'
 import { getItem, type ItemId } from '../../data/items'
 import { getMonster } from '../../data/monsters'
@@ -280,6 +281,7 @@ export function CharacterPage({
             <Card className="space-y-4">
               <div>
                 <h2 className="text-page font-bold text-gold">{characterName}</h2>
+                <TitleLine />
                 <p className="text-body text-parchment">
                   {active ? `${active.name} · Level ${activeLevel} · Tier ${classTier}` : 'No class'}
                 </p>
@@ -749,5 +751,24 @@ function Progression(props: {
         ))}
       </ul>
     </Card>
+  )
+}
+
+function TitleLine() {
+  const owned = useGameStore((state) => state.ownedTitles)
+  const equipped = useGameStore((state) => state.equippedTitleId)
+  const equip = useGameStore((state) => state.equipTitle)
+  if (owned.length === 0) return null
+  const shown = getTitle(equipped ?? '')?.name
+  return (
+    <p className="text-meta text-muted">
+      {shown ?? 'No title'}
+      {owned.length > 1 &&
+        owned.map((id) => (
+          <button key={id} type="button" className="ml-2 underline" onClick={() => equip(id === equipped ? null : id)}>
+            {getTitle(id)?.name ?? id}
+          </button>
+        ))}
+    </p>
   )
 }

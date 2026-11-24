@@ -7,7 +7,7 @@ import type { Equipment } from '../equipment'
 import type { ActiveBuff } from '../history'
 import type { Inventory } from '../inventory'
 import type { Rng } from '../rng'
-import type { Bounty } from '../social'
+import type { ActiveContract } from '../bounties'
 import { advanceDungeonNodes, maybeRareSwap, respawnMonster } from './dungeonRun'
 import { type CombatFight, pushLog } from './state'
 
@@ -27,7 +27,7 @@ export function tickRest(input: {
   casting: boolean
   modifiers?: Partial<Record<AbilityAbbr, number>>
   stopWhenOutOfFood?: boolean
-  bounty?: Bounty | null
+  bounty?: ActiveContract[]
   favor?: number
   activeBuffs?: ActiveBuff[]
 }): {
@@ -39,13 +39,13 @@ export function tickRest(input: {
   action: 'break' | 'stop' | 'defeat' | 'loop'
   questStepComplete: string | null
   flush: boolean
-  bounty: Bounty | null
+  bounty: ActiveContract[]
   favor: number
 } {
   const { fight, equipment, trace, casting } = input
   let { remaining, monster, inventory, classXp } = input
   let skills = input.skills
-  let bounty = input.bounty ?? null
+  let bounty = input.bounty ?? []
   let favor = input.favor ?? 0
   fight.playerProgressMs = 0
   fight.monsterProgressMs = 0

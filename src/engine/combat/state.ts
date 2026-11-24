@@ -40,6 +40,7 @@ import {
   type SpellSlot,
 } from '../spells'
 import { levelForXp, tier } from '../xp'
+import { monsterProfile, type MonsterModId } from './monsterMods'
 
 export interface CombatLootGain {
   id: string
@@ -108,6 +109,18 @@ export interface CombatFight {
   killsThisTick: string[]
   /** Dungeon cleared this tick (chest looted). */
   dungeonClearedThisTick: string | null
+  /** hunt loops; lair loops with lair actions; bounty is one fight. */
+  kind: 'hunt' | 'lair' | 'bounty'
+  lairId: string | null
+  contractId: string | null
+  displayName: string | null
+  monsterMods: MonsterModId[]
+  poisonDice: string | null
+  poisonLeft: number
+  toHitPenalty: number
+  toHitPenaltyLeft: number
+  /** Set when a lair slow should end after the next interval. */
+  undoIntervalBonus: number
 }
 
 export interface CombatAction {
@@ -278,6 +291,11 @@ export function createFight(input: {
   secondaryClassId?: ClassId | null
   secondaryClassXp?: number
   knownSpellIds?: readonly string[]
+  kind?: CombatFight['kind']
+  lairId?: string | null
+  contractId?: string | null
+  displayName?: string | null
+  monsterMods?: MonsterModId[]
 }): CombatFight | null {
   const monster = getMonster(input.monsterId)
   if (!monster) return null
@@ -306,19 +324,21 @@ export function createFight(input: {
     knownSpellIds: input.knownSpellIds,
   })
   const frightenAttacksLeft = rollFrightenAttacks(input.activeBuffs, input.rng)
+  const modsOn = input.monsterMods ?? []
+  const profile = monsterProfile(monster, modsOn)
   const fight: CombatFight = {
     monsterId: monster.id,
     biome: input.biome,
     playerHp: playerMax,
     playerMaxHp: playerMax,
-    monsterHp: monster.hp,
-    monsterMaxHp: monster.hp,
+    monsterHp: profile.hp,
+    monsterMaxHp: profile.hp,
     playerProgressMs: 0,
     monsterProgressMs: 0,
     phase: 'fight',
     restProgressMs: 0,
     playerIntervalMs: playerInterval,
-    monsterIntervalMs: computeMonsterIntervalMs(monster, false),
+    monsterIntervalMs: profile.intervalMs,
     playerIntervalCount: 0,
     summon1ProgressMs: 0,
     summon2ProgressMs: 0,
@@ -356,6 +376,16 @@ export function createFight(input: {
     frightenAttacksLeft,
     killsThisTick: [],
     dungeonClearedThisTick: null,
+    kind: input.kind ?? 'hunt',
+    lairId: input.lairId ?? null,
+    contractId: input.contractId ?? null,
+    displayName: input.displayName ?? null,
+    monsterMods: modsOn,
+    poisonDice: null,
+    poisonLeft: 0,
+    toHitPenalty: 0,
+    toHitPenaltyLeft: 0,
+    undoIntervalBonus: 0,
   }
 
   const ctxBase = {
@@ -432,7 +462,7 @@ export interface CombatAdvanceInput {
   inventory: Inventory
   gold: number
   favor?: number
-  bounty?: import('../social').Bounty | null
+  contracts?: import('../bounties').ActiveContract[]
   equipment: Equipment
   activeClassId: ClassId
   classXp: number
@@ -455,7 +485,10 @@ export interface CombatAdvanceInput {
 
 export interface CombatAdvanceResult {
   favor?: number
-  bounty?: import('../social').Bounty | null
+  contracts?: import('../bounties').ActiveContract[]
+  marksGained?: number
+  titlesGained?: string[]
+  baitGained?: boolean
   fight: CombatFight | null
   skills: Record<TradeSkillId, SkillProgress>
   inventory: Inventory

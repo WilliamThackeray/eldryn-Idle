@@ -107,6 +107,13 @@ export const NPCS: NpcDef[] = [
     location: 'mile-camp',
     description: 'Speaks for the guilds when the realm still has enough of a road to tax.',
   },
+  {
+    id: 'huntmaster',
+    name: 'Sela',
+    title: 'Huntmaster',
+    location: 'mile-camp',
+    description: 'Pins contracts to the lodge board. Culls and named bounties, paid in Marks.',
+  },
 ]
 
 const banditFight: QuestStage = {

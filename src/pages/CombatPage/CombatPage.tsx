@@ -32,6 +32,7 @@ import { PageLayout, SidePanel } from '../../components/ui/PageLayout'
 import { StatTile } from '../../components/ui/StatTile'
 import { Tabs } from '../../components/ui/Tabs'
 import { Tooltip } from '../../components/ui/Tooltip'
+import { BountiesTab, LairsTab } from './CombatTabs'
 import { difficultyBadge } from './difficultyBadge'
 import { useUiPrefs } from '../../store/uiPrefs'
 import { RESPAWN_MS } from '../../engine/config'
@@ -47,30 +48,36 @@ import { levelForXp, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
 import type { SkillProgress } from '../../types/game'
 
-type CombatTab = 'hunting' | 'dungeons'
+type CombatTab = 'hunting' | 'lairs' | 'dungeons' | 'bounties'
 
 interface CombatPageProps {
   focus?:
     | { kind: 'monster'; monsterId: string; biome: BiomeId }
     | { kind: 'dungeon'; dungeonId: string }
+    | { kind: 'combat-tab'; tab: CombatTab }
     | null
   onFocusConsumed?: () => void
+  onOpenBoard?: () => void
 }
 
-export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
+export function CombatPage({ focus = null, onFocusConsumed, onOpenBoard }: CombatPageProps) {
   const combat = useGameStore((state) => state.combat)
   const [tab, setTabState] = useState<CombatTab>(() => {
+    if (combat?.kind === 'lair') return 'lairs'
+    if (combat?.kind === 'bounty') return 'bounties'
     if (combat?.dungeonId) return 'dungeons'
     const saved = useUiPrefs.getState().lastTab.combat
-    return saved === 'dungeons' ? 'dungeons' : 'hunting'
+    return saved === 'dungeons' || saved === 'lairs' || saved === 'bounties' ? saved : 'hunting'
   })
   const setTab = (next: CombatTab) => {
     setTabState(next)
     useUiPrefs.getState().setLastTab('combat', next)
   }
   useEffect(() => {
-    if (combat?.dungeonId) setTab('dungeons')
-  }, [combat?.dungeonId])
+    if (combat?.kind === 'lair') setTab('lairs')
+    else if (combat?.kind === 'bounty') setTab('bounties')
+    else if (combat?.dungeonId) setTab('dungeons')
+  }, [combat?.dungeonId, combat?.kind])
   const [biome, setBiome] = useState<BiomeId>('forest')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [highlightMonsterId, setHighlightMonsterId] = useState<string | null>(null)
@@ -86,6 +93,8 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
       setBiome(focus.biome)
       setHighlightMonsterId(focus.monsterId)
       setHighlightDungeonId(null)
+    } else if (focus.kind === 'combat-tab') {
+      setTab(focus.tab)
     } else {
       setTab('dungeons')
       setHighlightDungeonId(focus.dungeonId)
@@ -99,7 +108,6 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const equipment = useGameStore((state) => state.equipment)
   const inventory = useGameStore((state) => state.inventory)
   const bestiaries = useGameStore((state) => state.bestiaries)
-  const bounty = useGameStore((state) => state.bounty)
   const activeAction = useGameStore((state) => state.activeAction)
   const log = useGameStore((state) => state.log)
   const startHunt = useGameStore((state) => state.startHunt)
@@ -201,7 +209,9 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
           onChange={(id) => setTab(id as CombatTab)}
           tabs={[
             { id: 'hunting', label: 'Hunting' },
+            { id: 'lairs', label: 'Lairs' },
             { id: 'dungeons', label: 'Dungeons' },
+            { id: 'bounties', label: 'Bounties' },
           ]}
         />
         <div className="relative ml-auto flex items-center gap-2">
@@ -231,7 +241,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
         </div>
       </div>
 
-      {inCombat && combat && (tab === 'dungeons') === inDungeon ? (
+      {inCombat && combat && tab === (combat.kind === 'lair' ? 'lairs' : combat.kind === 'bounty' ? 'bounties' : inDungeon ? 'dungeons' : 'hunting') ? (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div className="space-y-4 rounded-lg border border-brown/40 bg-panel p-4">
             <div className="flex items-center justify-between gap-3">
@@ -273,7 +283,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
             </div>
 
             <HpBlock
-              label={getMonster(combat.monsterId)?.name ?? 'Monster'}
+              label={combat.displayName ?? getMonster(combat.monsterId)?.name ?? 'Monster'}
               hp={combat.monsterHp}
               maxHp={combat.monsterMaxHp}
               barClassName="bg-crimson"
@@ -335,13 +345,6 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
       ) : tab === 'hunting' ? (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
           <div className="space-y-3">
-            {bounty && (
-              <div className="rounded-lg border border-gold/40 bg-panel p-3 text-sm">
-                <span className="font-bold text-gold">Bounty: </span>
-                Kill {bounty.need} {getMonster(bounty.monsterId)?.name ?? bounty.monsterId} (
-                {bounty.have}/{bounty.need})
-              </div>
-            )}
             <Tabs
               name="biome"
               label="Biome"
@@ -392,6 +395,10 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
             <MatchupPanel monster={matchupMonster} classId={classId} skills={skills} equipment={equipment} classXp={classXp} inventory={inventory} spellLoadout={classId ? spellLoadouts[classId] : undefined} knownSpellIds={knownSpells} bestiaries={bestiaries} foodSummary={foodSummary} />
           </SidePanel>
         </div>
+      ) : tab === 'lairs' ? (
+        <LairsTab />
+      ) : tab === 'bounties' ? (
+        <BountiesTab onOpenBoard={onOpenBoard ?? (() => undefined)} />
       ) : (
         <div className="space-y-3">
           {visibleDungeons.map((d) => {
@@ -588,6 +595,7 @@ function formatFoodWait(hours: number): string {
 
 function logTone(line: string): string {
   const text = line.toLowerCase()
+  if (text.startsWith('lair action:') || text.startsWith('bounty:')) return 'text-rarity-rare'
   if (text.startsWith('eat ') || text.startsWith('no food')) return 'text-ability-con'
   if (text.includes('(crit)')) return 'text-gold'
   if (text.startsWith('cast ')) return 'text-ability-int'

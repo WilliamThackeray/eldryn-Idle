@@ -11,6 +11,7 @@ import type { Rng } from '../rng'
 import { forEachSignature, hasSignature, tryWildShape } from '../signatures'
 import { concentrationDc } from '../spells'
 import { addXp, applyXpModifiers, levelForXp, proficiency, tier } from '../xp'
+import { addDamageDice, monsterProfile, regenHeal } from './monsterMods'
 import { abilityModMap, type CombatFight, playerArmorClass, pushLog, savingThrow, tryRelentless } from './state'
 
 export function applyPlayerDamage(input: {
@@ -151,6 +152,14 @@ export function resolveMonsterAttacks(input: {
   const { fight, monster, equipment, trace } = input
   let skills = input.skills
   fight.monsterProgressMs = 0
+  const profile = monsterProfile(monster, fight.monsterMods)
+  const regen = regenHeal(fight.monsterMaxHp, fight.monsterMods)
+  if (regen > 0 && fight.monsterHp < fight.monsterMaxHp) {
+    const gained = Math.min(regen, fight.monsterMaxHp - fight.monsterHp)
+    fight.monsterHp += gained
+    pushLog(fight, `Bounty: Regenerating: heals ${gained}.`, trace)
+  }
+  const foe = fight.displayName ?? monster.name
   const playerAc = playerArmorClass(fight, equipment, input.dexMod)
   const disadvSources: Array<'advantage' | 'disadvantage'> = []
   if (fight.monsterNextDisadvantage) disadvSources.push('disadvantage')
@@ -164,17 +173,30 @@ export function resolveMonsterAttacks(input: {
     const autoMiss = natural === 1
     const crit = natural === 20
     const hit = !autoMiss && (crit || total >= playerAc)
-    let line = `${monster.name} ${attack.name}: to hit ${total} - ${hit ? 'hits' : 'misses'}.`
+    let line = `${foe} ${attack.name}: to hit ${total} - ${hit ? 'hits' : 'misses'}.`
     if (hit) {
-      const parts = rollDamageParts(attack.damage, input.rng, crit)
+      const notation = addDamageDice(attack.damage, profile.extraDamageDie)
+      const parts = rollDamageParts(notation, input.rng, crit)
       let dealt = parts.total
       if (fight.frightenAttacksLeft > 0) {
         dealt = Math.floor(dealt * FRIGHTEN_DAMAGE_PCT)
         fight.frightenAttacksLeft -= 1
         line += ` (frightened)`
       }
+      let enraged = false
+      if (profile.enrageDamagePct > 0 && fight.monsterHp <= fight.monsterMaxHp * profile.enrageBelow) {
+        dealt = Math.floor(dealt * (1 + profile.enrageDamagePct))
+        enraged = true
+      }
+      const venom = profile.venomDice
+      if (venom) {
+        fight.poisonDice = venom
+        fight.poisonLeft = profile.venomIntervals
+      }
       line += ` ${dealt} ${attack.damageType}.`
       pushLog(fight, line, trace)
+      if (enraged) pushLog(fight, 'Bounty: Enraged.', trace)
+      if (venom) pushLog(fight, `Bounty: Venomous: ${venom} poison for ${profile.venomIntervals} intervals.`, trace)
       const result = applyPlayerDamage({
         fight,
         amount: dealt,

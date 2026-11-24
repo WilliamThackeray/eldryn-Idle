@@ -10,6 +10,7 @@ import {
   withQuality,
   type ItemQuality,
 } from '../data/items'
+import { getLair } from '../data/lairs'
 import { getMonster } from '../data/monsters'
 import { intervalBonus } from '../data/shop'
 import { getSkill, SKILLS, type TradeSkillId } from '../data/skills'
@@ -55,10 +56,10 @@ import {
   type QualityTier,
   type SkillCheckResult,
 } from './skillCheck'
+import type { ActiveContract, BountyBoard } from './bounties'
 import {
   grantFavor,
   renownGain,
-  type Bounty,
 } from './social'
 import { echoXpFraction } from './multiclass'
 import { canInscribe } from './spells'
@@ -116,7 +117,12 @@ export interface AdvanceState {
   activeBuffs?: ActiveBuff[]
   favor?: number
   renown?: number
-  bounty?: Bounty | null
+  marks?: number
+  marksLifetime?: number
+  contracts?: ActiveContract[]
+  ownedTitles?: string[]
+  equippedTitleId?: string | null
+  bountyBoard?: BountyBoard
 }
 
 export interface SkillEvent {
@@ -599,7 +605,7 @@ function advanceCombatAction(
     inventory,
     gold: state.gold,
     favor: state.favor,
-    bounty: state.bounty,
+    contracts: state.contracts,
     equipment,
     activeClassId: classId,
     classXp,
@@ -646,7 +652,14 @@ function advanceCombatAction(
       inventory: result.inventory,
       gold: result.gold,
       favor: result.favor ?? state.favor,
-      bounty: result.bounty !== undefined ? result.bounty : state.bounty,
+      contracts: result.contracts ?? state.contracts,
+      marks: (state.marks ?? 0) + (result.marksGained ?? 0),
+      marksLifetime: (state.marksLifetime ?? 0) + (result.marksGained ?? 0),
+      ownedTitles: mergeTitles(state.ownedTitles, result.titlesGained),
+      equippedTitleId: state.equippedTitleId ?? result.titlesGained?.[0] ?? null,
+      bountyBoard: result.baitGained
+        ? { ...(state.bountyBoard ?? { refreshedAt: 0, offers: [], baitBiome: null, baitCharges: 0 }), baitCharges: (state.bountyBoard?.baitCharges ?? 0) + 1 }
+        : state.bountyBoard,
       classXp: result.classXp,
       secondaryClassXp: result.secondaryClassXp ?? state.secondaryClassXp,
       equipment,
@@ -663,19 +676,30 @@ function advanceCombatAction(
   }
 
   const monster = getMonster(result.fight.monsterId)
+  const foe = result.fight.displayName ?? monster?.name ?? '…'
   const dungeonLabel =
     result.fight.dungeonId != null
       ? `Dungeon · ${monster?.name ?? '…'}`
-      : monster
-        ? `Hunting ${monster.name}`
-        : action.label
+      : result.fight.kind === 'lair'
+        ? (result.fight.lairId ? getLair(result.fight.lairId)?.name : null) ?? foe
+        : `Hunting ${foe}`
   const nextState: AdvanceState = {
     ...state,
     skills: result.skills,
     inventory: result.inventory,
     gold: result.gold,
     favor: result.favor ?? state.favor,
-    bounty: result.bounty !== undefined ? result.bounty : state.bounty,
+    contracts: result.contracts ?? state.contracts,
+    marks: (state.marks ?? 0) + (result.marksGained ?? 0),
+    marksLifetime: (state.marksLifetime ?? 0) + (result.marksGained ?? 0),
+    ownedTitles: mergeTitles(state.ownedTitles, result.titlesGained),
+    equippedTitleId: state.equippedTitleId ?? result.titlesGained?.[0] ?? null,
+    bountyBoard: result.baitGained
+      ? {
+          ...(state.bountyBoard ?? { refreshedAt: 0, offers: [], baitBiome: null, baitCharges: 0 }),
+          baitCharges: (state.bountyBoard?.baitCharges ?? 0) + 1,
+        }
+      : state.bountyBoard,
     classXp: result.classXp,
     secondaryClassXp: result.secondaryClassXp ?? state.secondaryClassXp,
     equipment,
@@ -691,4 +715,10 @@ function advanceCombatAction(
   }
   const quested = applyQuestSideEffects(nextState, log)
   return { state: { ...nextState, ...quested }, log }
+}
+
+function mergeTitles(owned: string[] | undefined, gained: string[] | undefined): string[] {
+  const next = [...(owned ?? [])]
+  for (const id of gained ?? []) if (!next.includes(id)) next.push(id)
+  return next
 }

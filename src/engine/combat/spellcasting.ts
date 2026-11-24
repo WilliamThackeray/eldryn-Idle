@@ -24,6 +24,7 @@ import {
 import { levelForXp, proficiency, tier } from '../xp'
 import { totalItemStats, type Equipment } from '../equipment'
 import { critThreshold, resolvePlayerAttack } from './attack'
+import { modifiedAc } from './monsterMods'
 import { abilityModMap, type CombatFight, pushLog, savingThrow, skillLevel } from './state'
 
 export function resolveSpellCast(input: {
@@ -207,7 +208,10 @@ export function resolveSpellCast(input: {
     const autoMiss = natural === 1
     const critFloor = critThreshold(itemStats.critRange)
     const crit = !autoMiss && natural >= critFloor
-    const hit = !autoMiss && (crit || total >= monster.ac)
+    const hit =
+      !autoMiss &&
+      (crit ||
+        total >= modifiedAc(monster, fight.monsterMods, fight.toHitPenaltyLeft > 0 ? fight.toHitPenalty : 0))
     line += ` to hit ${total} - ${hit ? 'hits' : 'misses'}.`
     if (!hit) {
       pushLog(fight, line, trace)

@@ -3,7 +3,7 @@ import { getDungeon } from '../data/dungeons'
 import { initialSkillProgress } from '../data/skills'
 import { buyUpgrade, getShopUpgrade } from '../data/shop'
 import { consumeEntryItem, resolveTrap, type DungeonCheckContext } from './dungeon'
-import { grantFavor, progressBounty } from './social'
+import { grantFavor } from './social'
 import { xpForLevel } from './xp'
 
 test('favor grant applies CHA favorPct', () => {
@@ -45,27 +45,6 @@ test('hag hollow consumes forged writ; shifting thicket stays free', () => {
 
   const second = consumeEntryItem({}, hollow)
   expect(second.ok).toBe(false)
-})
-
-test('bounty progress ignores other monsters and completes on the Nth kill', () => {
-  let bounty = { monsterId: 'wolf', need: 2, have: 0 }
-  const inventory = {}
-  const favor = 0
-  const gold = 0
-  const miss = progressBounty(bounty, 'deer', inventory, favor, gold, () => 0)
-  expect(miss.bounty).toEqual(bounty)
-  expect(miss.completed).toBe(false)
-
-  const mid = progressBounty(bounty, 'wolf', inventory, favor, gold, () => 0)
-  expect(mid.bounty).toEqual({ monsterId: 'wolf', need: 2, have: 1 })
-  expect(mid.completed).toBe(false)
-
-  bounty = mid.bounty!
-  const done = progressBounty(bounty, 'wolf', inventory, favor, gold, () => 0)
-  expect(done.completed).toBe(true)
-  expect(done.bounty).toBeNull()
-  expect(done.favor).toBe(5)
-  expect(done.goldGained).toBe(25)
 })
 
 test('inspiration rerolls a failed trap disarm; unspotted traps spend none', () => {

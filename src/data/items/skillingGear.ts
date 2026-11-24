@@ -88,4 +88,11 @@ export const SKILLING_GEAR = [
 
   skilling('binders-amulet', "Binder's Amulet", 'An amulet of sealed pacts.', 'necklace', 'binding', 1, 16),
   skilling('binders-gloves', "Binder's Gloves", 'Gloves chalked with binding marks.', 'gauntlets', 'binding', 2, 14),
+
+  skilling('hollow-cloak', 'Hollow Cloak', 'Spider-silk lining. The best hunting cloak of the forest.', 'cloak', 'hunting', 3, 28),
+  skilling('hollow-gloves', 'Hollow Gloves', 'Web-sticky fingers that still find the herb.', 'gauntlets', 'foraging', 3, 28),
+  skilling('den-apron', 'Den Apron', 'Ogre-hide apron. The hills’ best forge wear.', 'belt', 'smithing', 4, 40),
+  skilling('den-ring', 'Den Ring', 'A sinew-wrapped ring for the awl.', 'ring', 'leatherworking', 4, 40),
+  skilling('crypt-circlet', 'Crypt Circlet', 'A circlet that keeps swamp fumes out of the alembic.', 'helmet', 'alchemy', 5, 55),
+  skilling('crypt-gloves', 'Crypt Gloves', 'Dry gloves for script written in a drowned crypt.', 'gauntlets', 'scribing', 5, 55),
 ] as const satisfies readonly ItemDef[]

@@ -137,7 +137,6 @@ function buildIndex(): ItemIndex {
     activityId: 'local-music',
     label: 'Local Music',
   })
-  push(uses, 'bounty-contract', { kind: 'combat', label: 'Bounties' })
   push(uses, 'menace-trophy', { kind: 'combat', label: 'Frighten' })
   push(uses, 'intel', { kind: 'combat', label: 'Damage by creature type' })
 
