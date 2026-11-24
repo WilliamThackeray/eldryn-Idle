@@ -1,6 +1,4 @@
 import { expect, test } from 'vitest'
-import { applyStartingKit } from './equipment'
-import { getClass } from '../data/classes'
 import { getSpell } from '../data/spells'
 import { initialSkillProgress } from '../data/skills'
 import { getMonster } from '../data/monsters'
@@ -429,9 +427,3 @@ test('Arcane Recovery short-rest slot restore still works for expended leftovers
   expect(recoveredLevels).toBeGreaterThan(0)
 })
 
-test('casters start with 50 tradition reagents', () => {
-  expect(applyStartingKit(getClass('wizard').startingKit).inventory['arcane-dust']).toBe(50)
-  expect(applyStartingKit(getClass('paladin').startingKit).inventory['holy-water']).toBe(50)
-  expect(applyStartingKit(getClass('ranger').startingKit).inventory['mistletoe-sprig']).toBe(50)
-  expect(applyStartingKit(getClass('bard').startingKit).inventory.rosin).toBe(50)
-})

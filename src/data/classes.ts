@@ -103,32 +103,6 @@ const DRUID_WEAPONS = [
   'sling',
 ] as const satisfies readonly WeaponProficiency[]
 
-const FOOD = { itemId: 'cooked-meat' as ItemId, quantity: 10 }
-const ARMOR_PIECES = ['helmet', 'chest', 'chaps', 'gauntlets', 'boots'] as const
-
-type KitArmor = 'padded' | 'leather' | 'arcane' | 'vestment' | 'wildweave' | 'minstrel'
-
-function armorPieces(kind: KitArmor): { itemId: ItemId; quantity: number }[] {
-  return ARMOR_PIECES.map((slot) => ({ itemId: `${kind}-${slot}` as ItemId, quantity: 1 }))
-}
-
-function martialKit(weapon: ItemId, kind: 'padded' | 'leather'): { itemId: ItemId; quantity: number }[] {
-  return [{ itemId: weapon, quantity: 1 }, ...armorPieces(kind), FOOD]
-}
-
-function casterKit(
-  weapon: ItemId,
-  kind: KitArmor,
-  tradition: SpellTradition,
-): { itemId: ItemId; quantity: number }[] {
-  return [
-    { itemId: weapon, quantity: 1 },
-    ...armorPieces(kind),
-    FOOD,
-    { itemId: TRADITION_REAGENT[tradition], quantity: 50 },
-  ]
-}
-
 export const CLASSES = [
   {
     id: 'barbarian',
@@ -142,7 +116,7 @@ export const CLASSES = [
     weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
     checkProficiencies: ['athletics', 'intimidation', 'perception', 'survival'],
-    startingKit: martialKit('greataxe', 'leather'),
+    startingKit: [],
     signatureAbility: {
       id: 'rage',
       name: 'Rage',
@@ -162,7 +136,7 @@ export const CLASSES = [
     weaponProficiencies: SIMPLE_MARTIAL,
     spellcasting: { casterType: 'none' },
     checkProficiencies: ['athletics', 'acrobatics', 'intimidation', 'perception'],
-    startingKit: martialKit('longsword', 'leather'),
+    startingKit: [],
     signatureAbility: {
       id: 'secondWind',
       name: 'Second Wind',
@@ -182,7 +156,7 @@ export const CLASSES = [
     weaponProficiencies: ROGUE_BARD,
     spellcasting: { casterType: 'none' },
     checkProficiencies: ['stealth', 'sleightOfHand', 'perception', 'investigation', 'deception'],
-    startingKit: martialKit('rapier', 'leather'),
+    startingKit: [],
     signatureAbility: {
       id: 'sneakAttack',
       name: 'Sneak Attack',
@@ -193,7 +167,7 @@ export const CLASSES = [
     id: 'monk',
     name: 'Monk',
     role: 'Unarmed striker',
-    playstyle: 'Start with a quarterstaff, then flurries of unarmed strikes.',
+    playstyle: 'Flurries of unarmed strikes. Craft a quarterstaff when you want one.',
     difficulty: 2,
     xpModifiers: { DEX: 0.2, WIS: 0.2, STR: -0.15, CHA: -0.15 },
     hitDie: 8,
@@ -201,7 +175,7 @@ export const CLASSES = [
     weaponProficiencies: ['simple', 'shortsword'],
     spellcasting: { casterType: 'none' },
     checkProficiencies: ['acrobatics', 'stealth', 'insight', 'religion'],
-    startingKit: martialKit('quarterstaff', 'padded'),
+    startingKit: [],
     signatureAbility: {
       id: 'flurryOfBlows',
       name: 'Flurry of Blows',
@@ -226,7 +200,7 @@ export const CLASSES = [
       tradition: 'arcane',
     },
     checkProficiencies: ['arcana', 'history', 'investigation', 'insight'],
-    startingKit: casterKit('quarterstaff', 'arcane', 'arcane'),
+    startingKit: [],
     signatureAbility: {
       id: 'arcaneRecovery',
       name: 'Arcane Recovery',
@@ -252,7 +226,7 @@ export const CLASSES = [
       tradition: 'divine',
     },
     checkProficiencies: ['religion', 'medicine', 'insight', 'history'],
-    startingKit: casterKit('quarterstaff', 'vestment', 'divine'),
+    startingKit: [],
     signatureAbility: {
       id: 'channelDivinity',
       name: 'Channel Divinity',
@@ -278,7 +252,7 @@ export const CLASSES = [
       tradition: 'arcane',
     },
     checkProficiencies: ['arcana', 'deception', 'persuasion', 'intimidation'],
-    startingKit: casterKit('dagger', 'arcane', 'arcane'),
+    startingKit: [],
     signatureAbility: {
       id: 'metamagicPactMagic',
       name: 'Metamagic / Pact Magic',
@@ -304,7 +278,7 @@ export const CLASSES = [
       tradition: 'divine',
     },
     checkProficiencies: ['athletics', 'religion', 'persuasion', 'intimidation'],
-    startingKit: casterKit('longsword', 'leather', 'divine'),
+    startingKit: [],
     signatureAbility: {
       id: 'divineSmite',
       name: 'Divine Smite',
@@ -328,7 +302,7 @@ export const CLASSES = [
       tradition: 'primal',
     },
     checkProficiencies: ['survival', 'perception', 'stealth', 'nature'],
-    startingKit: casterKit('shortsword', 'leather', 'primal'),
+    startingKit: [],
     signatureAbility: {
       id: 'huntersMark',
       name: "Hunter's Mark",
@@ -352,7 +326,7 @@ export const CLASSES = [
       tradition: 'primal',
     },
     checkProficiencies: ['nature', 'animalHandling', 'medicine', 'survival'],
-    startingKit: casterKit('quarterstaff', 'wildweave', 'primal'),
+    startingKit: [],
     signatureAbility: {
       id: 'wildShape',
       name: 'Wild Shape',
@@ -377,7 +351,7 @@ export const CLASSES = [
       tradition: 'bardic',
     },
     checkProficiencies: ['performance', 'persuasion', 'deception', 'insight'],
-    startingKit: casterKit('dagger', 'minstrel', 'bardic'),
+    startingKit: [],
     signatureAbility: {
       id: 'bardicInspiration',
       name: 'Bardic Inspiration',

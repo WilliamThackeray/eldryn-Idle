@@ -133,14 +133,18 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
           </section>
           <section className="rounded-lg border border-brown/40 bg-panel p-5">
             <h2 className="mb-3 font-bold text-gold">Starting kit</h2>
-            <ul className="space-y-1 text-sm">
-              {chosen.startingKit.map((stack) => (
-                <li key={stack.itemId} className="flex justify-between gap-3">
-                  <span>{getItem(stack.itemId)?.name ?? stack.itemId}</span>
-                  <span className="text-sage">×{stack.quantity}</span>
-                </li>
-              ))}
-            </ul>
+            {chosen.startingKit.length === 0 ? (
+              <p className="text-sm text-parchment/70">Nothing.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {chosen.startingKit.map((stack) => (
+                  <li key={stack.itemId} className="flex justify-between gap-3">
+                    <span>{getItem(stack.itemId)?.name ?? stack.itemId}</span>
+                    <span className="text-sage">×{stack.quantity}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       )}

@@ -666,7 +666,6 @@ export const useGameStore = create<GameStore>()(
         if (!trimmed || !browserStorage) return
         const kit = applyStartingKit(getClass(classId).startingKit)
         const casting = starterCasting(classId)
-        if (casting.scroll) kit.inventory[casting.scroll] = (kit.inventory[casting.scroll] ?? 0) + 1
         bindSlot(slot)
         writeSlotIndex(browserStorage, { active: slot })
         enableSaveWrites()

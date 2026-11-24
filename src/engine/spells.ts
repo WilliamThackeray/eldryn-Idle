@@ -270,14 +270,13 @@ export function canInscribe(input: {
   return { ok: true, reason: null }
 }
 
-/** Cantrip and first level-1 spell already known, plus one extra level-1 scroll. */
-export function starterCasting(classId: ClassId): { known: SpellId[]; scroll: ItemId | null } {
+/** Cantrip and first level-1 spell already known. No starting items. */
+export function starterCasting(classId: ClassId): { known: SpellId[] } {
   const list = spellsForClass(classId)
   const cantrip = list.find((spell) => spell.level === 0)
   const leveled = list.filter((spell) => spell.level === 1)
   const known = [cantrip?.id, leveled[0]?.id].filter((id): id is SpellId => id != null)
-  const extra = leveled[1] ?? leveled[0]
-  return { known, scroll: extra ? (spellScrollId(extra.id) as ItemId) : null }
+  return { known }
 }
 
 /** Quest reward: a level-1 scroll, preferring one the starter kit did not already hand out. */
