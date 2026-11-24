@@ -2,6 +2,7 @@ import { ARMOR } from '../items/armor'
 import type { GearMaterial, ItemId } from '../items'
 import { WEAPONS } from '../items/weapons'
 import { MATERIAL_LEVEL } from '../../engine/config'
+import { withCombatGates } from './gates'
 import { activity, drop, stack } from './define'
 import type { ActivityDef } from './types'
 
@@ -171,4 +172,4 @@ const SMELT: ActivityDef[] = [
   }),
 ]
 
-export const smithingActivities: ActivityDef[] = [...SMELT, ...smithMetalGear()]
+export const smithingActivities: ActivityDef[] = withCombatGates([...SMELT, ...smithMetalGear()])

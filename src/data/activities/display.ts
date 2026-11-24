@@ -12,7 +12,7 @@ export const SKILL_TABS: Partial<Record<TradeSkillId, readonly string[]>> = {
   thievery: ['Pickpocketing', 'Lockpicking', 'Forgery', 'Infiltration'],
   cooking: ['Cooking'],
   alchemy: ['Potions', 'Reagents', 'Holy Water'],
-  scribing: ['Lore', 'Ink', 'Tomes', 'Study Notes', 'Bestiaries', 'Field Notes'],
+  scribing: ['Lore', 'Ink', 'Scrolls', 'Inscribing', 'Tomes', 'Study Notes', 'Bestiaries', 'Field Notes'],
   enchanting: ['Arcane Study', 'Enchantments'],
   weaving: ['Spinning', 'Loom', 'Tailoring', 'Skilling Gear'],
   foraging: ['Foraging', 'Plots'],

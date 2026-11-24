@@ -6,6 +6,7 @@ import {
   type ClassId,
 } from '../data/classes'
 import { getItem, type ItemId } from '../data/items'
+import { spellScrollId } from '../data/items/scrolls'
 import { getSkill, type TradeSkillId } from '../data/skills'
 import { getSpell, spellsForClass, type SpellDef, type SpellId } from '../data/spells'
 import type { AbilityAbbr } from '../types/game'
@@ -204,6 +205,11 @@ export function effectiveCasterType(classId: ClassId): Exclude<CasterType, 'none
   return cls.spellcasting.casterType
 }
 
+/** True when the class has a spell list (including half casters). */
+export function preparesSpells(classId: ClassId | null | undefined): boolean {
+  return Boolean(classId && getClass(classId).spellcasting.casterType !== 'none')
+}
+
 /** True when the class loops spell slots in combat (full table or pact signature). */
 export function usesSpellLoop(classId: ClassId): boolean {
   const type = effectiveCasterType(classId)
@@ -229,6 +235,56 @@ export function unlockSkillFor(classId: ClassId): TradeSkillId | null {
 
 export function isSpellUnlocked(spell: SpellDef, skillLevel: number): boolean {
   return skillLevel >= unlockSkillLevel(spell.level)
+}
+
+export function spellOnClassList(
+  spellId: string,
+  classId: ClassId | null | undefined,
+  secondaryClassId?: ClassId | null,
+): boolean {
+  const spell = getSpell(spellId)
+  if (!spell) return false
+  if (classId && spell.classes.includes(classId)) return true
+  return Boolean(secondaryClassId && spell.classes.includes(secondaryClassId))
+}
+
+/** Scribing level and class list. `learn` also refuses a spell you already know. */
+export function canInscribe(input: {
+  spellId: string
+  scribingLevel: number
+  classId: ClassId | null | undefined
+  secondaryClassId?: ClassId | null
+  known?: readonly string[]
+  mode?: 'learn' | 'scribe'
+}): { ok: boolean; reason: string | null } {
+  const spell = getSpell(input.spellId)
+  if (!spell) return { ok: false, reason: 'Unknown spell.' }
+  if (!spellOnClassList(spell.id, input.classId, input.secondaryClassId)) {
+    return { ok: false, reason: 'Not on your class list.' }
+  }
+  const need = unlockSkillLevel(spell.level)
+  if (input.scribingLevel < need) return { ok: false, reason: `Scribing ${need}.` }
+  if ((input.mode ?? 'learn') === 'learn' && input.known?.includes(spell.id)) {
+    return { ok: false, reason: 'Already known.' }
+  }
+  return { ok: true, reason: null }
+}
+
+/** Cantrip and first level-1 spell already known, plus one extra level-1 scroll. */
+export function starterCasting(classId: ClassId): { known: SpellId[]; scroll: ItemId | null } {
+  const list = spellsForClass(classId)
+  const cantrip = list.find((spell) => spell.level === 0)
+  const leveled = list.filter((spell) => spell.level === 1)
+  const known = [cantrip?.id, leveled[0]?.id].filter((id): id is SpellId => id != null)
+  const extra = leveled[1] ?? leveled[0]
+  return { known, scroll: extra ? (spellScrollId(extra.id) as ItemId) : null }
+}
+
+/** Quest reward: a level-1 scroll, preferring one the starter kit did not already hand out. */
+export function level1ScrollItem(classId: ClassId): ItemId | null {
+  const leveled = spellsForClass(classId).filter((spell) => spell.level === 1)
+  const pick = leveled[2] ?? leveled[1] ?? leveled[0]
+  return pick ? (spellScrollId(pick.id) as ItemId) : null
 }
 
 export function knownSpells(classId: ClassId, skillLevel: number): SpellDef[] {
@@ -320,13 +376,18 @@ export function buildFightSlots(input: {
   loadout: SpellLoadout | undefined
   secondaryClassId?: ClassId | null
   skills?: Record<TradeSkillId, { xp: number }>
+  /** When set, only these spells can be slotted. Omitted keeps the old skill-level list for combat tests. */
+  knownSpellIds?: readonly string[]
 }): SpellSlot[] {
   const casterType = effectiveCasterType(input.classId)
   if (casterType == null) return []
 
   const structure = slotsFor(casterType, input.classTier)
-  const knownList =
-    input.skills != null
+  const knownList = input.knownSpellIds
+    ? input.knownSpellIds
+        .map((id) => getSpell(id))
+        .filter((spell): spell is SpellDef => Boolean(spell && spellOnClassList(spell.id, input.classId, input.secondaryClassId)))
+    : input.skills != null
       ? knownSpellsForClasses(input.classId, input.secondaryClassId, input.skills)
       : knownSpells(input.classId, input.skillLevel)
   const known = new Set(knownList.map((s) => s.id))

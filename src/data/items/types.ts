@@ -1,3 +1,5 @@
+import type { Tier } from '../tiers'
+
 export const ITEM_CATEGORIES = ['material', 'food', 'potion', 'component', 'gear', 'ammo', 'currency', 'misc'] as const
 export type ItemCategory = (typeof ITEM_CATEGORIES)[number]
 
@@ -145,6 +147,8 @@ export interface ItemDef {
   id: string
   name: string
   description: string
+  /** Content tier. Omitted when `itemTier` can derive it from material or id. */
+  tier?: Tier
   category: ItemCategory
   rarity: ItemRarity
   stackable: boolean

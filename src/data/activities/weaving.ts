@@ -1,3 +1,4 @@
+import { withCombatGates } from './gates'
 import { activity, drop, stack } from './define'
 import type { ActivityDef } from './types'
 import type { ItemId } from '../items'
@@ -60,7 +61,7 @@ function attire(
   })
 }
 
-export const weavingActivities: ActivityDef[] = [
+export const weavingActivities: ActivityDef[] = withCombatGates([
   activity({
     skillId: 'weaving',
     id: 'spin-flax',
@@ -124,6 +125,26 @@ export const weavingActivities: ActivityDef[] = [
   ...clothSet('linen', 'linen-cloth', 10, 'Tailor'),
   ...clothSet('wool', 'wool-cloth', 40, 'Tailor'),
   ...clothSet('silk', 'silk-cloth', 70, 'Tailor'),
+  activity({
+    skillId: 'weaving',
+    id: 'gather-shadowsilk',
+    name: 'Gather Shadowsilk',
+    description: 'Collect shadowsilk. The Underdark looms are not open yet.',
+    requiredLevel: 60,
+    outputs: [drop('shadowsilk')],
+    category: 'Spinning',
+  }),
+  activity({
+    skillId: 'weaving',
+    id: 'gather-starweave',
+    name: 'Gather Starweave',
+    description: 'Collect starweave. The peaks are not open yet.',
+    requiredLevel: 80,
+    outputs: [drop('starweave')],
+    category: 'Spinning',
+  }),
+  ...clothSet('shadowsilk', 'shadowsilk', 60, 'Tailor'),
+  ...clothSet('starweave', 'starweave', 80, 'Tailor'),
   ...attire('wildweave', 'linen-cloth', 20, 'Weave', {
     helmet: 'Hood',
     chest: 'Wrap',
@@ -145,4 +166,4 @@ export const weavingActivities: ActivityDef[] = [
     gauntlets: 'Gloves',
     boots: 'Sandals',
   }),
-]
+])

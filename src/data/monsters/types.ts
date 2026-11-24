@@ -1,12 +1,13 @@
 import type { AbilityAbbr } from '../../types/game'
 import type { GoldDrop, LootEntry } from '../activities/types'
 import type { DamageType } from '../items/types'
+import type { Tier } from '../tiers'
 
-export const BIOMES = ['forest', 'hills', 'swamp', 'quest'] as const
+export const BIOMES = ['forest', 'hills', 'swamp', 'underdark', 'mountains', 'quest'] as const
 export type BiomeId = (typeof BIOMES)[number]
 
-/** Biomes shown on the Monster Hunting tab. */
-export const HUNT_BIOMES = ['forest', 'hills', 'swamp'] as const satisfies readonly BiomeId[]
+/** Biomes shown on the Monster Hunting tab. Coming-soon zones are included and locked. */
+export const HUNT_BIOMES = ['forest', 'hills', 'swamp', 'underdark', 'mountains'] as const satisfies readonly BiomeId[]
 export type HuntBiomeId = (typeof HUNT_BIOMES)[number]
 
 export const CREATURE_TYPES = [
@@ -62,6 +63,8 @@ export interface MonsterDef {
   lootTable: LootEntry[]
   gold?: GoldDrop
   biomes: readonly BiomeId[]
+  /** Content tier. Derived from the biome when omitted. */
+  tier?: Tier
   /** Rare spawn candidate for Rumor buffs. */
   rare?: boolean
 }

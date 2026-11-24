@@ -44,4 +44,6 @@ export interface ActivityDef {
   group?: string
   sortOrder?: number
   kind: 'gather' | 'craft' | 'train'
+  /** Successful craft adds this spell to knownSpells. */
+  learnSpell?: string
 }

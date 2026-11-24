@@ -391,6 +391,22 @@ export const ARMOR = [
       shield: true,
     },
   },
+  ...casterSet({
+    id: 'shadowsilk',
+    name: 'Shadowsilk',
+    description: 'Caster robes of shadowsilk. The Underdark is not open yet.',
+    pieceBuy: 40,
+    armorValue: 3,
+    chestStats: { spellAttack: 2, spellSaveDc: 2 },
+  }),
+  ...casterSet({
+    id: 'starweave',
+    name: 'Starweave',
+    description: 'Caster robes of starweave. The peaks are not open yet.',
+    pieceBuy: 80,
+    armorValue: 4,
+    chestStats: { spellAttack: 3, spellSaveDc: 3 },
+  }),
   {
     id: 'adamantine-shield',
     name: 'Adamantine Shield',

@@ -12,6 +12,7 @@ import {
   type MonsterDef,
 } from '../../data/monsters'
 import { dungeonUnlocked } from '../../engine/quest'
+import { dropsFor, tierForBiome, tierForDungeon } from '../../data/tiers'
 import type { TradeSkillId } from '../../data/skills'
 import { deriveAbilities } from '../../engine/abilities'
 import {
@@ -76,6 +77,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
   const [selectedMonsterId, setSelectedMonsterId] = useState<string | null>(null)
   const [highlightDungeonId, setHighlightDungeonId] = useState<string | null>(null)
   const spellLoadouts = useGameStore((state) => state.spellLoadouts)
+  const knownSpells = useGameStore((state) => state.knownSpells)
 
   useEffect(() => {
     if (!focus) return
@@ -154,6 +156,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
         classXp,
         inventory,
         spellLoadout: spellLoadouts[classId],
+        knownSpellIds: knownSpells,
       },
       matchupMonster,
     )
@@ -345,9 +348,19 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               variant="pill"
               value={biome}
               onChange={(id) => setBiome(id as BiomeId)}
-              tabs={huntTabs.map((id) => ({ id, label: BIOME_LABELS[id] }))}
+              tabs={huntTabs.map((id) => {
+                const row = tierForBiome(id)
+                return {
+                  id,
+                  label: BIOME_LABELS[id],
+                  count: row ? `${row.name} · ${row.levelMin}–${row.levelMax}` : undefined,
+                  locked: row?.zone.comingSoon,
+                }
+              })}
             />
-            {monsters.map((monster) => (
+            {tierForBiome(biome)?.zone.comingSoon ? (
+              <p className="text-sm text-parchment/70">Coming soon.</p>
+            ) : monsters.map((monster) => (
               <MonsterRow
                 key={monster.id}
                 monster={monster}
@@ -372,10 +385,11 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
               classXp={classXp}
               inventory={inventory}
               spellLoadout={classId ? spellLoadouts[classId] : undefined}
+              knownSpellIds={knownSpells}
               monster={matchupMonster}
               bestiaries={bestiaries}
             />
-            <MatchupPanel monster={matchupMonster} classId={classId} skills={skills} equipment={equipment} classXp={classXp} inventory={inventory} spellLoadout={classId ? spellLoadouts[classId] : undefined} bestiaries={bestiaries} foodSummary={foodSummary} />
+            <MatchupPanel monster={matchupMonster} classId={classId} skills={skills} equipment={equipment} classXp={classXp} inventory={inventory} spellLoadout={classId ? spellLoadouts[classId] : undefined} knownSpellIds={knownSpells} bestiaries={bestiaries} foodSummary={foodSummary} />
           </SidePanel>
         </div>
       ) : (
@@ -385,6 +399,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
             const need = d.entry?.quantity ?? 0
             const have = d.entry ? (inventory[d.entry.itemId] ?? 0) : 0
             const haveEntry = !d.entry || have >= need
+            const row = tierForDungeon(d.id)
             const encounterNames = [...d.encounters, d.boss]
               .map((id) => getMonster(id)?.name ?? id)
               .join(' → ')
@@ -398,8 +413,10 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-2">
                     <h3 className="text-lg font-bold text-gold">{d.name}</h3>
-                    <span className="text-sm text-parchment/70">
-                      {BIOME_LABELS[d.biome]} · Tier {d.recommendedTier}
+                    <span className={`text-sm ${row?.color ?? 'text-parchment/70'}`}>
+                      {BIOME_LABELS[d.biome]}
+                      {row ? ` · ${row.name} · ${row.levelMin}–${row.levelMax}` : ''}
+                      {d.comingSoon ? ' · Coming soon' : ''}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-parchment/80">{encounterNames}</p>
@@ -412,7 +429,7 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
                 </div>
                 <button
                   type="button"
-                  disabled={!classId || inCombat || !haveEntry}
+                  disabled={!classId || inCombat || !haveEntry || d.comingSoon}
                   onClick={() => startDungeon(d.id)}
                   className="rounded-lg bg-crimson px-4 py-2 text-sm font-bold text-parchment transition-colors hover:bg-brown disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -484,13 +501,20 @@ function MonsterRow({
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {monster.lootTable.length === 0 && <span className="text-meta text-muted">No drops</span>}
-          {monster.lootTable.map((entry) => (
-            <ItemChip
-              key={entry.itemId}
-              name={getItem(entry.itemId)?.name ?? entry.itemId}
-              note={entry.chance < 1 ? `${Math.round(entry.chance * 100)}%` : undefined}
-            />
-          ))}
+          {monster.lootTable.map((entry) => {
+            const gates = dropsFor(entry.itemId)
+            const chance = entry.chance < 1 ? `${Math.round(entry.chance * 100)}%` : undefined
+            const gated = gates.length
+              ? `Drops for: ${gates.map((gate) => `${gate.name} (${gate.skill})`).join(', ')}`
+              : undefined
+            return (
+              <ItemChip
+                key={entry.itemId}
+                name={getItem(entry.itemId)?.name ?? entry.itemId}
+                note={[chance, gated].filter(Boolean).join(' · ') || undefined}
+              />
+            )
+          })}
         </div>
       </button>
       <Button
@@ -611,6 +635,7 @@ function MatchupPanel({
   classXp,
   inventory,
   spellLoadout,
+  knownSpellIds,
   bestiaries,
   foodSummary,
 }: {
@@ -621,13 +646,14 @@ function MatchupPanel({
   classXp: number
   inventory: Inventory
   spellLoadout?: SpellLoadout
+  knownSpellIds?: readonly string[]
   bestiaries?: Bestiaries
   foodSummary: { foodPerHour: number; hoursUntilEmpty: number; count: number } | null
 }) {
   const stats =
     classId && monster
       ? computeCombatStats(
-          { skills, equipment, classId, classXp, inventory, spellLoadout, bestiaries },
+          { skills, equipment, classId, classXp, inventory, spellLoadout, bestiaries, knownSpellIds },
           monster,
         )
       : null

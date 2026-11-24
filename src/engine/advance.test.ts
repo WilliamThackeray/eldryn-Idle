@@ -121,7 +121,7 @@ test('a critical doubles outputs and rolls the rare table', () => {
   const result = advance(doing('mining', 'mine-iron'), 6000, scripted(0.95, 0.99, 0.99, 0, 0.99))
 
   expect(result.log[0]).toMatchObject({ tier: 'exceptional' })
-  expect(result.state.inventory).toEqual({ 'iron-ore': 2, coal: 2 })
+  expect(result.state.inventory).toEqual({ 'iron-ore': 2, coal: 2, 'raw-quartz': 2 })
 })
 
 test('a failed craft consumes every input and grants nothing', () => {

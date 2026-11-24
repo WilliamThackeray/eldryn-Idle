@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
 import { getClass, modifiersFor, type ClassId, type ClericFocus } from '../data/classes'
+import { getActivity } from '../data/activities'
 import { getDungeon } from '../data/dungeons'
 import type { ItemId } from '../data/items'
 import { getMonster, type BiomeId, type CreatureType } from '../data/monsters'
+import { tierForBiome } from '../data/tiers'
 import { isSpellId, type SpellId } from '../data/spells'
 import {
   buyGood as buyShopGood,
@@ -26,7 +28,7 @@ import {
   rollCheck,
   turnInQuest,
 } from '../engine/quest'
-import { effectiveCasterType, usesSpellLoop } from '../engine/spells'
+import { canInscribe, effectiveCasterType, spellOnClassList, starterCasting, usesSpellLoop } from '../engine/spells'
 import { levelForXp } from '../engine/xp'
 import {
   applySkillLoadout,
@@ -200,6 +202,19 @@ export const useGameStore = create<GameStore>()(
       questMessage: null,
       startActivity: (activity) =>
         set((state) => {
+          const def = getActivity(activity.skillId, activity.activityId)
+          if (def?.learnSpell || def?.id.startsWith('scribe-')) {
+            const spellId = def.learnSpell ?? def.id.slice('scribe-'.length)
+            const gate = canInscribe({
+              spellId,
+              scribingLevel: levelForXp(state.skills.scribing?.xp ?? 0),
+              classId: state.classId,
+              secondaryClassId: state.secondaryClassId,
+              known: state.knownSpells,
+              mode: def.learnSpell ? 'learn' : 'scribe',
+            })
+            if (!gate.ok) return state
+          }
           const applied = applySkillLoadout(
             state.equipment,
             state.inventory,
@@ -217,6 +232,7 @@ export const useGameStore = create<GameStore>()(
       startHunt: (monsterId, biome) =>
         set((state) => {
           if (!state.classId) return state
+          if (tierForBiome(biome)?.zone.comingSoon) return state
           const geared = applySkillLoadout(
             state.equipment,
             state.inventory,
@@ -237,6 +253,7 @@ export const useGameStore = create<GameStore>()(
             spellLoadout: state.spellLoadouts[state.classId],
             activeBuffs: state.activeBuffs,
             secondaryClassId: state.secondaryClassId,
+            knownSpellIds: state.knownSpells,
             secondaryClassXp: state.secondaryClassXp,
           })
           if (!fight) return state
@@ -267,7 +284,7 @@ export const useGameStore = create<GameStore>()(
         set((state) => {
           if (!state.classId) return state
           const dungeon = getDungeon(dungeonId)
-          if (!dungeon) return state
+          if (!dungeon || dungeon.comingSoon) return state
           const geared = applySkillLoadout(
             state.equipment,
             state.inventory,
@@ -288,6 +305,7 @@ export const useGameStore = create<GameStore>()(
             activeBuffs: state.activeBuffs,
             secondaryClassId: state.secondaryClassId,
             secondaryClassXp: state.secondaryClassXp,
+            knownSpellIds: state.knownSpells,
           })
           if (!fight) return state
           const weapon = geared.equipment.mainHand
@@ -336,6 +354,8 @@ export const useGameStore = create<GameStore>()(
               skillLoadouts: state.skillLoadouts,
               upgrades: state.upgrades,
               classId: state.classId,
+              secondaryClassId: state.secondaryClassId,
+              knownSpells: state.knownSpells,
               classXp: state.classXp,
               secondaryClassXp: state.secondaryClassXp,
               echoes: state.echoes,
@@ -354,6 +374,17 @@ export const useGameStore = create<GameStore>()(
             modifiersFor(state.classId, state.clericFocus),
             { trace: state.combatTrace },
           )
+          let clearedDungeons = state.clearedDungeons
+          let seenBiomes = state.seenBiomes
+          for (const event of result.log) {
+            if (event.kind === 'dungeonClear' && !clearedDungeons.includes(event.dungeonId)) {
+              clearedDungeons = [...clearedDungeons, event.dungeonId]
+            }
+            if (event.kind === 'kill') {
+              const biome = getMonster(event.monsterId)?.biomes.find((id) => id !== 'quest')
+              if (biome && !seenBiomes.includes(biome)) seenBiomes = [...seenBiomes, biome]
+            }
+          }
           const killsAfter = result.state.combat?.kills ?? result.state.endedHuntKills ?? killsBefore
           const gainedKills = Math.max(0, killsAfter - killsBefore)
           const tracking = !state.combatTrace
@@ -377,6 +408,9 @@ export const useGameStore = create<GameStore>()(
             secondaryClassXp: result.state.secondaryClassXp ?? state.secondaryClassXp,
             combat: result.state.combat ?? null,
             questProgress: result.state.questProgress ?? state.questProgress,
+            knownSpells: result.state.knownSpells ?? state.knownSpells,
+            clearedDungeons,
+            seenBiomes,
             noticeBoard,
             isInDungeonOrQuest:
               result.state.isInDungeonOrQuest !== undefined
@@ -599,6 +633,8 @@ export const useGameStore = create<GameStore>()(
         const trimmed = name.trim().slice(0, 20)
         if (!trimmed || !browserStorage) return
         const kit = applyStartingKit(getClass(classId).startingKit)
+        const casting = starterCasting(classId)
+        if (casting.scroll) kit.inventory[casting.scroll] = (kit.inventory[casting.scroll] ?? 0) + 1
         bindSlot(slot)
         writeSlotIndex(browserStorage, { active: slot })
         enableSaveWrites()
@@ -611,6 +647,7 @@ export const useGameStore = create<GameStore>()(
           clericFocus: classId === 'cleric' && clericFocus === 'STR' ? 'STR' : 'INT',
           ...withPlacedInventory(blank, kit.inventory),
           equipment: kit.equipment,
+          knownSpells: casting.known,
           lastTick: Date.now(),
           lastSaved: new Date().toISOString(),
           log: [],
@@ -624,6 +661,8 @@ export const useGameStore = create<GameStore>()(
       setSpellSlot: (classId, slotIndex, spellId) =>
         set((state) => {
           if (spellId != null && !isSpellId(spellId)) return state
+          if (spellId != null && !state.knownSpells.includes(spellId)) return state
+          if (spellId != null && !spellOnClassList(spellId, classId, state.secondaryClassId)) return state
           const casterType = effectiveCasterType(classId)
           if (casterType == null) return state
           const current = state.spellLoadouts[classId] ?? { slots: [] }
@@ -644,6 +683,7 @@ export const useGameStore = create<GameStore>()(
             skills: state.skills,
             classXp: state.classXp,
             inventory: state.inventory,
+            classId: state.classId,
           })
           line = result.line
           if (!result.ok) return { questMessage: result.line }
@@ -666,6 +706,7 @@ export const useGameStore = create<GameStore>()(
             state.classXp,
             state.gold,
             state.favor,
+            state.classId,
           )
           line = result.line
           if (!result.ok) return { questMessage: result.line }
@@ -809,6 +850,9 @@ export const useGameStore = create<GameStore>()(
         skillLoadouts: state.skillLoadouts ?? {},
         combat: state.combat ?? null,
         spellLoadouts: state.spellLoadouts,
+        knownSpells: state.knownSpells,
+        clearedDungeons: state.clearedDungeons,
+        seenBiomes: state.seenBiomes,
         questProgress: state.questProgress,
         pinnedQuestId: state.pinnedQuestId,
         noticeBoard: state.noticeBoard,

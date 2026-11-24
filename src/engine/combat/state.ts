@@ -277,6 +277,7 @@ export function createFight(input: {
   activeBuffs?: ActiveBuff[]
   secondaryClassId?: ClassId | null
   secondaryClassXp?: number
+  knownSpellIds?: readonly string[]
 }): CombatFight | null {
   const monster = getMonster(input.monsterId)
   if (!monster) return null
@@ -302,6 +303,7 @@ export function createFight(input: {
     loadout: input.spellLoadout,
     secondaryClassId,
     skills: input.skills,
+    knownSpellIds: input.knownSpellIds,
   })
   const frightenAttacksLeft = rollFrightenAttacks(input.activeBuffs, input.rng)
   const fight: CombatFight = {
@@ -391,8 +393,10 @@ export function beginDungeonFight(input: {
   activeBuffs?: ActiveBuff[]
   secondaryClassId?: ClassId | null
   secondaryClassXp?: number
+  knownSpellIds?: readonly string[]
 }): CombatFight | null {
   const dungeon = getDungeon(input.dungeonId)
+  if (dungeon?.comingSoon) return null
   if (!dungeon) return null
   const first = dungeon.encounters[0]
   if (!first) return null
@@ -409,6 +413,7 @@ export function beginDungeonFight(input: {
     activeBuffs: input.activeBuffs,
     secondaryClassId: input.secondaryClassId,
     secondaryClassXp: input.secondaryClassXp,
+    knownSpellIds: input.knownSpellIds,
   })
   if (!fight) return null
   fight.dungeonId = dungeon.id

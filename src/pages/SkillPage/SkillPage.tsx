@@ -25,6 +25,7 @@ import { totalItemStats } from '../../engine/equipment'
 import { tomeSpeedBonus, tomeXpPct } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
 import { activityUnlocked } from '../../engine/quest'
+import { spellOnClassList } from '../../engine/spells'
 import {
   activityBonusParts,
   activityRollMode,
@@ -68,6 +69,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const bestiaries = useGameStore((state) => state.bestiaries)
   const activeAction = useGameStore((state) => state.activeAction)
   const classId = useGameStore((state) => state.classId)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
   const clericFocus = useGameStore((state) => state.clericFocus)
   const log = useGameStore((state) => state.log)
   const startActivity = useGameStore((state) => state.startActivity)
@@ -100,8 +102,14 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const pageDiscount = effectTotal(activePerks({ skills }), 'historyTomePages')
 
   const activities = useMemo(
-    () => activitiesFor(skillId).filter((activity) => activityUnlocked(activity.requiresQuest, questProgress)),
-    [skillId, questProgress],
+    () =>
+      activitiesFor(skillId).filter((activity) => {
+        if (!activityUnlocked(activity.requiresQuest, questProgress)) return false
+        const spellId = activity.learnSpell ?? (activity.id.startsWith('scribe-') ? activity.id.slice('scribe-'.length) : null)
+        if (!spellId) return true
+        return spellOnClassList(spellId, classId, secondaryClassId)
+      }),
+    [skillId, questProgress, classId, secondaryClassId],
   )
   const tabs = useMemo(() => tabsFor(skillId, activities), [skillId, activities])
   const running =

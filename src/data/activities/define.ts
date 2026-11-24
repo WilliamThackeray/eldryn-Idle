@@ -39,6 +39,8 @@ interface Spec {
   category?: string
   group?: string
   sortOrder?: number
+  /** On a successful craft, learn this spell instead of producing an item. */
+  learnSpell?: string
 }
 
 export function activity(spec: Spec): ActivityDef {
@@ -67,5 +69,6 @@ export function activity(spec: Spec): ActivityDef {
     group: spec.group,
     sortOrder: spec.sortOrder,
     kind,
+    learnSpell: spec.learnSpell,
   }
 }

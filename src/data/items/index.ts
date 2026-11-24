@@ -8,6 +8,7 @@ import { KNOWLEDGE } from './knowledge'
 import { MATERIALS } from './materials'
 import { MISC } from './misc'
 import { POTIONS } from './potions'
+import { SPELL_SCROLLS } from './scrolls'
 import { SKILLING_GEAR } from './skillingGear'
 import { SUMMONS } from './summons'
 import { WEAPONS } from './weapons'
@@ -69,6 +70,7 @@ export const ITEMS = [
   ...ENCHANTED,
   ...SUMMONS,
   ...SKILLING_GEAR,
+  ...SPELL_SCROLLS,
 ] as const satisfies readonly ItemDef[]
 export type ItemId = (typeof ITEMS)[number]['id']
 

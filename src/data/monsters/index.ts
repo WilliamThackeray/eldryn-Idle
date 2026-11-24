@@ -1,3 +1,5 @@
+import { scrollLootForMonster } from '../scrollLoot'
+import { tierForBiome } from '../tiers'
 import { FOREST_MONSTERS } from './forest'
 import { HILLS_MONSTERS } from './hills'
 import { QUEST_MONSTERS } from './quest'
@@ -19,7 +21,15 @@ export const MONSTERS: MonsterDef[] = [
   ...HILLS_MONSTERS,
   ...SWAMP_MONSTERS,
   ...QUEST_MONSTERS,
-]
+].map((monster) => {
+  const biome = monster.biomes.find((id) => id !== 'quest')
+  const tier = biome ? tierForBiome(biome)?.tier : undefined
+  return {
+    ...monster,
+    tier,
+    lootTable: [...monster.lootTable, ...scrollLootForMonster(monster.id, tier ?? null)],
+  }
+})
 
 const BY_ID = new Map(MONSTERS.map((monster) => [monster.id, monster]))
 
@@ -39,5 +49,7 @@ export const BIOME_LABELS: Record<BiomeId, string> = {
   forest: 'Forest',
   hills: 'Hills',
   swamp: 'Swamp',
+  underdark: 'Underdark',
+  mountains: 'Mountains',
   quest: 'Quest',
 }

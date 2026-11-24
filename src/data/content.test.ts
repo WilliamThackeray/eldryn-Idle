@@ -203,7 +203,10 @@ test('weaving flax chain makes a linen robe with caster stats', () => {
   expect(getActivity('weaving', 'spin-flax')?.outputs[0]?.itemId).toBe('linen-thread')
   expect(getActivity('weaving', 'loom-linen')?.outputs[0]?.itemId).toBe('linen-cloth')
   expect(getActivity('weaving', 'craft-linen-chest')).toMatchObject({
-    inputs: [{ itemId: 'linen-cloth', quantity: 2 }],
+    inputs: [
+      { itemId: 'linen-cloth', quantity: 2 },
+      { itemId: 'dire-wolf-pelt', quantity: 1 },
+    ],
     outputs: [{ itemId: 'linen-chest' }],
   })
   const robe = getItem('linen-chest')

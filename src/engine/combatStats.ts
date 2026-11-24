@@ -92,6 +92,7 @@ export interface CombatStatsInput {
   inventory: Inventory
   spellLoadout?: SpellLoadout
   bestiaries?: Bestiaries
+  knownSpellIds?: readonly string[]
 }
 
 export interface CombatMatchup {
@@ -353,6 +354,7 @@ function expectedPlayerDps(input: CombatStatsInput, monster: MonsterDef): { dps:
     classTier,
     skillLevel: skillLevel(input.skills, unlock),
     loadout: input.spellLoadout,
+    knownSpellIds: input.knownSpellIds,
   }).map((slot) => ({ ...slot }))
   if (slots.length === 0) return { dps: 0, ttk: Infinity }
 

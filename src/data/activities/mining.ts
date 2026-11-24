@@ -11,10 +11,11 @@ export const miningActivities = fillDisplay(
       requiredLevel: 1,
       outputs: [
         drop('iron-ore'),
+        drop('raw-quartz'),
         drop('mica-chip', 1, 1, 0.25),
         drop('sulfur', 1, 1, 0.25),
       ],
-      rareTable: [drop('coal', 1, 1, 0.05), drop('raw-quartz', 1, 1, 0.12)],
+      rareTable: [drop('coal', 1, 1, 0.05)],
     }),
     activity({
       skillId: 'mining',
@@ -22,7 +23,7 @@ export const miningActivities = fillDisplay(
       name: 'Mine Coal',
       description: 'Dig coal for the forge.',
       requiredLevel: 15,
-      outputs: [drop('coal'), drop('mica-chip', 1, 1, 0.25), drop('sulfur', 1, 1, 0.25)],
+      outputs: [drop('coal'), drop('raw-amethyst'), drop('mica-chip', 1, 1, 0.25), drop('sulfur', 1, 1, 0.25)],
     }),
     activity({
       skillId: 'mining',
@@ -32,6 +33,7 @@ export const miningActivities = fillDisplay(
       requiredLevel: 30,
       outputs: [
         drop('silver-ore'),
+        drop('raw-sapphire'),
         drop('mica-chip', 1, 1, 0.25),
         drop('sulfur', 1, 1, 0.25),
       ],
@@ -70,6 +72,22 @@ export const miningActivities = fillDisplay(
         drop('mica-chip', 1, 1, 0.25),
         drop('sulfur', 1, 1, 0.25),
       ],
+    }),
+    activity({
+      skillId: 'mining',
+      id: 'prospect-emerald',
+      name: 'Prospect Emerald',
+      description: 'A deep seam. The Underdark is not open yet, but the cut is known.',
+      requiredLevel: 60,
+      outputs: [drop('raw-emerald')],
+    }),
+    activity({
+      skillId: 'mining',
+      id: 'prospect-diamond',
+      name: 'Prospect Diamond',
+      description: 'A high seam. The peaks are not open yet, but the cut is known.',
+      requiredLevel: 80,
+      outputs: [drop('raw-diamond')],
     }),
     activity({
       skillId: 'mining',

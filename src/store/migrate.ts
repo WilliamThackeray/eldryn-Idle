@@ -9,7 +9,7 @@ import { isItemId } from '../data/items'
 import { NOTE_GROUPS, type NoteGroupId } from '../data/historyContent'
 import { CREATURE_TYPES, getMonster, isBiomeId, type CreatureType } from '../data/monsters'
 import { isQuestId } from '../data/quests'
-import { isSpellId } from '../data/spells'
+import { isSpellId, type SpellId } from '../data/spells'
 import { initialSkillProgress, isSkillId, SKILLS, type TradeSkillId } from '../data/skills'
 import type { ActiveAction, CombatFight } from '../engine/advance'
 import type { ActiveBuff, BuffEffect } from '../engine/history'
@@ -29,6 +29,7 @@ import {
   normalizeInventoryTabs,
   type InventoryTab,
 } from '../engine/inventoryTabs'
+import { knownSpellsForClasses } from '../engine/spells'
 import {
   initialSpellLoadouts,
   type SpellLoadout,
@@ -73,6 +74,12 @@ export interface SaveData {
   skillLoadouts: Partial<Record<TradeSkillId | 'combat', EquipmentSnapshot>>
   combat: CombatFight | null
   spellLoadouts: Record<ClassId, SpellLoadout>
+  /** Spells learned by inscribing scrolls. */
+  knownSpells: SpellId[]
+  /** Dungeon ids cleared at least once. */
+  clearedDungeons: string[]
+  /** Biomes where this character has landed a kill. */
+  seenBiomes: string[]
   questProgress: QuestProgress
   pinnedQuestId: string | null
   noticeBoard: NoticeBoard
@@ -115,6 +122,9 @@ export function createInitialSave(): SaveData {
     skillLoadouts: {},
     combat: null,
     spellLoadouts: initialSpellLoadouts(),
+    knownSpells: [],
+    clearedDungeons: [],
+    seenBiomes: [],
     questProgress: emptyQuestProgress(),
     pinnedQuestId: null,
     noticeBoard: emptyNoticeBoard(),
@@ -169,6 +179,15 @@ export function normalizeSave(raw: unknown): SaveData {
 
   const { inventory: bagFreeInventory, goldBonus } = convertLegacyComponentBags(source.inventory)
   const inventory = migrateForgedWrit(readInventory(bagFreeInventory))
+  const locked = readLockedClass(source)
+  const secondary = readSecondaryClass(source)
+  const knownSpells = Array.isArray(source.knownSpells)
+    ? readSpellIds(source.knownSpells)
+    : locked.classId
+      ? (knownSpellsForClasses(locked.classId, secondary.secondaryClassId, skills).map(
+          (spell) => spell.id,
+        ) as SpellId[])
+      : []
   const upgrades = readUpgrades(source.upgrades)
   const tabTiers = upgrades['inventory-tabs']
   const tabCount = 5 + (tabTiers == null ? 0 : tabTiers + 1)
@@ -181,8 +200,8 @@ export function normalizeSave(raw: unknown): SaveData {
     lastSaved: typeof source.lastSaved === 'string' ? source.lastSaved : new Date().toISOString(),
     lastTick: typeof source.lastTick === 'number' && Number.isFinite(source.lastTick) ? source.lastTick : Date.now(),
     activeAction,
-    ...readLockedClass(source),
-    ...readSecondaryClass(source),
+    ...locked,
+    ...secondary,
     echoes: readEchoes(source.echoes),
     clericFocus: source.clericFocus === 'STR' ? 'STR' : 'INT',
     isInDungeonOrQuest: source.isInDungeonOrQuest === true,
@@ -190,6 +209,9 @@ export function normalizeSave(raw: unknown): SaveData {
     skillLoadouts: readSkillLoadouts(source.skillLoadouts),
     combat,
     spellLoadouts: readSpellLoadouts(source.spellLoadouts),
+    knownSpells,
+    clearedDungeons: readIdList(source.clearedDungeons),
+    seenBiomes: readIdList(source.seenBiomes),
     questProgress: readQuestProgress(source.questProgress),
     pinnedQuestId: readPinnedQuestId(source.pinnedQuestId),
     noticeBoard: readNoticeBoard(source.noticeBoard, typeof source.lastTick === 'number' ? source.lastTick : Date.now()),
@@ -202,6 +224,20 @@ export function normalizeSave(raw: unknown): SaveData {
     renown: readGold(source.renown),
     bounty: readBounty(source.bounty),
   }
+}
+
+function readSpellIds(value: unknown): SpellId[] {
+  if (!Array.isArray(value)) return []
+  const ids: SpellId[] = []
+  for (const entry of value) {
+    if (typeof entry === 'string' && isSpellId(entry) && !ids.includes(entry)) ids.push(entry)
+  }
+  return ids
+}
+
+function readIdList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === 'string')
 }
 
 function migrateForgedWrit(inventory: Inventory): Inventory {

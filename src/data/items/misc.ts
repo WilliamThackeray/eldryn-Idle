@@ -134,5 +134,6 @@ export const MISC = [
   },
   { id: 'empty-vial', name: 'Empty Vial', description: 'A clean glass vial.', category: 'misc', rarity: 'common', stackable: true, sellValue: 1 },
   { id: 'ink', name: 'Ink', description: 'Black ink for notes and tomes.', category: 'misc', rarity: 'common', stackable: true, sellValue: 1 },
+  { id: 'parchment', name: 'Parchment', description: 'A scraped sheet. Scrolls and inscriptions both take one.', category: 'misc', rarity: 'common', stackable: true, sellValue: 2 },
   { id: 'bandages', name: 'Bandages', description: 'Clean cloth wraps.', category: 'misc', rarity: 'common', stackable: true, sellValue: 1 },
 ] as const satisfies readonly ItemDef[]

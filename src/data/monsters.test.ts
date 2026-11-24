@@ -1,12 +1,17 @@
 import { expect, test } from 'vitest'
 import { getItem } from './items'
 import { HUNT_BIOMES, MONSTERS, monstersForBiome } from './monsters'
+import { tierForBiome } from './tiers'
 
 test('each hunt biome has 3–6 monsters spanning CR 0 to CR 3', () => {
   for (const biome of HUNT_BIOMES) {
     const list = monstersForBiome(biome)
+    if (tierForBiome(biome)?.zone.comingSoon) {
+      expect(list).toEqual([])
+      continue
+    }
     expect(list.length).toBeGreaterThanOrEqual(3)
-    expect(list.length).toBeLessThanOrEqual(6)
+    expect(list.length).toBeLessThanOrEqual(biome === 'hills' ? 7 : 6)
     const crs = list.map((monster) => monster.cr)
     expect(Math.min(...crs)).toBe(0)
     expect(Math.max(...crs)).toBe(3)

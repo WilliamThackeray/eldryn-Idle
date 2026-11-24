@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getItem } from '../../data/items'
 import { NPCS, QUESTS, getQuest, type CheckApproach, type QuestDef } from '../../data/quests'
 import { SKILLS } from '../../data/skills'
+import { preparesSpells } from '../../engine/spells'
 import {
   approachBonus,
   canTurnIn,
@@ -204,11 +205,12 @@ function QuestRow(props: {
   const skills = useGameStore((s) => s.skills)
   const inventory = useGameStore((s) => s.inventory)
   const classXp = useGameStore((s) => s.classXp)
+  const classId = useGameStore((s) => s.classId)
   const questProgress = useGameStore((s) => s.questProgress)
   const run = getRun(questProgress, quest.id)
   const available =
     !run &&
-    prerequisitesMet(quest, { questProgress, skills, classXp, inventory })
+    prerequisitesMet(quest, { questProgress, skills, classXp, inventory, classId })
   const active = isQuestActive(questProgress, quest.id)
   const done = isQuestComplete(questProgress, quest.id)
   const stage = run ? currentStage(quest, run) : null
@@ -220,7 +222,7 @@ function QuestRow(props: {
 
   const locked = !available && !active && !done
   const reason = locked
-    ? lockReason(quest, questProgress, skills, classXp, inventory)
+    ? lockReason(quest, questProgress, skills, classXp, inventory, classId)
     : null
   const status = done
     ? { label: 'Completed', tone: 'neutral' as const }
@@ -298,6 +300,7 @@ function lockReason(
   skills: Parameters<typeof prerequisitesMet>[1]['skills'],
   classXp: number,
   inventory: Parameters<typeof prerequisitesMet>[1]['inventory'],
+  classId: Parameters<typeof prerequisitesMet>[1]['classId'],
 ): string {
   const missing: string[] = []
   for (const id of quest.prerequisites.quests ?? []) {
@@ -317,6 +320,7 @@ function lockReason(
       missing.push(`${name} ${levelReq.level}`)
     }
   }
+  if (quest.prerequisites.caster && !preparesSpells(classId)) missing.push('Caster')
   for (const stack of quest.prerequisites.items ?? []) {
     if ((inventory[stack.itemId] ?? 0) < stack.quantity) {
       missing.push(`${getItem(stack.itemId)?.name ?? stack.itemId} ×${stack.quantity}`)

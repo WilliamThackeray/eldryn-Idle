@@ -50,7 +50,7 @@ export const huntingActivities = fillDisplay(
       name: 'Track Hills Game',
       description: 'Follow hill spoor for hides and meat.',
       requiredLevel: 30,
-      outputs: [drop('hide'), drop('raw-meat', 1, 2)],
+      outputs: [drop('hide'), drop('thick-hide'), drop('raw-meat', 1, 2)],
       rareTable: [drop('hide', 1, 2, 0.4), drop('raw-meat', 2, 3, 0.35)],
     }),
     activity({
@@ -61,6 +61,22 @@ export const huntingActivities = fillDisplay(
       requiredLevel: 60,
       outputs: [drop('hide', 1, 2), drop('raw-meat', 2, 3)],
       rareTable: [drop('hide', 2, 3, 0.4), drop('bones', 1, 2, 0.3)],
+    }),
+    activity({
+      skillId: 'hunting',
+      id: 'track-underdark',
+      name: 'Track Underdark Herds',
+      description: 'Follow rothé. The caverns are not open yet.',
+      requiredLevel: 60,
+      outputs: [drop('rothe-hide'), drop('raw-meat', 1, 2)],
+    }),
+    activity({
+      skillId: 'hunting',
+      id: 'track-peaks',
+      name: 'Track Peak Game',
+      description: 'Follow dragon sign. The peaks are not open yet.',
+      requiredLevel: 80,
+      outputs: [drop('dragonhide'), drop('raw-meat', 2, 3)],
     }),
     activity({
       skillId: 'hunting',

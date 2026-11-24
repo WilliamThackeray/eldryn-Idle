@@ -13,6 +13,7 @@ import {
 import { getMonster } from '../data/monsters'
 import { intervalBonus } from '../data/shop'
 import { getSkill, SKILLS, type TradeSkillId } from '../data/skills'
+import { isSpellId, type SpellId } from '../data/spells'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { activePerks, deriveAbilities, effectTotal } from './abilities'
 import {
@@ -60,6 +61,7 @@ import {
   type Bounty,
 } from './social'
 import { echoXpFraction } from './multiclass'
+import { canInscribe } from './spells'
 import { addXp, applyXpModifiers, levelForXp } from './xp'
 
 export type { CombatAction, CombatFight } from './combat'
@@ -89,6 +91,9 @@ export interface AdvanceState {
   /** Missing means none; shop interval upgrades. */
   upgrades?: Record<string, number>
   classId?: ClassId | null
+  secondaryClassId?: ClassId | null
+  /** Spells learned by inscribing scrolls. */
+  knownSpells?: SpellId[]
   classXp?: number
   secondaryClassXp?: number
   echoes?: number
@@ -348,12 +353,24 @@ export function onActivityComplete(
   const favorPct = effectTotal(perks, 'favorPct')
   inventory = addItems(inventory, stacks)
   const favor = grantFavor(state.favor ?? 0, favorGain, favorPct)
+  let knownSpells = state.knownSpells
+  if (passed && activity.learnSpell && isSpellId(activity.learnSpell)) {
+    const gate = canInscribe({
+      spellId: activity.learnSpell,
+      scribingLevel: levelForXp(state.skills.scribing?.xp ?? 0),
+      classId: state.classId,
+      secondaryClassId: state.secondaryClassId,
+      known: knownSpells,
+      mode: 'learn',
+    })
+    if (gate.ok) knownSpells = [...(knownSpells ?? []), activity.learnSpell]
+  }
   const isVenue =
     action.skillId === 'performance' &&
     !action.activityId.startsWith('craft-') &&
     passed
   const renown = isVenue ? renownGain(state.renown ?? 0, 1) : (state.renown ?? 0)
-  return { ...state, inventory, gold: state.gold + goldGain, favor, renown }
+  return { ...state, inventory, gold: state.gold + goldGain, favor, renown, knownSpells }
 }
 
 export function activityIntervalMs(
@@ -408,6 +425,7 @@ export function advance(
   let gold = state.gold
   let favor = state.favor ?? 0
   let renown = state.renown ?? 0
+  let knownSpells = state.knownSpells
   let activeBuffs = state.activeBuffs ?? []
   let equipment = state.equipment ?? emptyEquipment()
   if (current.progressMs === 0) {
@@ -494,6 +512,9 @@ export function advance(
         gold,
         favor,
         renown,
+        knownSpells,
+        classId: state.classId,
+        secondaryClassId: state.secondaryClassId,
         activeAction: { ...acting, progressMs: 0 },
         equipment,
         activeBuffs,
@@ -508,6 +529,7 @@ export function advance(
     gold = next.gold
     favor = next.favor ?? favor
     renown = next.renown ?? renown
+    knownSpells = next.knownSpells
     action = next.activeAction
     activeBuffs = tickBuffs(activeBuffs, need)
     log.push({
@@ -535,6 +557,7 @@ export function advance(
     gold,
     favor,
     renown,
+    knownSpells,
     equipment,
     activeBuffs,
     activeAction: action?.kind === 'skill' ? { ...action, progressMs: progress } : action,

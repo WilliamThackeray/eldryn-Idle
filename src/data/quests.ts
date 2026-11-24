@@ -54,12 +54,16 @@ export interface QuestRewards {
   items?: { itemId: ItemId; quantity: number }[]
   unlockActivity?: string
   unlockDungeon?: string
+  /** A level-1 spell scroll from the character's class list. */
+  level1Scroll?: boolean
 }
 
 export interface QuestPrerequisites {
   quests?: string[]
   level?: { skillId: TradeSkillId | 'class'; level: number }
   items?: { itemId: ItemId; quantity: number }[]
+  /** Only a class that prepares spells. */
+  caster?: boolean
 }
 
 export interface QuestDef {
@@ -217,6 +221,25 @@ export const QUESTS: QuestDef[] = [
       },
     ],
     rewards: { gold: 30, favor: 5 },
+  },
+  {
+    id: 'hedge-witchs-primer',
+    title: "The Hedge-Witch's Primer",
+    chapter: 1,
+    giverNpcId: 'hedge-witch',
+    turnInNpcId: 'hedge-witch',
+    prerequisites: { caster: true },
+    description:
+      'The hedge-witch keeps her primers locked. Bring her ink and a sheet of parchment and she will hand you a spell scroll to practice on.',
+    stages: [
+      {
+        objectives: [
+          { type: 'deliver', itemId: 'ink', qty: 1 },
+          { type: 'deliver', itemId: 'parchment', qty: 1 },
+        ],
+      },
+    ],
+    rewards: { level1Scroll: true },
   },
   {
     id: 'into-the-thicket',

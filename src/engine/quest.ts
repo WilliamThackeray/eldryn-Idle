@@ -17,6 +17,7 @@ import type { GameEvent } from './advance'
 import { checkModifier, formatCheck } from './checks'
 import { rollD20, type RollMode } from './dice'
 import { hasItems, removeItems, addItems, type Inventory } from './inventory'
+import { level1ScrollItem, preparesSpells } from './spells'
 import type { Rng } from './rng'
 import { levelForXp } from './xp'
 
@@ -93,6 +94,7 @@ export function prerequisitesMet(
     skills: Record<TradeSkillId, SkillProgress>
     classXp: number
     inventory: Inventory
+    classId?: ClassId | null
   },
 ): boolean {
   const prereq = quest.prerequisites
@@ -107,6 +109,7 @@ export function prerequisitesMet(
     if (level < prereq.level.level) return false
   }
   if (prereq.items && !hasItems(input.inventory, prereq.items)) return false
+  if (prereq.caster && !preparesSpells(input.classId)) return false
   return true
 }
 
@@ -117,6 +120,7 @@ export function acceptQuest(
     skills: Record<TradeSkillId, SkillProgress>
     classXp: number
     inventory: Inventory
+    classId?: ClassId | null
   },
 ): { progress: QuestProgress; ok: boolean; line: string } {
   const quest = getQuest(questId)
@@ -194,6 +198,7 @@ function grantRewards(
   inventory: Inventory,
   gold: number,
   favor: number,
+  classId?: ClassId | null,
 ): { inventory: Inventory; gold: number; favor: number } {
   const mod = run.rewardMod
   let nextGold = gold
@@ -202,6 +207,10 @@ function grantRewards(
   if (quest.rewards.gold) nextGold += Math.floor(quest.rewards.gold * mod)
   if (quest.rewards.favor) nextFavor += quest.rewards.favor
   if (quest.rewards.items) nextInv = addItems(nextInv, quest.rewards.items)
+  if (quest.rewards.level1Scroll && classId) {
+    const scroll = level1ScrollItem(classId)
+    if (scroll) nextInv = addItems(nextInv, [{ itemId: scroll, quantity: 1 }])
+  }
   return { inventory: nextInv, gold: nextGold, favor: nextFavor }
 }
 
@@ -213,6 +222,7 @@ export function turnInQuest(
   classXp: number,
   gold: number,
   favor: number,
+  classId?: ClassId | null,
 ): {
   progress: QuestProgress
   inventory: Inventory
@@ -247,7 +257,7 @@ export function turnInQuest(
   const history = [...run.history, { text: `Turned in stage ${run.stage + 1}.` }]
 
   if (nextStage >= stages.length) {
-    const granted = grantRewards(quest, run, nextInv, gold, favor)
+    const granted = grantRewards(quest, run, nextInv, gold, favor, classId)
     return {
       progress: {
         ...progress,

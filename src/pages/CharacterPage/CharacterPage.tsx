@@ -5,7 +5,7 @@ import { getItem, type ItemId } from '../../data/items'
 import { getMonster } from '../../data/monsters'
 import { getShopUpgrade, type OwnedUpgrades } from '../../data/shop'
 import { CHECK_SKILLS } from '../../data/checkSkills'
-import { getSkill, SKILLS, type TradeSkillId } from '../../data/skills'
+import { SKILLS, type TradeSkillId } from '../../data/skills'
 import { checkModifier, formatCheck } from '../../engine/checks'
 import { getSpell, spellsForClass, type SpellId } from '../../data/spells'
 import { ladderPerksFor, perRankPerkFor } from '../../data/abilityPerks'
@@ -32,14 +32,13 @@ import {
   componentCostForCast,
   effectiveCasterType,
   hasComponents,
-  knownSpellsForClasses,
   missingComponentName,
   slotsFor,
   spellFitsSlot,
   spellOwnerClass,
   unlockSkillFor,
-  unlockSkillLevel,
 } from '../../engine/spells'
+import { tierProgress } from '../../engine/progression'
 import { levelForXp, progressToNext, tier } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
 import type { AbilityAbbr, SkillProgress } from '../../types/game'
@@ -96,6 +95,9 @@ export function CharacterPage({
   const equipment = useGameStore((state) => state.equipment)
   const inventory = useGameStore((state) => state.inventory)
   const spellLoadouts = useGameStore((state) => state.spellLoadouts)
+  const knownSpells = useGameStore((state) => state.knownSpells)
+  const clearedDungeons = useGameStore((state) => state.clearedDungeons)
+  const seenBiomes = useGameStore((state) => state.seenBiomes)
   const setSpellSlot = useGameStore((state) => state.setSpellSlot)
   const unequipSlot = useGameStore((state) => state.unequipSlot)
   const equipItem = useGameStore((state) => state.equipItem)
@@ -145,9 +147,9 @@ export function CharacterPage({
     return [...primary, ...secondarySpells.filter((spell) => !seen.has(spell.id))]
   }, [classId, secondaryClassId])
   const knownIds = useMemo(() => {
-    if (!classId) return new Set<string>()
-    return new Set(knownSpellsForClasses(classId, secondaryClassId, skills).map((spell) => spell.id))
-  }, [classId, secondaryClassId, skills])
+    const allowed = new Set(classSpells.map((spell) => spell.id))
+    return new Set<string>(knownSpells.filter((id) => allowed.has(id)))
+  }, [classSpells, knownSpells])
   const loadout = classId ? spellLoadouts[classId] : undefined
 
   function openLink(link: ItemLink) {
@@ -240,6 +242,7 @@ export function CharacterPage({
         inventory,
         spellLoadout: loadout,
         bestiaries,
+        knownSpellIds: knownSpells,
       })
     : null
 
@@ -273,6 +276,7 @@ export function CharacterPage({
         <Tabs name="character" label="Character" tabs={tabItems} value={tab} onChange={chooseTab} />
         <TabPanel name="character" id={tab} active>
           {tab === 'overview' && (
+            <>
             <Card className="space-y-4">
               <div>
                 <h2 className="text-page font-bold text-gold">{characterName}</h2>
@@ -337,6 +341,8 @@ export function CharacterPage({
                 </div>
               )}
             </Card>
+            <Progression inventory={inventory} equipment={equipment} clearedDungeons={clearedDungeons} seenBiomes={seenBiomes} />
+            </>
           )}
 
           {tab === 'abilities' && (
@@ -369,6 +375,7 @@ export function CharacterPage({
                     classXp={classXp}
                     inventory={inventory}
                     spellLoadout={loadout}
+                    knownSpellIds={knownSpells}
                     bestiaries={bestiaries}
                   />
                 </div>
@@ -384,10 +391,8 @@ export function CharacterPage({
           ) : (
             <>
               <p className="mb-4 text-sm text-sage">
-                Unlock skill: {unlockSkillId ? getSkill(unlockSkillId).name : '—'} level {unlockLevel}
-                {secondaryUnlockId
-                  ? ` · Secondary: ${getSkill(secondaryUnlockId).name} level ${secondaryUnlockLevel}`
-                  : ''}
+                Spells you have inscribed. Casting still needs a slot of that level. Scribing level {unlockLevel}
+                {secondaryUnlockId ? ` · secondary ${secondaryUnlockLevel}` : ''}.
               </p>
 
               {casterType && (
@@ -439,14 +444,10 @@ export function CharacterPage({
                 </>
               )}
 
-              <h4 className="mb-2 font-semibold text-sage">Known & locked</h4>
+              <h4 className="mb-2 font-semibold text-sage">Known</h4>
               <ul className="space-y-2 text-sm">
-                {classSpells.map((spell) => {
+                {classSpells.filter((spell) => knownIds.has(spell.id)).map((spell) => {
                   const owner = spellOwnerClass(spell.id as SpellId, classId, secondaryClassId)
-                  const ownerUnlock = unlockSkillFor(owner)
-                  const ownerLevel = ownerUnlock ? levelForXp(skills[ownerUnlock]?.xp ?? 0) : 0
-                  const need = unlockSkillLevel(spell.level)
-                  const known = ownerLevel >= need
                   const cost = componentCostForCast({ spell, classId: owner })
                   return (
                     <li
@@ -464,9 +465,7 @@ export function CharacterPage({
                             {owner !== classId ? ` · ${getClass(owner).name}` : ''})
                           </span>
                         </span>
-                        <span className={known ? 'text-sage' : 'text-parchment/50'}>
-                          {known ? 'Known' : `Unlocks at ${need}`}
-                        </span>
+                        <span className="text-sage">Known</span>
                       </div>
                       <ComponentLines cost={cost} inventory={inventory} onOpenLink={openLink} />
                     </li>
@@ -705,5 +704,50 @@ function ComponentLines({
         )
       })}
     </ul>
+  )
+}
+
+function Progression(props: {
+  inventory: Inventory
+  equipment: Parameters<typeof tierProgress>[0]['equipment']
+  clearedDungeons: readonly string[]
+  seenBiomes: readonly string[]
+}) {
+  const rows = tierProgress(props)
+  return (
+    <Card className="space-y-3">
+      <h3 className="font-bold text-gold">Progression</h3>
+      <ul className="space-y-3">
+        {rows.map(({ row, groups, zoneCleared, dungeonCleared }) => (
+          <li key={row.tier} className="rounded-md border border-line bg-ink/30 px-3 py-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className={cx('font-semibold', row.color)}>
+                {row.name} · {row.levelMin}–{row.levelMax}
+              </span>
+              <span className="text-meta text-muted">
+                {row.zone.name}
+                {zoneCleared ? ' ✓' : ''}
+                {' · '}
+                {row.dungeon.name}
+                {dungeonCleared ? ' ✓' : ''}
+                {' · '}
+                {row.boss.name}
+                {dungeonCleared ? ' ✓' : ''}
+                {row.zone.comingSoon ? ' · Coming soon' : ''}
+              </span>
+            </div>
+            <div className="mt-1 grid gap-1 text-sm sm:grid-cols-3">
+              {groups.map((group) => (
+                <p key={group.label}>
+                  <span className="text-muted">{group.label}: </span>
+                  {group.yours}
+                  <span className="text-muted"> / {group.target}</span>
+                </p>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }

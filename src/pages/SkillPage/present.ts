@@ -1,6 +1,7 @@
 import type { ActivityDef, GoldDrop, LootEntry } from '../../data/activities'
 import { parseTomeActivityId } from '../../data/historyContent'
 import { getItem } from '../../data/items'
+import { obtainedFrom } from '../../data/tiers'
 import { discountTomeInputs } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
 
@@ -50,11 +51,15 @@ export function goldNote(gold: GoldDrop): string {
 }
 
 export function inputChips(activity: ActivityDef, inventory: Inventory, pageDiscount: number) {
-  return craftInputs(activity, pageDiscount).map((stack) => ({
-    name: itemName(stack.itemId),
-    owned: inventory[stack.itemId] ?? 0,
-    needed: stack.quantity,
-  }))
+  return craftInputs(activity, pageDiscount).map((stack) => {
+    const from = obtainedFrom(stack.itemId)
+    return {
+      name: itemName(stack.itemId),
+      owned: inventory[stack.itemId] ?? 0,
+      needed: stack.quantity,
+      note: from ? `Obtained from: ${from.monster} (${from.biome})` : undefined,
+    }
+  })
 }
 
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const

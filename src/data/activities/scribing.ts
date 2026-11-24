@@ -1,4 +1,5 @@
 import { scribingCraftActivities } from '../historyContent'
+import { scrollActivities } from './scrolls'
 import { activity, drop, stack } from './define'
 import { fillDisplay } from './display'
 
@@ -17,7 +18,7 @@ export const scribingActivities = fillDisplay(
       skillId: 'scribing',
       id: 'lost-runes',
       name: 'Lost Runes',
-      description: 'Study rune fragments. Scrolls come later.',
+      description: 'Study rune fragments.',
       requiredLevel: 20,
     }),
     activity({
@@ -28,6 +29,15 @@ export const scribingActivities = fillDisplay(
       requiredLevel: 1,
       inputs: [stack('forest-herbs'), stack('coal')],
       outputs: [drop('ink')],
+    }),
+    activity({
+      skillId: 'scribing',
+      id: 'craft-parchment',
+      name: 'Craft Parchment',
+      description: 'Scrape a hide into a writing sheet.',
+      requiredLevel: 1,
+      inputs: [stack('hide')],
+      outputs: [drop('parchment')],
     }),
     activity({
       skillId: 'scribing',
@@ -47,11 +57,14 @@ export const scribingActivities = fillDisplay(
       outputs: [drop('rumor'), drop('intel', 1, 1, 0.45)],
     }),
     ...scribingCraftActivities,
+    ...scrollActivities,
   ],
   (def, index) => {
     if (def.category) return { category: def.category, group: def.group, sortOrder: def.sortOrder ?? index }
     if (def.id === 'chronicles' || def.id === 'lost-runes') return { category: 'Lore', sortOrder: index }
-    if (def.id === 'craft-ink' || def.id === 'craft-blessed-parchment') return { category: 'Ink', sortOrder: index }
+    if (def.id === 'craft-ink' || def.id === 'craft-parchment' || def.id === 'craft-blessed-parchment') {
+      return { category: 'Ink', sortOrder: index }
+    }
     if (def.id === 'interrogation') return { category: 'Field Notes', sortOrder: index }
     return { category: 'Lore', sortOrder: index }
   },

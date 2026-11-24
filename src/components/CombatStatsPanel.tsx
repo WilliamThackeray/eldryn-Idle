@@ -20,6 +20,7 @@ interface CombatStatsPanelProps {
   classXp: number
   inventory: Inventory
   spellLoadout?: SpellLoadout
+  knownSpellIds?: readonly string[]
   monster?: MonsterDef | null
   compact?: boolean
   bestiaries?: Bestiaries
@@ -89,6 +90,7 @@ export function CombatStatsPanel({
   classXp,
   inventory,
   spellLoadout,
+  knownSpellIds,
   monster = null,
   compact = false,
   bestiaries,
@@ -103,7 +105,7 @@ export function CombatStatsPanel({
   }
 
   const stats: CombatStats = computeCombatStats(
-    { skills, equipment, classId, classXp, inventory, spellLoadout, bestiaries },
+    { skills, equipment, classId, classXp, inventory, spellLoadout, bestiaries, knownSpellIds },
     monster ?? undefined,
   )
 
