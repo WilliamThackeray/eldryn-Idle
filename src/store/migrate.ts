@@ -17,7 +17,12 @@ import { emptyNoticeBoard, type NoticeBoard } from '../engine/noticeBoard'
 import type { Bounty } from '../engine/social'
 import { emptyQuestProgress, emptyQuestRun, type QuestProgress, type QuestRun } from '../engine/quest'
 import { emptySignatureRuntime } from '../engine/signatures'
-import { emptyEquipment, type Equipment, type EquipmentSet, type EquipmentSlot } from '../engine/equipment'
+import {
+  emptyEquipment,
+  type Equipment,
+  type EquipmentSnapshot,
+  type EquipmentSlot,
+} from '../engine/equipment'
 import type { Inventory } from '../engine/inventory'
 import {
   defaultInventoryTabs,
@@ -64,7 +69,8 @@ export interface SaveData {
   clericFocus: ClericFocus
   isInDungeonOrQuest: boolean
   equipment: Equipment
-  equipmentSets: EquipmentSet[]
+  /** Per-skill and combat equipment snapshots. Empty entry means leave gear alone. */
+  skillLoadouts: Partial<Record<TradeSkillId | 'combat', EquipmentSnapshot>>
   combat: CombatFight | null
   spellLoadouts: Record<ClassId, SpellLoadout>
   questProgress: QuestProgress
@@ -106,7 +112,7 @@ export function createInitialSave(): SaveData {
     clericFocus: 'INT',
     isInDungeonOrQuest: false,
     equipment: emptyEquipment(),
-    equipmentSets: [],
+    skillLoadouts: {},
     combat: null,
     spellLoadouts: initialSpellLoadouts(),
     questProgress: emptyQuestProgress(),
@@ -181,7 +187,7 @@ export function normalizeSave(raw: unknown): SaveData {
     clericFocus: source.clericFocus === 'STR' ? 'STR' : 'INT',
     isInDungeonOrQuest: source.isInDungeonOrQuest === true,
     equipment: readEquipment(source.equipment),
-    equipmentSets: readEquipmentSets(source.equipmentSets),
+    skillLoadouts: readSkillLoadouts(source.skillLoadouts),
     combat,
     spellLoadouts: readSpellLoadouts(source.spellLoadouts),
     questProgress: readQuestProgress(source.questProgress),
@@ -588,14 +594,22 @@ function readEquipment(value: unknown): Equipment {
   return equipment
 }
 
-function readEquipmentSets(value: unknown): EquipmentSet[] {
-  if (!Array.isArray(value)) return []
-  const sets: EquipmentSet[] = []
-  for (const entry of value) {
-    if (!isRecord(entry) || typeof entry.name !== 'string' || !entry.name.trim()) continue
-    sets.push({ name: entry.name.trim(), slots: readEquipment(entry.slots) })
+function readSkillLoadouts(
+  value: unknown,
+): Partial<Record<TradeSkillId | 'combat', EquipmentSnapshot>> {
+  if (!isRecord(value)) return {}
+  const out: Partial<Record<TradeSkillId | 'combat', EquipmentSnapshot>> = {}
+  for (const [key, snap] of Object.entries(value)) {
+    if (key !== 'combat' && !isSkillId(key)) continue
+    if (!isRecord(snap)) continue
+    const next: EquipmentSnapshot = {}
+    for (const slot of EQUIPMENT_SLOTS) {
+      const id = snap[slot]
+      if (typeof id === 'string' && isItemId(id)) next[slot] = id
+    }
+    out[key as TradeSkillId | 'combat'] = next
   }
-  return sets
+  return out
 }
 
 function readCombat(value: unknown): CombatFight | null {
@@ -624,6 +638,10 @@ function readCombat(value: unknown): CombatFight | null {
     playerIntervalMs: Math.max(1, finite(value.playerIntervalMs) ?? 6000),
     monsterIntervalMs: Math.max(1, finite(value.monsterIntervalMs) ?? 6000),
     playerIntervalCount: Math.max(0, Math.floor(finite(value.playerIntervalCount) ?? 0)),
+    summon1ProgressMs: Math.max(0, finite(value.summon1ProgressMs) ?? 0),
+    summon2ProgressMs: Math.max(0, finite(value.summon2ProgressMs) ?? 0),
+    summon1IntervalMs: Math.max(0, finite(value.summon1IntervalMs) ?? 0),
+    summon2IntervalMs: Math.max(0, finite(value.summon2IntervalMs) ?? 0),
     nextAttackAdvantage: value.nextAttackAdvantage === true,
     monsterNextDisadvantage: value.monsterNextDisadvantage === true,
     slowActive: value.slowActive === true,

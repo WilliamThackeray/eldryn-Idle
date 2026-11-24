@@ -14,6 +14,7 @@ import { tryAutoEat } from './food'
 import { resolveMonsterAttacks } from './monsterTurn'
 import { runOpening } from './opening'
 import { resolveSpellCast } from './spellcasting'
+import { resolveSummonAttack, summonOf } from './summons'
 import {
   abilityModMap,
   type CombatAdvanceInput,
@@ -235,11 +236,17 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
       fight.playerIntervalMs = nextInterval
     }
     fight.monsterIntervalMs = computeMonsterIntervalMs(monster, fight.slowActive)
+    fight.summon1IntervalMs = summonOf(equipment, 'summon1')?.intervalMs ?? 0
+    fight.summon2IntervalMs = summonOf(equipment, 'summon2')?.intervalMs ?? 0
 
     let playerReady = fight.playerProgressMs >= fight.playerIntervalMs - 1e-6
     let monsterReady = fight.pushDelayMs <= 0 && fight.monsterProgressMs >= fight.monsterIntervalMs - 1e-6
+    let summon1Ready =
+      fight.summon1IntervalMs > 0 && fight.summon1ProgressMs >= fight.summon1IntervalMs - 1e-6
+    let summon2Ready =
+      fight.summon2IntervalMs > 0 && fight.summon2ProgressMs >= fight.summon2IntervalMs - 1e-6
 
-    if (!playerReady && !monsterReady) {
+    if (!playerReady && !monsterReady && !summon1Ready && !summon2Ready) {
       if (remaining <= 0) break
 
       // Burn push delay first; the player timer still advances.
@@ -249,20 +256,40 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         remaining -= burn
         fight.sessionMs += burn
         fight.playerProgressMs += burn
+        if (fight.summon1IntervalMs > 0) fight.summon1ProgressMs += burn
+        if (fight.summon2IntervalMs > 0) fight.summon2ProgressMs += burn
         playerReady = fight.playerProgressMs >= fight.playerIntervalMs - 1e-6
         monsterReady = fight.pushDelayMs <= 0 && fight.monsterProgressMs >= fight.monsterIntervalMs - 1e-6
-        if (!playerReady && !monsterReady) continue
+        summon1Ready =
+          fight.summon1IntervalMs > 0 && fight.summon1ProgressMs >= fight.summon1IntervalMs - 1e-6
+        summon2Ready =
+          fight.summon2IntervalMs > 0 && fight.summon2ProgressMs >= fight.summon2IntervalMs - 1e-6
+        if (!playerReady && !monsterReady && !summon1Ready && !summon2Ready) continue
       } else {
         const playerNeed = Math.max(0, fight.playerIntervalMs - fight.playerProgressMs)
         const monsterNeed = Math.max(0, fight.monsterIntervalMs - fight.monsterProgressMs)
-        const step = Math.min(playerNeed, monsterNeed, remaining)
-        if (step <= 0) break
+        const s1Need =
+          fight.summon1IntervalMs > 0
+            ? Math.max(0, fight.summon1IntervalMs - fight.summon1ProgressMs)
+            : Infinity
+        const s2Need =
+          fight.summon2IntervalMs > 0
+            ? Math.max(0, fight.summon2IntervalMs - fight.summon2ProgressMs)
+            : Infinity
+        const step = Math.min(playerNeed, monsterNeed, s1Need, s2Need, remaining)
+        if (step <= 0 || !Number.isFinite(step)) break
         fight.playerProgressMs += step
         fight.monsterProgressMs += step
+        if (fight.summon1IntervalMs > 0) fight.summon1ProgressMs += step
+        if (fight.summon2IntervalMs > 0) fight.summon2ProgressMs += step
         remaining -= step
         fight.sessionMs += step
         playerReady = fight.playerProgressMs >= fight.playerIntervalMs - 1e-6
         monsterReady = fight.monsterProgressMs >= fight.monsterIntervalMs - 1e-6
+        summon1Ready =
+          fight.summon1IntervalMs > 0 && fight.summon1ProgressMs >= fight.summon1IntervalMs - 1e-6
+        summon2Ready =
+          fight.summon2IntervalMs > 0 && fight.summon2ProgressMs >= fight.summon2IntervalMs - 1e-6
       }
     }
 
@@ -445,6 +472,88 @@ export function advanceCombat(input: CombatAdvanceInput): CombatAdvanceResult {
         }
       }
     }
+    const resolveSummonKill = (killed: boolean) => {
+      if (!killed) return null
+      return onKill({
+        fight,
+        monster,
+        inventory,
+        equipment,
+        classXp,
+        secondaryClassXp,
+        echoes,
+        hasSecondary: secondaryActive,
+        skills,
+        rng: input.rng,
+        trace,
+        modifiers,
+        chaMod: mods().CHA,
+        classTier: classTier(),
+        activeClassId: input.activeClassId,
+        casting,
+        stopWhenOutOfFood: input.stopWhenOutOfFood,
+        bounty,
+        favor,
+        activeBuffs: input.activeBuffs,
+      })
+    }
+
+    if (summon1Ready && fight.phase === 'fight' && fight.monsterHp > 0) {
+      fight.summon1ProgressMs = 0
+      const swing = resolveSummonAttack({
+        fight,
+        monster,
+        equipment,
+        slot: 'summon1',
+        rng: input.rng,
+        trace,
+      })
+      if (swing.killed) {
+        const killed = resolveSummonKill(true)
+        if (killed) {
+          inventory = killed.inventory
+          classXp = killed.classXp
+          secondaryClassXp = killed.secondaryClassXp
+          skills = killed.skills
+          bounty = killed.bounty
+          favor = killed.favor
+          if (killed.monster) monster = killed.monster
+          flushGold()
+          if (killed.stop) return finishStop(killed.questStepComplete)
+          if (fight.defeated) return finishDefeat()
+          continue
+        }
+      }
+    }
+
+    if (summon2Ready && fight.phase === 'fight' && fight.monsterHp > 0) {
+      fight.summon2ProgressMs = 0
+      const swing = resolveSummonAttack({
+        fight,
+        monster,
+        equipment,
+        slot: 'summon2',
+        rng: input.rng,
+        trace,
+      })
+      if (swing.killed) {
+        const killed = resolveSummonKill(true)
+        if (killed) {
+          inventory = killed.inventory
+          classXp = killed.classXp
+          secondaryClassXp = killed.secondaryClassXp
+          skills = killed.skills
+          bounty = killed.bounty
+          favor = killed.favor
+          if (killed.monster) monster = killed.monster
+          flushGold()
+          if (killed.stop) return finishStop(killed.questStepComplete)
+          if (fight.defeated) return finishDefeat()
+          continue
+        }
+      }
+    }
+
     if (monsterReady && fight.phase === 'fight' && fight.monsterHp > 0) {
       const turn = resolveMonsterAttacks({
         fight,

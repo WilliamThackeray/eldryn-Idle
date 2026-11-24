@@ -158,7 +158,7 @@ test('rebirth resets class level, clears secondary, adds Echo, and scales cost',
     gold: 999_999,
     inventory,
     skills,
-    upgrades: { pickaxe: 0 },
+    upgrades: {},
     tomes: { ...createInitialSave().tomes, mining: 3 },
     questProgress: createInitialSave().questProgress,
   }

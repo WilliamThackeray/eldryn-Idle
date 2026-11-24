@@ -4,6 +4,7 @@ import {
   type GearMaterial,
   type GearSlot,
   type ItemDef,
+  type ItemStats,
 } from './types'
 
 const PIECES = ['helmet', 'chest', 'chaps', 'gauntlets', 'boots'] as const satisfies readonly GearSlot[]
@@ -59,6 +60,46 @@ function armorSet(spec: {
   }))
 }
 
+const CASTER_LABELS: Record<ArmorPiece, string> = {
+  helmet: 'Hood',
+  chest: 'Robe',
+  chaps: 'Trousers',
+  gauntlets: 'Gloves',
+  boots: 'Slippers',
+}
+
+function casterSet(spec: {
+  id: string
+  name: string
+  description: string
+  pieceBuy: number
+  armorValue: number
+  chestStats: ItemStats
+  labels?: Record<ArmorPiece, string>
+}): ItemDef[] {
+  const labels = spec.labels ?? CASTER_LABELS
+  return PIECES.map((slot) => ({
+    id: `${spec.id}-${slot}`,
+    name: `${spec.name} ${labels[slot]}`,
+    description: spec.description,
+    category: 'gear' as const,
+    rarity: 'common' as const,
+    stackable: true,
+    sellValue: sellFromBuy(spec.pieceBuy),
+    tags: ['armor', 'light', 'caster'],
+    gear: {
+      slot,
+      magicBonus: magicBonusForRarity('common'),
+      armor: {
+        weightClass: 'light' as const,
+        armorValue: spec.armorValue,
+        stealthDisadvantage: false,
+      },
+      stats: slot === 'chest' ? spec.chestStats : undefined,
+    },
+  }))
+}
+
 export const ARMOR = [
   ...armorSet({
     id: 'padded',
@@ -69,34 +110,55 @@ export const ARMOR = [
     armorValue: 1,
     stealthDisadvantage: true,
   }),
-  ...armorSet({
+  ...casterSet({
+    id: 'linen',
+    name: 'Linen',
+    description: 'Simple linen caster attire.',
+    pieceBuy: 2,
+    armorValue: 1,
+    chestStats: { spellAttack: 1, spellSaveDc: 1, componentSaveChance: 0.05, maxHp: 2 },
+  }),
+  ...casterSet({
+    id: 'wool',
+    name: 'Wool',
+    description: 'Warm wool caster attire.',
+    pieceBuy: 6,
+    armorValue: 1,
+    chestStats: { spellAttack: 1, spellSaveDc: 1, componentSaveChance: 0.08, maxHp: 4 },
+  }),
+  ...casterSet({
+    id: 'silk',
+    name: 'Silk',
+    description: 'Fine silk caster attire.',
+    pieceBuy: 16,
+    armorValue: 2,
+    chestStats: { spellAttack: 2, spellSaveDc: 2, componentSaveChance: 0.1, maxHp: 6 },
+  }),
+  ...casterSet({
     id: 'arcane',
     name: 'Arcane',
     description: 'A robe stitched with faint sigils.',
-    pieceBuy: 1,
-    weightClass: 'light',
+    pieceBuy: 8,
     armorValue: 1,
-    stealthDisadvantage: false,
+    chestStats: { spellAttack: 1, spellSaveDc: 1, componentSaveChance: 0.08, maxHp: 4 },
     labels: { helmet: 'Hood', chest: 'Robe', chaps: 'Trousers', gauntlets: 'Gloves', boots: 'Slippers' },
   }),
-  ...armorSet({
+  ...casterSet({
     id: 'vestment',
     name: 'Vestment',
     description: 'Temple cloth, blessed and plainly cut.',
-    pieceBuy: 1,
-    weightClass: 'light',
-    armorValue: 1,
-    stealthDisadvantage: false,
+    pieceBuy: 14,
+    armorValue: 2,
+    chestStats: { spellAttack: 2, spellSaveDc: 2, componentSaveChance: 0.1, maxHp: 6 },
     labels: { helmet: 'Cowl', chest: 'Robe', chaps: 'Leggings', gauntlets: 'Gloves', boots: 'Sandals' },
   }),
-  ...armorSet({
+  ...casterSet({
     id: 'wildweave',
     name: 'Wildweave',
     description: 'Bark-cloth and woven leaves.',
-    pieceBuy: 1,
-    weightClass: 'light',
+    pieceBuy: 4,
     armorValue: 1,
-    stealthDisadvantage: false,
+    chestStats: { spellAttack: 1, spellSaveDc: 1, componentSaveChance: 0.05, maxHp: 2 },
     labels: { helmet: 'Hood', chest: 'Wrap', chaps: 'Leggings', gauntlets: 'Gloves', boots: 'Boots' },
   }),
   ...armorSet({

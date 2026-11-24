@@ -4,23 +4,23 @@ import type { ActivityDef } from './types'
 /** Skills with an explicit tab list. Anything else tabs only when it is large and categorized. */
 export const SKILL_TABS: Partial<Record<TradeSkillId, readonly string[]>> = {
   mining: ['Mining', 'Excavation'],
-  smithing: ['Smelting', 'Weapons', 'Armor', 'Shields'],
+  smithing: ['Smelting', 'Weapons', 'Armor', 'Shields', 'Skilling Gear'],
   woodcutting: ['Woodcutting'],
   woodcraft: ['Weapons', 'Ammo', 'Bows', 'Crossbows', 'Focuses'],
-  leatherworking: ['Armor', 'Attire', 'Weapons'],
-  jewelcrafting: ['Jewelry', 'Appraisal', 'Focuses'],
+  leatherworking: ['Armor', 'Attire', 'Weapons', 'Skilling Gear'],
+  jewelcrafting: ['Gem Cutting', 'Jewelry', 'Appraisal', 'Focuses', 'Skilling Gear'],
   thievery: ['Pickpocketing', 'Lockpicking', 'Forgery', 'Infiltration'],
   cooking: ['Cooking'],
   alchemy: ['Potions', 'Reagents', 'Holy Water'],
   scribing: ['Lore', 'Ink', 'Tomes', 'Study Notes', 'Bestiaries', 'Field Notes'],
-  enchanting: ['Arcane Study'],
-  weaving: ['Attire'],
+  enchanting: ['Arcane Study', 'Enchantments'],
+  weaving: ['Spinning', 'Loom', 'Tailoring', 'Skilling Gear'],
   foraging: ['Foraging', 'Plots'],
   fishing: ['Fishing'],
-  hunting: ['Trapping', 'Butchering', 'Husbandry'],
+  hunting: ['Trapping', 'Tracking', 'Butchering', 'Husbandry'],
   commerce: ['Trade', 'Rumors', 'Schemes', 'Debts'],
   performance: ['Venues'],
-  binding: ['Drills'],
+  binding: ['Pacts'],
 }
 
 export function skillUsesTabs(skillId: TradeSkillId, activities: ActivityDef[]): boolean {

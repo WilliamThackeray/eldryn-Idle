@@ -260,6 +260,21 @@ export function resolvePlayerAttack(input: {
     skills,
   })
 
+  const rider = getItem(equipment.mainHand ?? '')?.gear?.rider
+  if (rider && fight.monsterHp > 0) {
+    const riderParts = rollDamageParts(rider.dice, rng, crit)
+    const riderRaw = applyDamageModifiers(
+      riderParts.total,
+      rider.damageType,
+      monster.resistances,
+      monster.vulnerabilities,
+      monster.immunities,
+    )
+    let riderDealt = applyTriangle(riderRaw, 'magic' as const, monster.archetype)
+    if (intelPct > 0) riderDealt = Math.floor(riderDealt * (1 + intelPct))
+    fight.monsterHp = Math.max(0, fight.monsterHp - riderDealt)
+    line += ` Rider [${rider.dice}] ${riderDealt} ${rider.damageType}.`
+  }
 
   pushLog(fight, line, trace)
   return {

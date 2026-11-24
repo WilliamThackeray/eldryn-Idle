@@ -61,6 +61,11 @@ export interface CombatFight {
   playerIntervalMs: number
   monsterIntervalMs: number
   playerIntervalCount: number
+  /** Summon attack clocks. TODO(design): should monsters target summons? */
+  summon1ProgressMs: number
+  summon2ProgressMs: number
+  summon1IntervalMs: number
+  summon2IntervalMs: number
   nextAttackAdvantage: boolean
   monsterNextDisadvantage: boolean
   slowActive: boolean
@@ -313,6 +318,10 @@ export function createFight(input: {
     playerIntervalMs: playerInterval,
     monsterIntervalMs: computeMonsterIntervalMs(monster, false),
     playerIntervalCount: 0,
+    summon1ProgressMs: 0,
+    summon2ProgressMs: 0,
+    summon1IntervalMs: getItem(input.equipment.summon1)?.gear?.summon?.intervalMs ?? 0,
+    summon2IntervalMs: getItem(input.equipment.summon2)?.gear?.summon?.intervalMs ?? 0,
     nextAttackAdvantage: false,
     monsterNextDisadvantage: false,
     slowActive: false,

@@ -100,6 +100,7 @@ export const SWAMP_MONSTERS = [
       { itemId: 'animal-scraps', chance: 0.5, min: 1, max: 2 },
       { itemId: 'ghoul-ichor', chance: 0.75, min: 1, max: 1 },
       { itemId: 'undead-trophy', chance: 0.25, min: 1, max: 1 },
+      { itemId: 'shadow-essence', chance: 0.35, min: 1, max: 1 },
     ],
     gold: { min: 1, max: 4 },
     biomes: ['swamp'],

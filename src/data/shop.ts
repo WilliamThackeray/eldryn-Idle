@@ -11,7 +11,7 @@ export type ShopSection = 'general' | 'class' | TradeSkillId | 'combat'
 
 export type UpgradeEffect =
   | { kind: 'inventoryTabs' }
-  | { kind: 'interval'; match: 'mine' | 'chop' | 'fish' | 'herb-plot'; pct: number }
+  | { kind: 'interval'; match: 'herb-plot'; pct: number }
   | { kind: 'shopDiscount'; pct: number }
   | { kind: 'soon' }
 
@@ -42,29 +42,6 @@ export const GENERAL_GOODS: readonly ShopGood[] = [
   { itemId: 'bandages' },
 ]
 
-const toolTiers = (
-  gold: [number, number, number],
-  items: [ItemStack, ItemStack, ItemStack],
-  skillId: TradeSkillId,
-  match: 'mine' | 'chop' | 'fish',
-): ShopUpgradeTier[] => [
-  {
-    cost: { gold: gold[0], items: [items[0]] },
-    effect: { kind: 'interval', match, pct: 0.05 },
-    requires: { skillId, level: 1 },
-  },
-  {
-    cost: { gold: gold[1], items: [items[1]] },
-    effect: { kind: 'interval', match, pct: 0.05 },
-    requires: { skillId, level: 15 },
-  },
-  {
-    cost: { gold: gold[2], items: [items[2]] },
-    effect: { kind: 'interval', match, pct: 0.05 },
-    requires: { skillId, level: 30 },
-  },
-]
-
 const soon = (section: ShopSection, id: string, name: string, description: string): ShopUpgrade => ({
   id,
   section,
@@ -87,65 +64,7 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
       { cost: { gold: 2000 }, effect: { kind: 'inventoryTabs' } },
     ],
   },
-  // TODO(Prompt 23): tool-tier upgrades move to crafting.
-  {
-    id: 'pickaxe',
-    section: 'mining',
-    name: 'Pickaxe',
-    description: 'Mining interval −5% per tier.',
-    tiers: [
-      {
-        cost: { gold: 50, items: [{ itemId: 'iron-bar', quantity: 1 }] },
-        effect: { kind: 'interval', match: 'mine', pct: 0.05 },
-        requires: { skillId: 'mining', level: 1 },
-      },
-      {
-        cost: { gold: 200, items: [{ itemId: 'iron-bar', quantity: 5 }] },
-        effect: { kind: 'interval', match: 'mine', pct: 0.05 },
-        requires: { skillId: 'mining', level: 15 },
-      },
-      {
-        cost: { gold: 800, items: [{ itemId: 'steel-bar', quantity: 5 }], favor: 15 },
-        effect: { kind: 'interval', match: 'mine', pct: 0.05 },
-        requires: { skillId: 'mining', level: 30 },
-      },
-    ],
-  },
   soon('smithing', 'bellows', 'Bellows', 'Smithing yield. Coming soon.'),
-  // TODO(Prompt 23): tool-tier upgrades move to crafting.
-  {
-    id: 'hatchet',
-    section: 'woodcutting',
-    name: 'Hatchet',
-    description: 'Woodcutting interval −5% per tier.',
-    tiers: toolTiers(
-      [50, 200, 800],
-      [
-        { itemId: 'logs', quantity: 1 },
-        { itemId: 'logs', quantity: 5 },
-        { itemId: 'hardwood', quantity: 5 },
-      ],
-      'woodcutting',
-      'chop',
-    ),
-  },
-  // TODO(Prompt 23): tool-tier upgrades move to crafting.
-  {
-    id: 'rod',
-    section: 'fishing',
-    name: 'Rod',
-    description: 'Fishing interval −5% per tier.',
-    tiers: toolTiers(
-      [50, 200, 800],
-      [
-        { itemId: 'logs', quantity: 1 },
-        { itemId: 'logs', quantity: 5 },
-        { itemId: 'hardwood', quantity: 5 },
-      ],
-      'fishing',
-      'fish',
-    ),
-  },
   {
     id: 'extra-farm-plot',
     section: 'foraging',
@@ -177,14 +96,12 @@ export const SHOP_UPGRADES: readonly ShopUpgrade[] = [
   },
   ...SKILLS.filter(
     (skill) =>
-      skill.id !== 'mining' &&
       skill.id !== 'smithing' &&
-      skill.id !== 'woodcutting' &&
-      skill.id !== 'fishing' &&
       skill.id !== 'foraging' &&
       skill.id !== 'thievery' &&
       skill.id !== 'scribing' &&
-      skill.id !== 'commerce',
+      skill.id !== 'commerce' &&
+      skill.id !== 'vitality',
   ).map((skill) =>
     soon(skill.id, `coming-soon-${skill.id}`, 'Coming soon', `${skill.name} upgrades. Coming soon.`),
   ),
@@ -280,11 +197,7 @@ export function intervalBonus(upgrades: OwnedUpgrades, activityId: string): numb
     for (let i = 0; i <= owned; i++) {
       const effect = upgrade.tiers[i]?.effect
       if (!effect || effect.kind !== 'interval') continue
-      const match =
-        effect.match === 'herb-plot'
-          ? activityId === 'herb-plot'
-          : activityId.startsWith(`${effect.match}-`)
-      if (match) total += effect.pct
+      if (effect.match === 'herb-plot' && activityId === 'herb-plot') total += effect.pct
     }
   }
   return total

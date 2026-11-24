@@ -78,7 +78,7 @@ test('version 19 keeps skill xp without stored level or score', () => {
   expect(next.clericFocus).toBe('INT')
   expect(next.isInDungeonOrQuest).toBe(false)
   expect(next.equipment).toEqual(emptyEquipment())
-  expect(next.equipmentSets).toEqual([])
+  expect(next.skillLoadouts).toEqual({})
 })
 
 test('version 19 keeps the active action and last tick', () => {

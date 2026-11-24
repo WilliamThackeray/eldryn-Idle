@@ -94,6 +94,20 @@ export interface ItemStats {
   resistances?: readonly DamageType[]
   skillXpPct?: Partial<Record<string, number>>
   skillSpeedPct?: Partial<Record<string, number>>
+  /** Flat bonus to a trade skill's activity (and tool) checks. */
+  skillCheck?: Partial<Record<string, number>>
+  spellAttack?: number
+  spellSaveDc?: number
+  /** 0–1 chance not to spend spell components. */
+  componentSaveChance?: number
+}
+
+export interface SummonStats {
+  hp: number
+  ac: number
+  toHit: number
+  damage: string
+  intervalMs: number
 }
 
 export interface GearBlock {
@@ -105,6 +119,10 @@ export interface GearBlock {
   /** Off-hand shield: +2 AC. */
   shield?: boolean
   stats?: ItemStats
+  /** Bound creature for a summon slot. */
+  summon?: SummonStats
+  /** Extra elemental packet on a weapon hit (Flame/Frost/Shock). */
+  rider?: { dice: string; damageType: DamageType }
 }
 
 export interface ItemDef {

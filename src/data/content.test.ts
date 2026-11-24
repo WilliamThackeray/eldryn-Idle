@@ -28,7 +28,7 @@ test('every skill has a level 1 activity and craft inputs are produced somewhere
   expect(activitiesFor('vitality')).toEqual([])
   for (const skill of SKILLS) {
     if (skill.id === 'vitality') continue
-    expect(activitiesFor(skill.id).length).toBeGreaterThan(0)
+    expect(activitiesFor(skill.id).length, skill.id).toBeGreaterThanOrEqual(6)
     const minLevel = Math.min(...activitiesFor(skill.id).map((activity) => activity.requiredLevel))
     expect(minLevel, skill.id).toBeLessThanOrEqual(skill.id === 'binding' ? 10 : 1)
   }
@@ -197,3 +197,50 @@ test('History tomes use themed skill items and Chronicles can drop Ancient Pages
     }
   }
 })
+
+test('weaving flax chain makes a linen robe with caster stats', () => {
+  expect(getActivity('foraging', 'forage-flax')?.outputs[0]?.itemId).toBe('flax')
+  expect(getActivity('weaving', 'spin-flax')?.outputs[0]?.itemId).toBe('linen-thread')
+  expect(getActivity('weaving', 'loom-linen')?.outputs[0]?.itemId).toBe('linen-cloth')
+  expect(getActivity('weaving', 'craft-linen-chest')).toMatchObject({
+    inputs: [{ itemId: 'linen-cloth', quantity: 2 }],
+    outputs: [{ itemId: 'linen-chest' }],
+  })
+  const robe = ITEMS.find((item) => item.id === 'linen-chest')
+  expect(robe?.gear?.stats).toMatchObject({
+    spellAttack: 1,
+    spellSaveDc: 1,
+    componentSaveChance: 0.05,
+    maxHp: 2,
+  })
+})
+
+test('every trade skill except vitality has at least two skilling-gear pieces with a source', () => {
+  for (const skill of SKILLS) {
+    if (skill.id === 'vitality') continue
+    const pieces = ITEMS.filter((item) => {
+      const stats = item.gear?.stats
+      if (!stats) return false
+      return (stats.skillCheck?.[skill.id] ?? 0) > 0 || (stats.skillXpPct?.[skill.id] ?? 0) > 0
+    })
+    expect(pieces.length, skill.id).toBeGreaterThanOrEqual(2)
+    for (const piece of pieces) {
+      expect(sourcesOf(piece.id as ItemId).length, piece.id).toBeGreaterThan(0)
+    }
+  }
+})
+
+test('every summon is craftable and every essence drops somewhere', () => {
+  const produced = new Set(
+    ACTIVITIES.flatMap((activity) => activity.outputs.map((entry) => entry.itemId)),
+  )
+  for (const item of ITEMS) {
+    if (item.gear?.slot !== 'summon') continue
+    expect(produced.has(item.id as ItemId), item.id).toBe(true)
+  }
+  const drops = new Set(MONSTERS.flatMap((monster) => monster.lootTable.map((entry) => entry.itemId)))
+  for (const essence of ['fire-essence', 'earth-essence', 'shadow-essence'] as const) {
+    expect(drops.has(essence), essence).toBe(true)
+  }
+})
+

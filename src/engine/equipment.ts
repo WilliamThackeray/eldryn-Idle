@@ -175,6 +175,10 @@ export interface TotalItemStats {
   resistances: DamageType[]
   skillXpPct: Partial<Record<TradeSkillId, number>>
   skillSpeedPct: Partial<Record<TradeSkillId, number>>
+  skillCheck: Partial<Record<TradeSkillId, number>>
+  spellAttack: number
+  spellSaveDc: number
+  componentSaveChance: number
 }
 
 function emptyTotalStats(): TotalItemStats {
@@ -189,12 +193,16 @@ function emptyTotalStats(): TotalItemStats {
     resistances: [],
     skillXpPct: {},
     skillSpeedPct: {},
+    skillCheck: {},
+    spellAttack: 0,
+    spellSaveDc: 0,
+    componentSaveChance: 0,
   }
 }
 
 function addSkillMap(
   into: Partial<Record<TradeSkillId, number>>,
-  from: ItemStats['skillXpPct'] | ItemStats['skillSpeedPct'],
+  from: ItemStats['skillXpPct'] | ItemStats['skillSpeedPct'] | ItemStats['skillCheck'],
 ) {
   if (!from) return
   for (const [key, value] of Object.entries(from)) {
@@ -202,6 +210,81 @@ function addSkillMap(
     const skill = key as TradeSkillId
     into[skill] = (into[skill] ?? 0) + value
   }
+}
+
+/** Sum of skillCheck bonuses from every equipped item. */
+export function gearSkillBonus(
+  equipment: Equipment,
+  skillId: TradeSkillId,
+): number {
+  return totalItemStats(equipment).skillCheck[skillId] ?? 0
+}
+
+/** Occupied slots only. Used for per-skill and combat loadouts. */
+export type EquipmentSnapshot = Partial<Record<EquipmentSlot, ItemId>>
+
+/**
+ * Equip items named in the snapshot without clearing unnamed slots.
+ * Missing items leave the worn piece and are listed in `missing`.
+ */
+export function applySkillLoadout(
+  equipment: Equipment,
+  inventory: Inventory,
+  snapshot: EquipmentSnapshot | undefined,
+): { equipment: Equipment; inventory: Inventory; missing: EquipmentSlot[] } {
+  if (!snapshot || Object.keys(snapshot).length === 0) {
+    return { equipment, inventory, missing: [] }
+  }
+
+  const nextEquipment = { ...equipment }
+  let nextInventory = inventory
+  const missing: EquipmentSlot[] = []
+
+  for (const slot of Object.keys(snapshot) as EquipmentSlot[]) {
+    const itemId = snapshot[slot]
+    if (!itemId) continue
+    if (nextEquipment[slot] === itemId) continue
+    if ((nextInventory[itemId] ?? 0) <= 0) {
+      missing.push(slot)
+      continue
+    }
+    const worn = nextEquipment[slot]
+    if (worn && !isSelectionSlot(slot)) {
+      nextInventory = addItems(nextInventory, [{ itemId: worn, quantity: 1 }])
+    }
+    if (!isSelectionSlot(slot)) {
+      nextInventory = removeItems(nextInventory, [{ itemId, quantity: 1 }])
+    }
+    nextEquipment[slot] = itemId
+  }
+
+  return { equipment: nextEquipment, inventory: nextInventory, missing }
+}
+
+export function snapshotFromEquipment(equipment: Equipment): EquipmentSnapshot {
+  const snap: EquipmentSnapshot = {}
+  for (const slot of Object.keys(equipment) as EquipmentSlot[]) {
+    const itemId = equipment[slot]
+    if (itemId) snap[slot] = itemId
+  }
+  return snap
+}
+
+export function loadoutMissing(
+  equipment: Equipment,
+  inventory: Inventory,
+  snapshot: EquipmentSnapshot | undefined,
+): EquipmentSlot[] {
+  if (!snapshot) return []
+  const missing: EquipmentSlot[] = []
+  for (const slot of Object.keys(snapshot) as EquipmentSlot[]) {
+    const itemId = snapshot[slot]
+    if (!itemId) continue
+    if (equipment[slot] === itemId) continue
+    if ((inventory[itemId] ?? 0) > 0) continue
+    missing.push(slot)
+  }
+  return missing
 }
 
 function materialBonus(material: GearMaterial | undefined): number {
@@ -225,9 +308,13 @@ export function totalItemStats(equipment: Equipment): TotalItemStats {
       total.maxHp += stats.maxHp ?? 0
       total.critRange += stats.critRange ?? 0
       total.attackSpeedPct += stats.attackSpeedPct ?? 0
+      total.spellAttack += stats.spellAttack ?? 0
+      total.spellSaveDc += stats.spellSaveDc ?? 0
+      total.componentSaveChance += stats.componentSaveChance ?? 0
       for (const type of stats.resistances ?? []) resistSet.add(type)
       addSkillMap(total.skillXpPct, stats.skillXpPct)
       addSkillMap(total.skillSpeedPct, stats.skillSpeedPct)
+      addSkillMap(total.skillCheck, stats.skillCheck)
     }
 
     if (ARMOR_SHARE_SLOTS.includes(slot as ArmorShareSlot) || gear.shield) {

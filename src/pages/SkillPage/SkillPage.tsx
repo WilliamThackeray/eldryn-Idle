@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { LoadoutButton } from '../../components/LoadoutDrawer'
 import { SkillIcon } from '../../components/skillIcons'
 import { ProgressBar } from '../../components/ProgressBar'
 import { Button } from '../../components/ui/Button'
@@ -20,6 +21,7 @@ import { intervalBonus } from '../../data/shop'
 import { SKILLS, type TradeSkillId } from '../../data/skills'
 import { activePerks, deriveAbilities, effectTotal } from '../../engine/abilities'
 import { actionIntervalMs, activityIntervalMs } from '../../engine/advance'
+import { totalItemStats } from '../../engine/equipment'
 import { tomeCheckBonus, tomeSpeedBonus, tomeXpPct } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
 import { activityUnlocked } from '../../engine/quest'
@@ -81,7 +83,8 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const modifier = derived?.modifier ?? 0
   const rank = derived?.rank
   const checkBonus = tomeCheckBonus(tomes, skillId)
-  const bonus = modifier + proficiency(tier(level)) + checkBonus
+  const gearBonus = totalItemStats(equipment).skillCheck[skillId] ?? 0
+  const bonus = modifier + proficiency(tier(level)) + checkBonus + gearBonus
   const classMods = modifiersFor(classId, clericFocus)
   const className = classId ? getClass(classId).name : null
   const tomePct = tomeXpPct(tomes, skillId)
@@ -190,7 +193,8 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   }
 
   function intervalOf(activity: ActivityDef): number {
-    const speed = intervalBonus(upgrades, activity.id) + tomeSpeed
+    const gearSpeed = (totalItemStats(equipment).skillSpeedPct[skillId] ?? 0) / 100
+    const speed = intervalBonus(upgrades, activity.id) + tomeSpeed + gearSpeed
     if (activeAction?.kind === 'skill' && activeAction.activityId === activity.id) {
       return actionIntervalMs(activeAction, skills, equipment, null, speed)
     }
@@ -311,8 +315,11 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
             <span className="text-gold">
               <SkillIcon id={skillId} size={36} />
             </span>
-            <div className="min-w-0">
-              <h1 className="text-page text-gold">{skill?.name ?? skillId}</h1>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h1 className="text-page text-gold">{skill?.name ?? skillId}</h1>
+                <LoadoutButton loadoutKey={skillId} />
+              </div>
               {modifiers && <p className="text-meta text-muted">{modifiers}</p>}
             </div>
           </div>

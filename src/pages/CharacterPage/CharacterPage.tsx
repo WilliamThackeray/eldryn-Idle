@@ -95,18 +95,13 @@ export function CharacterPage({
   const isInDungeonOrQuest = useGameStore((state) => state.isInDungeonOrQuest)
   const equipment = useGameStore((state) => state.equipment)
   const inventory = useGameStore((state) => state.inventory)
-  const equipmentSets = useGameStore((state) => state.equipmentSets)
   const spellLoadouts = useGameStore((state) => state.spellLoadouts)
   const setSpellSlot = useGameStore((state) => state.setSpellSlot)
   const unequipSlot = useGameStore((state) => state.unequipSlot)
   const equipItem = useGameStore((state) => state.equipItem)
-  const saveEquipmentSet = useGameStore((state) => state.saveEquipmentSet)
-  const loadEquipmentSet = useGameStore((state) => state.loadEquipmentSet)
-  const deleteEquipmentSet = useGameStore((state) => state.deleteEquipmentSet)
   const tomes = useGameStore((state) => state.tomes)
   const bestiaries = useGameStore((state) => state.bestiaries)
   const upgrades = useGameStore((state) => state.upgrades)
-  const [setName, setSetName] = useState('')
   const savedTab = useUiPrefs((state) => state.lastTab.character)
   const setLastTab = useUiPrefs((state) => state.setLastTab)
   const [pickedTab, setPickedTab] = useState<Tab | null>(null)
@@ -376,54 +371,6 @@ export function CharacterPage({
                     spellLoadout={loadout}
                     bestiaries={bestiaries}
                   />
-                  <Card>
-                    <SubHeading title="Loadouts" count={equipmentSets.length} />
-                    {equipmentSets.length === 0 ? (
-                      <p className="mb-3 text-meta text-muted">No saved loadouts.</p>
-                    ) : (
-                      <ul className="mb-3 space-y-2">
-                        {equipmentSets.map((entry) => (
-                          <li key={entry.name} className="flex items-center justify-between gap-2">
-                            <span className="text-body text-parchment">{entry.name}</span>
-                            <span className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={isInDungeonOrQuest}
-                                disabledReason={isInDungeonOrQuest ? 'Locked in a dungeon or quest' : undefined}
-                                onClick={() => loadEquipmentSet(entry.name)}
-                              >
-                                Load
-                              </Button>
-                              <Button size="sm" variant="danger" onClick={() => deleteEquipmentSet(entry.name)}>
-                                Delete
-                              </Button>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <form
-                      className="flex gap-2"
-                      onSubmit={(event) => {
-                        event.preventDefault()
-                        const name = setName.trim()
-                        if (!name) return
-                        saveEquipmentSet(name)
-                        setSetName('')
-                      }}
-                    >
-                      <input
-                        aria-label="Loadout name"
-                        value={setName}
-                        onChange={(event) => setSetName(event.target.value)}
-                        className="min-w-0 flex-1 rounded-lg border border-line bg-ink px-2 py-1 text-body text-parchment"
-                      />
-                      <Button type="submit" size="sm" disabled={!setName.trim()}>
-                        Save
-                      </Button>
-                    </form>
-                  </Card>
                 </div>
               </div>
             </div>

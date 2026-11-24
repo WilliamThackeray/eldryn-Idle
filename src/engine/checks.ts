@@ -4,6 +4,7 @@ import { getSkill, type TradeSkillId } from '../data/skills'
 import type { AbilityAbbr, SkillProgress } from '../types/game'
 import { deriveAbilities } from './abilities'
 import { rollD20, type RollMode } from './dice'
+import { emptyEquipment, gearSkillBonus, type Equipment } from './equipment'
 import type { Rng } from './rng'
 import { levelForXp, proficiency, tier } from './xp'
 
@@ -41,19 +42,20 @@ export function checkModifier(state: CheckState, checkSkillId: CheckSkillId): Ch
 }
 
 export function toolCheckModifier(
-  state: { skills: Record<TradeSkillId, SkillProgress> },
+  state: { skills: Record<TradeSkillId, SkillProgress>; equipment?: Equipment },
   tradeSkillId: TradeSkillId,
 ): CheckModifier {
   const def = getSkill(tradeSkillId)
   const abilityMod = deriveAbilities(state.skills).find((a) => a.abbr === def.ability)?.modifier ?? 0
   const level = levelForXp(state.skills[tradeSkillId]?.xp ?? 0)
   const prof = proficiency(tier(level))
+  const gear = gearSkillBonus(state.equipment ?? emptyEquipment(), tradeSkillId)
   return {
     name: def.name,
     ability: def.ability,
     abilityMod,
     proficiency: prof,
-    total: abilityMod + prof,
+    total: abilityMod + prof + gear,
     proficient: true,
   }
 }

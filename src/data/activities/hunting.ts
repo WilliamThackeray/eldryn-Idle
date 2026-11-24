@@ -37,6 +37,33 @@ export const huntingActivities = fillDisplay(
     }),
     activity({
       skillId: 'hunting',
+      id: 'track-forest',
+      name: 'Track Forest Game',
+      description: 'Follow forest spoor for hides and meat.',
+      requiredLevel: 10,
+      outputs: [drop('hide'), drop('raw-meat')],
+      rareTable: [drop('hide', 1, 1, 0.35), drop('raw-meat', 1, 2, 0.35)],
+    }),
+    activity({
+      skillId: 'hunting',
+      id: 'track-hills',
+      name: 'Track Hills Game',
+      description: 'Follow hill spoor for hides and meat.',
+      requiredLevel: 30,
+      outputs: [drop('hide'), drop('raw-meat', 1, 2)],
+      rareTable: [drop('hide', 1, 2, 0.4), drop('raw-meat', 2, 3, 0.35)],
+    }),
+    activity({
+      skillId: 'hunting',
+      id: 'track-swamp',
+      name: 'Track Swamp Game',
+      description: 'Follow swamp spoor for hides and meat.',
+      requiredLevel: 60,
+      outputs: [drop('hide', 1, 2), drop('raw-meat', 2, 3)],
+      rareTable: [drop('hide', 2, 3, 0.4), drop('bones', 1, 2, 0.3)],
+    }),
+    activity({
+      skillId: 'hunting',
       id: 'butcher-small',
       name: 'Butcher Small Animal',
       description: 'Break a small catch into meat, hide, and bones.',
@@ -51,7 +78,7 @@ export const huntingActivities = fillDisplay(
       description: 'Break a bird into meat and bones.',
       requiredLevel: 20,
       inputs: [stack('air-fowl')],
-      outputs: [drop('raw-fowl'), drop('bones')],
+      outputs: [drop('raw-fowl'), drop('bones'), drop('feathers', 1, 2)],
     }),
     activity({
       skillId: 'hunting',
@@ -74,18 +101,20 @@ export const huntingActivities = fillDisplay(
     activity({
       skillId: 'hunting',
       id: 'ranch',
-      name: 'Ranch',
-      description: 'Tend the ranch. Eggs for now.',
+      name: 'Husbandry',
+      description: 'Tend the ranch for wool, eggs, and feathers.',
       requiredLevel: 1,
-      outputs: [drop('eggs', 1, 2)],
+      outputs: [drop('eggs', 1, 2), drop('wool', 1, 1, 0.6), drop('feathers', 1, 2, 0.5)],
     }),
   ],
   (def, index) => ({
     category: def.id.startsWith('trap-')
       ? 'Trapping'
-      : def.id.startsWith('butcher-')
-        ? 'Butchering'
-        : 'Husbandry',
+      : def.id.startsWith('track-')
+        ? 'Tracking'
+        : def.id.startsWith('butcher-')
+          ? 'Butchering'
+          : 'Husbandry',
     sortOrder: index,
   }),
 )

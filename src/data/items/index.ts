@@ -2,11 +2,14 @@ import { ACCESSORIES } from './accessories'
 import { AMMO } from './ammo'
 import { ARMOR } from './armor'
 import { COMPONENTS } from './components'
+import { ENCHANTED } from './enchanted'
 import { FOOD } from './food'
 import { KNOWLEDGE } from './knowledge'
 import { MATERIALS } from './materials'
 import { MISC } from './misc'
 import { POTIONS } from './potions'
+import { SKILLING_GEAR } from './skillingGear'
+import { SUMMONS } from './summons'
 import { WEAPONS } from './weapons'
 import type { ItemDef } from './types'
 
@@ -20,6 +23,7 @@ export type {
   ItemDef,
   ItemRarity,
   ItemStats,
+  SummonStats,
   WeaponGear,
   WeaponMastery,
   WeaponProperty,
@@ -47,6 +51,9 @@ export const ITEMS = [
   ...ARMOR,
   ...ACCESSORIES,
   ...AMMO,
+  ...ENCHANTED,
+  ...SUMMONS,
+  ...SKILLING_GEAR,
 ] as const satisfies readonly ItemDef[]
 export type ItemId = (typeof ITEMS)[number]['id']
 

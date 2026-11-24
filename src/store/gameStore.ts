@@ -29,15 +29,18 @@ import {
 import { effectiveCasterType, usesSpellLoop } from '../engine/spells'
 import { levelForXp } from '../engine/xp'
 import {
-  applyLoadout,
+  applySkillLoadout,
   applyStartingKit,
   canEquip,
   emptyEquipment,
   equip,
+  snapshotFromEquipment,
   unequip,
   weaponIntervalBase,
+  type EquipmentSnapshot,
   type EquipmentSlot,
 } from '../engine/equipment'
+import type { TradeSkillId } from '../data/skills'
 import { getItem } from '../data/items'
 import { activePerks } from '../engine/abilities'
 import {
@@ -107,9 +110,11 @@ interface GameStore extends SaveData {
   rebirth: (newClassId: ClassId, clericFocus?: ClericFocus) => void
   equipItem: (itemId: ItemId) => void
   unequipSlot: (slot: EquipmentSlot) => void
-  saveEquipmentSet: (name: string) => void
-  loadEquipmentSet: (name: string) => void
-  deleteEquipmentSet: (name: string) => void
+  setSkillLoadout: (key: TradeSkillId | 'combat', snapshot: EquipmentSnapshot) => void
+  clearSkillLoadout: (key: TradeSkillId | 'combat') => void
+  copyCurrentToLoadout: (key: TradeSkillId | 'combat') => void
+  equipSkillLoadout: (key: TradeSkillId | 'combat') => void
+  setLoadoutSlot: (key: TradeSkillId | 'combat', slot: EquipmentSlot, itemId: ItemId | null) => void
   renameInventoryTab: (tabId: string, name: string) => void
   moveInventoryItem: (itemId: ItemId, toTabId: string) => void
   reorderInventoryItem: (tabId: string, itemId: ItemId, beforeItemId: ItemId) => void
@@ -194,15 +199,29 @@ export const useGameStore = create<GameStore>()(
       lastDefeat: false,
       questMessage: null,
       startActivity: (activity) =>
-        set({
-          activeAction: { kind: 'skill', ...activity, progressMs: 0 },
-          combat: null,
-          isInDungeonOrQuest: false,
-          log: [],
+        set((state) => {
+          const applied = applySkillLoadout(
+            state.equipment,
+            state.inventory,
+            state.skillLoadouts[activity.skillId],
+          )
+          return {
+            ...withPlacedInventory(state, applied.inventory),
+            equipment: applied.equipment,
+            activeAction: { kind: 'skill', ...activity, progressMs: 0 },
+            combat: null,
+            isInDungeonOrQuest: false,
+            log: [],
+          }
         }),
       startHunt: (monsterId, biome) =>
         set((state) => {
           if (!state.classId) return state
+          const geared = applySkillLoadout(
+            state.equipment,
+            state.inventory,
+            state.skillLoadouts.combat,
+          )
           const swappedId = maybeRareSwap(monsterId, biome, state.activeBuffs, liveRng)
           const monster = getMonster(swappedId)
           if (!monster) return state
@@ -210,7 +229,7 @@ export const useGameStore = create<GameStore>()(
             monsterId: swappedId,
             biome,
             skills: state.skills,
-            equipment: state.equipment,
+            equipment: geared.equipment,
             activeClassId: state.classId,
             classXp: state.classXp,
             rng: liveRng,
@@ -221,11 +240,15 @@ export const useGameStore = create<GameStore>()(
             secondaryClassXp: state.secondaryClassXp,
           })
           if (!fight) return state
-          const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
+          const weapon = geared.equipment.mainHand
+            ? getItem(geared.equipment.mainHand)?.gear?.weapon
+            : undefined
           const baseSec = usesSpellLoop(state.classId)
             ? SPELL_INTERVAL_SEC
             : weaponIntervalBase(weapon)
           return {
+            ...withPlacedInventory(state, geared.inventory),
+            equipment: geared.equipment,
             combat: fight,
             isInDungeonOrQuest: false,
             activeAction: {
@@ -245,12 +268,17 @@ export const useGameStore = create<GameStore>()(
           if (!state.classId) return state
           const dungeon = getDungeon(dungeonId)
           if (!dungeon) return state
-          const entry = consumeEntryItem(state.inventory, dungeon)
+          const geared = applySkillLoadout(
+            state.equipment,
+            state.inventory,
+            state.skillLoadouts.combat,
+          )
+          const entry = consumeEntryItem(geared.inventory, dungeon)
           if (!entry.ok) return state
           const fight = beginDungeonFight({
             dungeonId,
             skills: state.skills,
-            equipment: state.equipment,
+            equipment: geared.equipment,
             activeClassId: state.classId,
             classXp: state.classXp,
             rng: liveRng,
@@ -262,13 +290,16 @@ export const useGameStore = create<GameStore>()(
             secondaryClassXp: state.secondaryClassXp,
           })
           if (!fight) return state
-          const weapon = state.equipment.mainHand ? getItem(state.equipment.mainHand)?.gear?.weapon : undefined
+          const weapon = geared.equipment.mainHand
+            ? getItem(geared.equipment.mainHand)?.gear?.weapon
+            : undefined
           const baseSec = usesSpellLoop(state.classId)
             ? SPELL_INTERVAL_SEC
             : weaponIntervalBase(weapon)
           const monster = getMonster(fight.monsterId)
           return {
             ...withPlacedInventory(state, entry.inventory),
+            equipment: geared.equipment,
             combat: fight,
             isInDungeonOrQuest: true,
             activeAction: {
@@ -302,6 +333,7 @@ export const useGameStore = create<GameStore>()(
               bounty: state.bounty,
               activeAction: state.activeAction,
               equipment: state.equipment,
+              skillLoadouts: state.skillLoadouts,
               upgrades: state.upgrades,
               classId: state.classId,
               classXp: state.classXp,
@@ -335,6 +367,7 @@ export const useGameStore = create<GameStore>()(
           return {
             skills: result.state.skills,
             ...withPlacedInventory(state, result.state.inventory),
+            equipment: result.state.equipment ?? state.equipment,
             gold: result.state.gold,
             favor: result.state.favor ?? state.favor,
             renown: result.state.renown ?? state.renown,
@@ -517,26 +550,43 @@ export const useGameStore = create<GameStore>()(
           const next = unequip(state.equipment, state.inventory, slot)
           return { equipment: next.equipment, ...withPlacedInventory(state, next.inventory) }
         }),
-      saveEquipmentSet: (name) =>
+      setSkillLoadout: (key, snapshot) =>
+        set((state) => ({
+          skillLoadouts: { ...state.skillLoadouts, [key]: snapshot },
+        })),
+      clearSkillLoadout: (key) =>
         set((state) => {
-          const trimmed = name.trim()
-          if (!trimmed) return state
-          const slots = { ...state.equipment }
-          const rest = state.equipmentSets.filter((entry) => entry.name !== trimmed)
-          return { equipmentSets: [...rest, { name: trimmed, slots }] }
+          const next = { ...state.skillLoadouts }
+          delete next[key]
+          return { skillLoadouts: next }
         }),
-      loadEquipmentSet: (name) =>
+      copyCurrentToLoadout: (key) =>
+        set((state) => ({
+          skillLoadouts: {
+            ...state.skillLoadouts,
+            [key]: snapshotFromEquipment(state.equipment),
+          },
+        })),
+      equipSkillLoadout: (key) =>
         set((state) => {
           if (state.isInDungeonOrQuest) return state
-          const found = state.equipmentSets.find((entry) => entry.name === name)
-          if (!found) return state
-          const next = applyLoadout(state.equipment, state.inventory, found.slots)
-          return { equipment: next.equipment, ...withPlacedInventory(state, next.inventory) }
+          const applied = applySkillLoadout(
+            state.equipment,
+            state.inventory,
+            state.skillLoadouts[key],
+          )
+          return {
+            equipment: applied.equipment,
+            ...withPlacedInventory(state, applied.inventory),
+          }
         }),
-      deleteEquipmentSet: (name) =>
-        set((state) => ({
-          equipmentSets: state.equipmentSets.filter((entry) => entry.name !== name),
-        })),
+      setLoadoutSlot: (key, slot, itemId) =>
+        set((state) => {
+          const current = { ...(state.skillLoadouts[key] ?? {}) }
+          if (itemId == null) delete current[slot]
+          else current[slot] = itemId
+          return { skillLoadouts: { ...state.skillLoadouts, [key]: current } }
+        }),
       renameInventoryTab: (tabId, name) =>
         set((state) => ({ inventoryTabs: renameTab(state.inventoryTabs, tabId, name) })),
       moveInventoryItem: (itemId, toTabId) =>
@@ -756,7 +806,7 @@ export const useGameStore = create<GameStore>()(
         clericFocus: state.clericFocus,
         isInDungeonOrQuest: state.isInDungeonOrQuest,
         equipment: state.equipment ?? emptyEquipment(),
-        equipmentSets: state.equipmentSets ?? [],
+        skillLoadouts: state.skillLoadouts ?? {},
         combat: state.combat ?? null,
         spellLoadouts: state.spellLoadouts,
         questProgress: state.questProgress,

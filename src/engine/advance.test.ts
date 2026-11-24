@@ -117,8 +117,8 @@ function doing(skillId: SkillId, activityId: string, inventory: Inventory = {}):
 }
 
 test('a critical doubles outputs and rolls the rare table', () => {
-  // After the crit d20: skip mica, skip sulfur, then hit the rare coal roll.
-  const result = advance(doing('mining', 'mine-iron'), 6000, scripted(0.95, 0.99, 0.99, 0))
+  // After the crit d20: skip mica, skip sulfur, hit rare coal, skip rare quartz.
+  const result = advance(doing('mining', 'mine-iron'), 6000, scripted(0.95, 0.99, 0.99, 0, 0.99))
 
   expect(result.log[0]).toMatchObject({ outcome: 'critical' })
   expect(result.state.inventory).toEqual({ 'iron-ore': 2, coal: 2 })

@@ -14,6 +14,15 @@ export const foragingActivities = [
   }),
   activity({
     skillId: 'foraging',
+    id: 'forage-flax',
+    name: 'Gather Flax',
+    description: 'Pull flax from the field edge.',
+    requiredLevel: 1,
+    outputs: [drop('flax')],
+    category: 'Foraging',
+  }),
+  activity({
+    skillId: 'foraging',
     id: 'forage-desert',
     name: 'Forage Desert Herbs',
     description: 'Gather bitter plants from dry ground.',

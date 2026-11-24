@@ -13,7 +13,16 @@ import {
 } from './combat'
 import { OFFLINE_CAP_MS, RESPAWN_MS } from './config'
 import { resolveRollMode } from './dice'
-import { emptyEquipment, gearRollMode, heavyArmorIntervalMultiplier, type Equipment } from './equipment'
+import {
+  applySkillLoadout,
+  emptyEquipment,
+  gearRollMode,
+  gearSkillBonus,
+  heavyArmorIntervalMultiplier,
+  totalItemStats,
+  type Equipment,
+  type EquipmentSnapshot,
+} from './equipment'
 import {
   discountTomeInputs,
   noteYieldPct,
@@ -64,6 +73,7 @@ export interface AdvanceState {
   activeAction: ActiveAction | null
   /** Missing means empty; keeps older advance tests valid. */
   equipment?: Equipment
+  skillLoadouts?: Partial<Record<TradeSkillId | 'combat', EquipmentSnapshot>>
   /** Missing means none; shop interval upgrades. */
   upgrades?: Record<string, number>
   classId?: ClassId | null
@@ -346,7 +356,16 @@ export function advance(
   let favor = state.favor ?? 0
   let renown = state.renown ?? 0
   let activeBuffs = state.activeBuffs ?? []
-  const equipment = state.equipment ?? emptyEquipment()
+  let equipment = state.equipment ?? emptyEquipment()
+  if (current.progressMs === 0) {
+    const applied = applySkillLoadout(
+      equipment,
+      inventory,
+      state.skillLoadouts?.[current.skillId],
+    )
+    equipment = applied.equipment
+    inventory = applied.inventory
+  }
   const tomes = state.tomes
   const pageDiscount = effectTotal(activePerks(state), 'historyTomePages')
   let action: ActiveAction | null = current
@@ -377,8 +396,11 @@ export function advance(
       break
     }
 
+    const gearStats = totalItemStats(equipment)
     const speed =
-      intervalBonus(state.upgrades ?? {}, acting.activityId) + tomeSpeedBonus(tomes, acting.skillId)
+      intervalBonus(state.upgrades ?? {}, acting.activityId) +
+      tomeSpeedBonus(tomes, acting.skillId) +
+      (gearStats.skillSpeedPct[acting.skillId] ?? 0) / 100
     const interval = activityIntervalMs(acting.skillId, acting.baseIntervalMs, skills, equipment, speed)
     if (!Number.isFinite(interval) || interval <= 0) break
 
@@ -403,13 +425,15 @@ export function advance(
       abilityModifier: deriveAbilities(skills).find((ability) => ability.abbr === skill.ability)?.modifier ?? 0,
       skillLevel: levelForXp(skills[skill.id].xp),
       requiredLevel: acting.requiredLevel,
-      checkBonus: tomeCheckBonus(tomes, skill.id),
+      checkBonus: tomeCheckBonus(tomes, skill.id) + gearSkillBonus(equipment, skill.id),
     })
     const xp = applyXpModifiers(
       acting.baseXp * check.xpMultiplier,
       skill.ability,
       modifiers,
-      tomeXpPct(tomes, skill.id) + echoXpFraction(state.echoes ?? 0),
+      tomeXpPct(tomes, skill.id) +
+        echoXpFraction(state.echoes ?? 0) +
+        (gearStats.skillXpPct[acting.skillId] ?? 0) / 100,
     )
     const beforeLevel = levelForXp(skills[skill.id].xp)
     skills = { ...skills, [skill.id]: { xp: addXp(skills[skill.id].xp, xp) } }
@@ -464,6 +488,7 @@ export function advance(
     gold,
     favor,
     renown,
+    equipment,
     activeBuffs,
     activeAction: action?.kind === 'skill' ? { ...action, progressMs: progress } : action,
   }
@@ -489,15 +514,23 @@ function advanceCombatAction(
     return { state: { ...state, activeAction: null, combat: null }, log: [] }
   }
 
+  let equipment = state.equipment ?? emptyEquipment()
+  let inventory = state.inventory
+  if (action.progressMs === 0) {
+    const applied = applySkillLoadout(equipment, inventory, state.skillLoadouts?.combat)
+    equipment = applied.equipment
+    inventory = applied.inventory
+  }
+
   const beforeLogLen = fight.log.length
   const result = advanceCombat({
     fight,
     skills: state.skills,
-    inventory: state.inventory,
+    inventory,
     gold: state.gold,
     favor: state.favor,
     bounty: state.bounty,
-    equipment: state.equipment ?? emptyEquipment(),
+    equipment,
     activeClassId: classId,
     classXp,
     secondaryClassXp: state.secondaryClassXp,
@@ -546,6 +579,7 @@ function advanceCombatAction(
       bounty: result.bounty !== undefined ? result.bounty : state.bounty,
       classXp: result.classXp,
       secondaryClassXp: result.secondaryClassXp ?? state.secondaryClassXp,
+      equipment,
       activeBuffs,
       activeAction: null,
       combat: null,
@@ -574,6 +608,7 @@ function advanceCombatAction(
     bounty: result.bounty !== undefined ? result.bounty : state.bounty,
     classXp: result.classXp,
     secondaryClassXp: result.secondaryClassXp ?? state.secondaryClassXp,
+    equipment,
     combat: result.fight,
     activeBuffs,
     activeAction: {

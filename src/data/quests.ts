@@ -162,7 +162,13 @@ export const QUESTS: QuestDef[] = [
           prompt:
             'A surveyor claims the marker has always been here. Convince them, read them, or buy their silence before the flux moves again.',
           approaches: [
-            { id: 'persuade', label: 'Persuade', checkSkillId: 'persuasion', dc: 12 },
+            {
+              id: 'persuade',
+              label: 'Persuade',
+              checkSkillId: 'persuasion',
+              dc: 12,
+              prep: { itemId: 'letter-of-introduction', effect: 'advantage' },
+            },
             {
               id: 'insight',
               label: 'Insight',

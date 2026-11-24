@@ -55,7 +55,13 @@ export function resolveSpellCast(input: {
   const castMod = mods[castAbility]
   const unlock = unlockSkillFor(input.activeClassId)
   const skillLvl = skillLevel(skills, unlock)
-  const saveDc = 8 + prof + castMod + effectTotal(activePerks({ skills }), 'spellSaveDc')
+  const itemStats = totalItemStats(input.equipment)
+  const saveDc =
+    8 +
+    prof +
+    castMod +
+    effectTotal(activePerks({ skills }), 'spellSaveDc') +
+    itemStats.spellSaveDc
   const intelPct = Math.max(0, input.intelDamagePct ?? 0)
 
   const picked = pickSlotForCast({
@@ -117,7 +123,11 @@ export function resolveSpellCast(input: {
   }
 
   const isWizard = input.activeClassId === 'wizard'
-  const savedComponents = isWizard && cost.length > 0 && rng() < ARCANE_RECOVERY_SAVE_CHANCE
+  const componentSave =
+    (isWizard ? ARCANE_RECOVERY_SAVE_CHANCE : 0) +
+    itemStats.componentSaveChance +
+    effectTotal(activePerks({ skills }), 'componentSaveChance')
+  const savedComponents = cost.length > 0 && componentSave > 0 && rng() < componentSave
   if (!savedComponents && cost.length > 0) {
     inventory = removeItems(inventory, [...cost])
   }
@@ -193,9 +203,9 @@ export function resolveSpellCast(input: {
 
     const natural = rollD20(rng)
     const bestiary = Math.max(0, Math.floor(input.bestiaryBonus ?? 0))
-    const total = natural + castMod + prof + bestiary
+    const total = natural + castMod + prof + bestiary + itemStats.spellAttack
     const autoMiss = natural === 1
-    const critFloor = critThreshold(totalItemStats(input.equipment).critRange)
+    const critFloor = critThreshold(itemStats.critRange)
     const crit = !autoMiss && natural >= critFloor
     const hit = !autoMiss && (crit || total >= monster.ac)
     line += ` to hit ${total} - ${hit ? 'hits' : 'misses'}.`

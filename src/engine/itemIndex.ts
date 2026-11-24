@@ -102,20 +102,16 @@ function buildIndex(): ItemIndex {
   push(uses, 'trade-contract', {
     kind: 'activity',
     skillId: 'commerce',
-    activityId: 'haggle',
-    label: 'Haggle at Market',
-  })
-  push(uses, 'letter-of-introduction', {
-    kind: 'activity',
-    skillId: 'commerce',
     activityId: 'petition-guilds',
     label: 'Petition the Guilds',
   })
-  push(uses, 'rumor', {
+  push(uses, 'trade-contract', { kind: 'combat', label: 'Sell-price buff' })
+  push(uses, 'rumor', { kind: 'combat', label: 'Rare-spawn buff' })
+  push(uses, 'marked-cards', {
     kind: 'activity',
     skillId: 'commerce',
-    activityId: 'tavern-gossip',
-    label: 'Tavern Gossip',
+    activityId: 'card-sharping',
+    label: 'Card Sharping (keepsake)',
   })
   push(uses, 'disguise-kit', {
     kind: 'activity',

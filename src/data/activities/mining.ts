@@ -14,7 +14,7 @@ export const miningActivities = fillDisplay(
         drop('mica-chip', 1, 1, 0.25),
         drop('sulfur', 1, 1, 0.25),
       ],
-      rareTable: [drop('coal', 1, 1, 0.05)],
+      rareTable: [drop('coal', 1, 1, 0.05), drop('raw-quartz', 1, 1, 0.12)],
     }),
     activity({
       skillId: 'mining',
@@ -35,6 +35,7 @@ export const miningActivities = fillDisplay(
         drop('mica-chip', 1, 1, 0.25),
         drop('sulfur', 1, 1, 0.25),
       ],
+      rareTable: [drop('raw-amethyst', 1, 1, 0.1)],
     }),
     activity({
       skillId: 'mining',
@@ -43,6 +44,7 @@ export const miningActivities = fillDisplay(
       description: 'Chip gold ore out of the rock.',
       requiredLevel: 40,
       outputs: [drop('gold-ore'), drop('mica-chip', 1, 1, 0.25), drop('sulfur', 1, 1, 0.25)],
+      rareTable: [drop('lucky-nugget', 1, 1, 0.04)],
     }),
     activity({
       skillId: 'mining',
@@ -55,6 +57,7 @@ export const miningActivities = fillDisplay(
         drop('mica-chip', 1, 1, 0.25),
         drop('sulfur', 1, 1, 0.25),
       ],
+      rareTable: [drop('raw-sapphire', 1, 1, 0.08)],
     }),
     activity({
       skillId: 'mining',

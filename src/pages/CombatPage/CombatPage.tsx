@@ -21,6 +21,7 @@ import {
   playerToHitBonus,
 } from '../../engine/combat'
 import { CombatStatsPanel } from '../../components/CombatStatsPanel'
+import { LoadoutButton } from '../../components/LoadoutDrawer'
 import { ProgressBar } from '../../components/ProgressBar'
 import { Badge, Chip } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -200,7 +201,8 @@ export function CombatPage({ focus = null, onFocusConsumed }: CombatPageProps) {
             { id: 'dungeons', label: 'Dungeons' },
           ]}
         />
-        <div className="relative ml-auto">
+        <div className="relative ml-auto flex items-center gap-2">
+          <LoadoutButton loadoutKey="combat" />
           <Button
             size="sm"
             variant="ghost"

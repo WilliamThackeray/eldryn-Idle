@@ -12,6 +12,7 @@ import { leatherworkingActivities } from './leatherworking'
 import { miningActivities } from './mining'
 import { performanceActivities } from './performance'
 import { scribingActivities } from './scribing'
+import { skillingGearActivities } from './skillingGear'
 import { smithingActivities } from './smithing'
 import { thieveryActivities } from './thievery'
 import { weavingActivities } from './weaving'
@@ -40,6 +41,7 @@ export const ACTIVITIES: ActivityDef[] = [
   ...commerceActivities,
   ...performanceActivities,
   ...bindingActivities,
+  ...skillingGearActivities,
 ]
 
 const BY_KEY = new Map(ACTIVITIES.map((activity) => [`${activity.skillId}:${activity.id}`, activity]))
