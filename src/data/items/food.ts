@@ -26,5 +26,8 @@ export const FOOD = [
     tags: ['meat', 'cooked'],
     heal: 22,
   },
+  { id: 'camp-rations', name: 'Camp Rations', description: 'Meat and herbs packed for the road.', category: 'food', rarity: 'uncommon', stackable: true, sellValue: 16, tags: ['meat', 'cooked'], heal: 18 },
+  { id: 'royal-feast', name: 'Royal Feast', description: 'A high-table spread.', category: 'food', rarity: 'rare', stackable: true, sellValue: 40, tags: ['meat', 'cooked'], heal: 60 },
+  { id: 'heros-feast', name: "Hero's Feast", description: 'A late-game feast that sticks to the ribs.', category: 'food', rarity: 'very-rare', stackable: true, sellValue: 80, tags: ['meat', 'cooked'], heal: 90 },
   { id: 'eggs', name: 'Eggs', description: 'Ranch eggs.', category: 'food', rarity: 'common', stackable: true, sellValue: 2, tags: ['raw'] },
 ] as const satisfies readonly ItemDef[]

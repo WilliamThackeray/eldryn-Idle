@@ -26,6 +26,7 @@ import { activePerks, deriveAbilities, type DerivedAbility } from '../../engine/
 import { computeCombatStats, type StatBreakdown } from '../../engine/combatStats'
 import { type EquipmentSlot } from '../../engine/equipment'
 import { sourcesOf, type ItemLink } from '../../engine/itemIndex'
+import { maskCraftLabel, presentedActivityLabel } from '../../engine/presentActivity'
 import type { Bestiaries, Tomes } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
 import { ECHO_XP_PCT } from '../../engine/config'
@@ -673,6 +674,12 @@ function ComponentLines({
   inventory: Inventory
   onOpenLink: (link: ItemLink) => void
 }) {
+  const skills = useGameStore((state) => state.skills)
+  const renown = useGameStore((state) => state.renown)
+  const classId = useGameStore((state) => state.classId)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
+  const questProgress = useGameStore((state) => state.questProgress)
+  const viewer = { skills, renown, classId, secondaryClassId, questProgress }
   if (cost.length === 0) {
     return <p className="mt-1 text-xs text-parchment/50">No components</p>
   }
@@ -697,7 +704,9 @@ function ComponentLines({
                     onClick={() => onOpenLink(link)}
                     className="mr-1 text-gold underline-offset-2 hover:underline"
                   >
-                    {link.label}
+                    {link.kind === 'activity'
+                      ? (presentedActivityLabel(link.skillId, link.activityId, viewer) ?? link.label)
+                      : link.label}
                   </button>
                 ))}
               </span>
@@ -716,6 +725,12 @@ function Progression(props: {
   seenBiomes: readonly string[]
 }) {
   const rows = tierProgress(props)
+  const skills = useGameStore((state) => state.skills)
+  const renown = useGameStore((state) => state.renown)
+  const classId = useGameStore((state) => state.classId)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
+  const questProgress = useGameStore((state) => state.questProgress)
+  const viewer = { skills, renown, classId, secondaryClassId, questProgress }
   return (
     <Card className="space-y-3">
       <h3 className="font-bold text-gold">Progression</h3>
@@ -739,13 +754,17 @@ function Progression(props: {
               </span>
             </div>
             <div className="mt-1 grid gap-1 text-sm sm:grid-cols-3">
-              {groups.map((group) => (
+              {groups.map((group) => {
+                const craftSkill =
+                  group.label === 'Weapon' ? row.best.weaponSkill : group.label === 'Armor' ? row.best.armorSkill : row.best.robeSkill
+                return (
                 <p key={group.label}>
                   <span className="text-muted">{group.label}: </span>
                   {group.yours}
-                  <span className="text-muted"> / {group.target}</span>
+                  <span className="text-muted"> / {maskCraftLabel(craftSkill, group.target, viewer)}</span>
                 </p>
-              ))}
+                )
+              })}
             </div>
           </li>
         ))}

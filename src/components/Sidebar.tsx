@@ -28,6 +28,8 @@ export function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
   const skills = useGameStore((state) => state.skills)
   const activeAction = useGameStore((state) => state.activeAction)
   const runningId = activeAction?.kind === 'skill' ? activeAction.skillId : null
+  const unseenUnlocks = useUiPrefs((state) => state.unseenUnlocks)
+  const unseenSkills = new Set(unseenUnlocks.map((key) => key.split(':')[0]))
 
   return (
     <aside
@@ -62,6 +64,7 @@ export function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
                 label={skill.name}
                 level={levelForXp(skills[skill.id].xp)}
                 running={runningId === skill.id}
+                attention={unseenSkills.has(skill.id)}
                 active={
                   skill.id === 'vitality' ? currentPage === 'character' : currentPage === skill.id
                 }
@@ -93,6 +96,7 @@ function NavButton({
   label,
   level,
   running = false,
+  attention = false,
   active,
   onClick,
   icon,
@@ -101,6 +105,7 @@ function NavButton({
   label: string
   level?: number
   running?: boolean
+  attention?: boolean
   active: boolean
   onClick: () => void
   icon: ReactNode
@@ -113,7 +118,7 @@ function NavButton({
       aria-label={
         expanded
           ? undefined
-          : `${label}${level != null ? `, level ${level}` : ''}${running ? ', running' : ''}`
+          : `${label}${level != null ? `, level ${level}` : ''}${running ? ', running' : ''}${attention ? ', new unlocks' : ''}`
       }
       className={cx(
         'relative flex rounded-lg text-parchment transition-colors',
@@ -124,6 +129,7 @@ function NavButton({
       <span className="relative">
         {icon}
         {running && <span className="absolute -right-1 -top-1 h-2 w-2 animate-pulse rounded-full bg-sage" />}
+        {attention && <span className="absolute -bottom-0.5 -right-1 h-2 w-2 rounded-full bg-gold" />}
       </span>
       {running && <span className="sr-only">running</span>}
       {expanded ? (

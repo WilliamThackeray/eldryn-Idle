@@ -14,7 +14,9 @@ export function ActivityCard({
   successPct,
   inputs,
   output,
-  lockedLabel,
+  masked,
+  maskText,
+  isNew,
   onSelect,
 }: {
   activity: ActivityDef
@@ -25,23 +27,29 @@ export function ActivityCard({
   successPct: number
   inputs: { name: string; owned: number; needed: number }[]
   output: { name: string; note?: string } | null
-  lockedLabel: string | null
+  masked: boolean
+  maskText: string
+  isNew: boolean
   onSelect: () => void
 }) {
+  if (masked) {
+    return (
+      <Card variant="muted" selected={selected} onClick={onSelect} className="p-3">
+        <div className="flex items-center gap-2 text-muted">
+          <Lock size={14} aria-hidden />
+          <span className="text-card">{maskText}</span>
+        </div>
+      </Card>
+    )
+  }
   const tone = successPct >= 70 ? 'easy' : successPct >= 40 ? 'even' : 'hard'
   return (
-    <Card
-      variant={lockedLabel ? 'muted' : running ? 'highlight' : 'interactive'}
-      selected={selected}
-      onClick={onSelect}
-      className="p-3"
-    >
+    <Card variant={running ? 'highlight' : 'interactive'} selected={selected} onClick={onSelect} className="p-3">
       <div className="flex flex-wrap items-center gap-2">
-        {lockedLabel && <Lock size={14} aria-hidden />}
         <span className="text-card">{activity.name}</span>
+        {isNew && <Chip tone="gold">NEW</Chip>}
         <Chip>{intervalLabel}</Chip>
         <Chip tone={tone}>{successPct}%</Chip>
-        {lockedLabel && <Chip>{lockedLabel}</Chip>}
       </div>
       <p className="mt-1 truncate text-meta text-muted">{activity.description}</p>
       {(inputs.length > 0 || output) && (

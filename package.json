@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pacing": "vitest run src/engine/pacing.report.test.ts --reporter=verbose"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",

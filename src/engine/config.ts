@@ -5,6 +5,22 @@ export const MAX_LEVEL = 99
 export const BASE_INVENTORY_TABS = 5
 export const MAX_INVENTORY_TABS = 10
 
+/**
+ * Activity XP. xp = round(XP_BASE + XP_PER_LEVEL × requiredLevel).
+ * Crafts multiply by CRAFT_XP_MULT because the inputs already took gathering time.
+ */
+export const XP_BASE = 8
+export const XP_PER_LEVEL = 1.15
+export const CRAFT_XP_MULT = 1.3
+
+/** How many upcoming unlock levels a skill tab shows before "More unlocks". */
+export const LOCKED_PREVIEW_LEVELS = 3
+
+/** Scribing tomes: Vol. N at TOME_FIRST_LEVEL + (N−1)×TOME_LEVEL_STEP, and the target skill ≥ (N−1)×TOME_SKILL_GATE_STEP. */
+export const TOME_FIRST_LEVEL = 5
+export const TOME_LEVEL_STEP = 9
+export const TOME_SKILL_GATE_STEP = 10
+
 /** Leveling: RuneScape curve for now. XP to reach level L = floor(1/4 * Σ floor(l + 300 * 2^(l/7))). */
 export const XP_SUM_DIVISOR = 4
 export const XP_LEVEL_COEFFICIENT = 300
@@ -156,6 +172,94 @@ export const MATERIAL_LEVEL = {
   mithral: 60,
   adamantine: 80,
 } as const
+
+/**
+ * Gather/craft band start. An activity that consumes one of these cannot unlock earlier.
+ * Gold is not on the metal tier row; it sits between silvered and mithral.
+ */
+export const MATERIAL_ITEM_BAND: Record<string, number> = {
+  'iron-ore': 1,
+  'iron-bar': 1,
+  'steel-bar': 15,
+  'silver-ore': 30,
+  'silver-bar': 30,
+  'gold-ore': 40,
+  'gold-bar': 40,
+  'mithral-ore': 60,
+  'mithral-bar': 60,
+  'adamantine-ore': 80,
+  'adamantine-bar': 80,
+  logs: 1,
+  hardwood: 15,
+  ironwood: 30,
+  shadowtimber: 60,
+  elderwood: 80,
+  hide: 1,
+  'thick-hide': 15,
+  'croc-leather': 30,
+  'rothe-hide': 60,
+  dragonhide: 80,
+  flax: 1,
+  'linen-thread': 1,
+  'linen-cloth': 1,
+  wool: 15,
+  'wool-yarn': 15,
+  'wool-cloth': 15,
+  'spider-silk': 30,
+  'silk-thread': 30,
+  'silk-cloth': 30,
+  shadowsilk: 60,
+  starweave: 80,
+  'raw-quartz': 1,
+  'cut-quartz': 1,
+  'raw-amethyst': 15,
+  'cut-amethyst': 15,
+  'raw-sapphire': 30,
+  'cut-sapphire': 30,
+  'raw-emerald': 60,
+  'cut-emerald': 60,
+  'raw-diamond': 80,
+  'cut-diamond': 80,
+}
+
+/** Smithing weapon type levels. Variant level is max(type, material band). */
+export const WEAPON_TYPE_LEVEL = {
+  dagger: 1,
+  dart: 3,
+  handaxe: 4,
+  sickle: 5,
+  mace: 7,
+  spear: 8,
+  javelin: 9,
+  shortsword: 11,
+  scimitar: 13,
+  morningstar: 15,
+  rapier: 17,
+  longsword: 19,
+  battleaxe: 21,
+  warhammer: 23,
+  flail: 25,
+  greatsword: 27,
+  greataxe: 29,
+  maul: 31,
+  glaive: 34,
+  halberd: 37,
+} as const
+
+export const ARROWHEAD_TYPE_LEVEL = 2
+export const SHIELD_TYPE_LEVEL = 6
+
+/** Armor piece levels by set, in Boots → Gauntlets → Helmet → Chaps → Chest order. */
+export const ARMOR_PIECE_LEVELS: Record<string, Record<string, number>> = {
+  'ring-mail': { boots: 1, gauntlets: 2, helmet: 3, chaps: 4, chest: 6 },
+  'chain-shirt': { boots: 8, gauntlets: 9, helmet: 10, chaps: 12, chest: 13 },
+  'scale-mail': { boots: 16, gauntlets: 18, helmet: 19, chaps: 20, chest: 21 },
+  'chain-mail': { boots: 20, gauntlets: 22, helmet: 24, chaps: 26, chest: 27 },
+  'breastplate': { boots: 28, gauntlets: 30, helmet: 32, chaps: 33, chest: 35 },
+  'half-plate': { boots: 38, gauntlets: 40, helmet: 42, chaps: 44, chest: 46 },
+  splint: { boots: 48, gauntlets: 50, helmet: 52, chaps: 54, chest: 56 },
+  plate: { boots: 58, gauntlets: 60, helmet: 62, chaps: 65, chest: 68 },
+}
 
 export const MATERIAL_FLAGS = {
   silvered: { bypassesResistance: true },

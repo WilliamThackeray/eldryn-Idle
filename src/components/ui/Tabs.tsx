@@ -65,11 +65,18 @@ export function Tabs({ name, label, tabs, value, onChange, variant = 'underline'
             )}
           >
             {tab.running && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sage" aria-hidden />}
-            {tab.locked && <Lock size={12} aria-hidden />}
-            {tab.label}
-            {tab.locked && tab.lockLevel != null && <span className="text-meta">Lv {tab.lockLevel}</span>}
-            {tab.count != null && (
-              <span className="rounded bg-ink px-1.5 text-meta text-parchment">{tab.count}</span>
+            {tab.locked ? (
+              <>
+                <Lock size={12} aria-hidden />
+                <span>Lv {tab.lockLevel}</span>
+              </>
+            ) : (
+              <>
+                {tab.label}
+                {tab.count != null && (
+                  <span className="rounded bg-ink px-1.5 text-meta text-parchment">{tab.count}</span>
+                )}
+              </>
             )}
           </button>
         )

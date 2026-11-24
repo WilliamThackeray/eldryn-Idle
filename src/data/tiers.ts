@@ -249,7 +249,9 @@ const SET_TIER: Record<string, Tier> = {
   vestment: 3,
   croc: 3,
   shadowsilk: 4,
+  rothe: 4,
   starweave: 5,
+  dragonhide: 5,
 }
 
 const PIECE = /-(helmet|chest|chaps|gauntlets|boots)$/

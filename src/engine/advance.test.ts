@@ -172,10 +172,10 @@ test('pickpocketing adds gold', () => {
   expect(result.state.inventory).toEqual({})
 })
 
-test('a fine smithing check produces a fine longsword, not extra swords', () => {
-  const result = advance(doing('smithing', 'smith-longsword', { 'iron-bar': 3 }), 6000, scripted(0.6, 0.99))
+test('a fine smithing check produces a fine dagger, not extra swords', () => {
+  const result = advance(doing('smithing', 'smith-dagger', { 'iron-bar': 1 }), 6000, scripted(0.6, 0.99))
   expect(result.log[0]).toMatchObject({ tier: 'fine' })
-  expect(result.state.inventory).toEqual({ 'longsword@fine': 1 })
+  expect(result.state.inventory).toEqual({ 'dagger@fine': 1 })
 })
 
 test('enchanting keeps the consumed weapon quality', () => {

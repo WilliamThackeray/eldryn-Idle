@@ -40,6 +40,11 @@ export const GENERAL_GOODS: readonly ShopGood[] = [
   { itemId: 'empty-vial' },
   { itemId: 'ink' },
   { itemId: 'bandages' },
+  { itemId: 'padded-boots' },
+  { itemId: 'padded-gauntlets' },
+  { itemId: 'padded-helmet' },
+  { itemId: 'padded-chaps' },
+  { itemId: 'padded-chest' },
 ]
 
 const soon = (section: ShopSection, id: string, name: string, description: string): ShopUpgrade => ({

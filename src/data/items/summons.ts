@@ -27,6 +27,14 @@ function summon(
 
 export const SUMMONS = [
   summon(
+    'familiar-spark',
+    'Familiar Spark',
+    'A weak spark bound as a familiar. Fills a summon slot.',
+    8,
+    { hp: 4, ac: 10, toHit: 2, damage: '1d4', intervalMs: 6000 },
+    [],
+  ),
+  summon(
     'bound-wolf',
     'Bound Wolf',
     'A wolf bound by pact. Fills a summon slot.',

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Header } from './components/Header'
 import { OfflineModal } from './components/OfflineModal'
 import { RankToast } from './components/RankToast'
+import { UnlockToast } from './components/UnlockToast'
 import { Sidebar } from './components/Sidebar'
 import { useGameLoop } from './hooks/useGameLoop'
 import { isSkillId, SKILLS } from './data/skills'
@@ -98,6 +99,7 @@ function App() {
       </div>
 
       <RankToast />
+      <UnlockToast />
       {/* Outside overflow:hidden so hover labels are not clipped. */}
       <div id="tooltip-root" className="pointer-events-none fixed inset-0 z-50" />
     </>

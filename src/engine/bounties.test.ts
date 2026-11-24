@@ -71,7 +71,6 @@ test('armored raises AC and a 13 misses it', () => {
 })
 
 test('regenerating heals on the monster interval', () => {
-  const ogre = getMonster('ogre')!
   const fight = fightOf('ogre', ['regenerating'])
   fight.playerHp = 500
   fight.playerMaxHp = 500

@@ -25,12 +25,13 @@ test('persists UI prefs under their own key, not the game save', () => {
 
   expect([...mem.keys()]).toEqual([UI_PREFS_KEY])
   const saved = JSON.parse(mem.get(UI_PREFS_KEY) ?? '{}') as {
-    state: { sidebarExpanded: boolean; lastTab: Record<string, string>; hideLocked: boolean }
+    state: { sidebarExpanded: boolean; lastTab: Record<string, string>; hideLocked: boolean; unseenUnlocks: string[] }
   }
   expect(saved.state).toMatchObject({
     sidebarExpanded: true,
     lastTab: { shop: 'combat' },
     hideLocked: true,
+    unseenUnlocks: [],
   })
   expect(JSON.stringify(saved)).not.toContain('gold')
 })

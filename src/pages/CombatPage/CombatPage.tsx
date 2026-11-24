@@ -13,6 +13,7 @@ import {
 } from '../../data/monsters'
 import { dungeonUnlocked } from '../../engine/quest'
 import { dropsFor, tierForBiome, tierForDungeon } from '../../data/tiers'
+import { maskCraftLabel } from '../../engine/presentActivity'
 import type { TradeSkillId } from '../../data/skills'
 import { deriveAbilities } from '../../engine/abilities'
 import {
@@ -481,6 +482,12 @@ function MonsterRow({
   onSelect: () => void
   onFight: () => void
 }) {
+  const skills = useGameStore((state) => state.skills)
+  const renown = useGameStore((state) => state.renown)
+  const classId = useGameStore((state) => state.classId)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
+  const questProgress = useGameStore((state) => state.questProgress)
+  const viewer = { skills, renown, classId, secondaryClassId, questProgress }
   const avgDamage = monster.attacks.reduce((sum, attack) => sum + averageDamage(attack.damage), 0)
   const hint = difficultyHint({
     playerToHitBonus: toHit,
@@ -512,7 +519,7 @@ function MonsterRow({
             const gates = dropsFor(entry.itemId)
             const chance = entry.chance < 1 ? `${Math.round(entry.chance * 100)}%` : undefined
             const gated = gates.length
-              ? `Drops for: ${gates.map((gate) => `${gate.name} (${gate.skill})`).join(', ')}`
+              ? `Drops for: ${gates.map((gate) => `${maskCraftLabel(gate.skill, gate.name, viewer)} (${gate.skill})`).join(', ')}`
               : undefined
             return (
               <ItemChip

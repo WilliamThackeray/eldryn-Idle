@@ -14,7 +14,7 @@ const CASTER_PIECES = [
 function clothSet(
   prefix: string,
   cloth: ItemId,
-  requiredLevel: number,
+  levels: Record<string, number>,
   verb: string,
 ): ActivityDef[] {
   return CASTER_PIECES.map((piece, index) => {
@@ -25,7 +25,7 @@ function clothSet(
       id: `craft-${id}`,
       name: `Craft ${prefix.charAt(0).toUpperCase()}${prefix.slice(1)} ${piece.label}`,
       description: `${verb} a ${prefix} ${piece.label.toLowerCase()}.`,
-      requiredLevel,
+      requiredLevel: levels[piece.slot] ?? 1,
       inputs: [stack(cloth, isChest ? 2 : 1)],
       outputs: [drop(id)],
       category: 'Tailoring',
@@ -38,7 +38,7 @@ function clothSet(
 function attire(
   prefix: string,
   cloth: ItemId,
-  requiredLevel: number,
+  levels: Record<string, number>,
   verb: string,
   labels: Record<string, string>,
 ): ActivityDef[] {
@@ -51,7 +51,7 @@ function attire(
       id: `craft-${id}`,
       name: `Craft ${prefix.charAt(0).toUpperCase()}${prefix.slice(1)} ${label}`,
       description: `${verb} ${label.toLowerCase()}.`,
-      requiredLevel,
+      requiredLevel: levels[slot] ?? 1,
       inputs: [stack(cloth, isChest ? 2 : 1)],
       outputs: [drop(id)],
       category: 'Tailoring',
@@ -59,6 +59,11 @@ function attire(
       sortOrder: 100 + index,
     })
   })
+}
+
+function spread(start: number, end: number): Record<string, number> {
+  const slots = ['boots', 'gauntlets', 'helmet', 'chaps', 'chest']
+  return Object.fromEntries(slots.map((slot, index) => [slot, Math.round(start + ((end - start) * index) / 4)]))
 }
 
 export const weavingActivities: ActivityDef[] = withCombatGates([
@@ -77,8 +82,7 @@ export const weavingActivities: ActivityDef[] = withCombatGates([
     id: 'spin-wool',
     name: 'Spin Wool',
     description: 'Spin wool into yarn.',
-    requiredLevel: 20,
-    inputs: [stack('wool')],
+    requiredLevel: 26,
     outputs: [drop('wool-yarn')],
     category: 'Spinning',
   }),
@@ -87,8 +91,7 @@ export const weavingActivities: ActivityDef[] = withCombatGates([
     id: 'spin-silk',
     name: 'Spin Silk',
     description: 'Spin spider silk into thread.',
-    requiredLevel: 40,
-    inputs: [stack('spider-silk')],
+    requiredLevel: 42,
     outputs: [drop('silk-thread')],
     category: 'Spinning',
   }),
@@ -97,8 +100,7 @@ export const weavingActivities: ActivityDef[] = withCombatGates([
     id: 'loom-linen',
     name: 'Weave Linen Cloth',
     description: 'Loom linen thread into cloth.',
-    requiredLevel: 10,
-    inputs: [stack('linen-thread', 2)],
+    requiredLevel: 4,
     outputs: [drop('linen-cloth')],
     category: 'Loom',
   }),
@@ -107,8 +109,7 @@ export const weavingActivities: ActivityDef[] = withCombatGates([
     id: 'loom-wool',
     name: 'Weave Wool Cloth',
     description: 'Loom wool yarn into cloth.',
-    requiredLevel: 30,
-    inputs: [stack('wool-yarn', 2)],
+    requiredLevel: 50,
     outputs: [drop('wool-cloth')],
     category: 'Loom',
   }),
@@ -117,20 +118,19 @@ export const weavingActivities: ActivityDef[] = withCombatGates([
     id: 'loom-silk',
     name: 'Weave Silk Cloth',
     description: 'Loom silk thread into cloth.',
-    requiredLevel: 50,
-    inputs: [stack('silk-thread', 2)],
+    requiredLevel: 58,
     outputs: [drop('silk-cloth')],
     category: 'Loom',
   }),
-  ...clothSet('linen', 'linen-cloth', 10, 'Tailor'),
-  ...clothSet('wool', 'wool-cloth', 40, 'Tailor'),
-  ...clothSet('silk', 'silk-cloth', 70, 'Tailor'),
+  ...clothSet('linen', 'linen-cloth', spread(6, 14), 'Tailor'),
+  ...clothSet('wool', 'wool-cloth', spread(28, 36), 'Tailor'),
+  ...clothSet('silk', 'silk-cloth', spread(64, 74), 'Tailor'),
   activity({
     skillId: 'weaving',
     id: 'gather-shadowsilk',
     name: 'Gather Shadowsilk',
     description: 'Collect shadowsilk. The Underdark looms are not open yet.',
-    requiredLevel: 60,
+    requiredLevel: 76,
     outputs: [drop('shadowsilk')],
     category: 'Spinning',
   }),
@@ -143,23 +143,23 @@ export const weavingActivities: ActivityDef[] = withCombatGates([
     outputs: [drop('starweave')],
     category: 'Spinning',
   }),
-  ...clothSet('shadowsilk', 'shadowsilk', 60, 'Tailor'),
-  ...clothSet('starweave', 'starweave', 80, 'Tailor'),
-  ...attire('wildweave', 'linen-cloth', 20, 'Weave', {
+  ...clothSet('shadowsilk', 'shadowsilk', spread(82, 92), 'Tailor'),
+  ...clothSet('starweave', 'starweave', spread(84, 98), 'Tailor'),
+  ...attire('wildweave', 'linen-cloth', spread(16, 24), 'Weave', {
     helmet: 'Hood',
     chest: 'Wrap',
     chaps: 'Leggings',
     gauntlets: 'Gloves',
     boots: 'Boots',
   }),
-  ...attire('arcane', 'wool-cloth', 50, 'Stitch', {
+  ...attire('arcane', 'wool-cloth', spread(38, 48), 'Stitch', {
     helmet: 'Hood',
     chest: 'Robe',
     chaps: 'Trousers',
     gauntlets: 'Gloves',
     boots: 'Slippers',
   }),
-  ...attire('vestment', 'silk-cloth', 90, 'Stitch', {
+  ...attire('vestment', 'silk-cloth', spread(52, 62), 'Stitch', {
     helmet: 'Cowl',
     chest: 'Robe',
     chaps: 'Leggings',

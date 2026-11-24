@@ -157,6 +157,7 @@ export function canEquip(equipment: Equipment, itemId: string, classLevel: numbe
     const required = MATERIAL_LEVEL[gear.material]
     if (classLevel < required) return `Requires Class Level ${required}`
   }
+  // TODO(design): should equipping heavy armor TYPES also need a Class Level?
   return null
 }
 

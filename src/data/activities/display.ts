@@ -1,4 +1,5 @@
 import type { TradeSkillId } from '../skills'
+import { LOCKED_PREVIEW_LEVELS } from '../../engine/config'
 import type { ActivityDef } from './types'
 
 /** Skills with an explicit tab list. Anything else tabs only when it is large and categorized. */
@@ -78,14 +79,22 @@ export function compareActivities(a: ActivityDef, b: ActivityDef): number {
   return a.name.localeCompare(b.name)
 }
 
-export function visibleActivities<T extends { locked: boolean }>(
+export function visibleActivities<T extends { locked: boolean; level: number }>(
   items: T[],
   hideLocked: boolean,
-  showAllLocked: boolean,
-): { shown: T[]; hiddenLocked: number } {
+): { shown: T[]; moreMax: number | null } {
   const unlocked = items.filter((item) => !item.locked)
-  const locked = items.filter((item) => item.locked)
-  if (hideLocked) return { shown: unlocked, hiddenLocked: 0 }
-  if (showAllLocked || locked.length <= 1) return { shown: [...unlocked, ...locked], hiddenLocked: 0 }
-  return { shown: [...unlocked, locked[0]!], hiddenLocked: locked.length - 1 }
+  if (hideLocked) return { shown: unlocked, moreMax: null }
+  const locked = items.filter((item) => item.locked).slice().sort((a, b) => a.level - b.level)
+  const levels: number[] = []
+  for (const item of locked) {
+    if (!levels.includes(item.level)) levels.push(item.level)
+  }
+  const keep = new Set(levels.slice(0, LOCKED_PREVIEW_LEVELS))
+  const shownLocked = locked.filter((item) => keep.has(item.level))
+  const rest = locked.filter((item) => !keep.has(item.level))
+  return {
+    shown: [...unlocked, ...shownLocked],
+    moreMax: rest.length > 0 ? Math.max(...rest.map((item) => item.level)) : null,
+  }
 }

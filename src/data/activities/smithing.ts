@@ -1,10 +1,19 @@
 import { ARMOR } from '../items/armor'
 import type { GearMaterial, ItemId } from '../items'
 import { WEAPONS } from '../items/weapons'
-import { MATERIAL_LEVEL } from '../../engine/config'
+import {
+  ARMOR_PIECE_LEVELS,
+  ARROWHEAD_TYPE_LEVEL,
+  MATERIAL_LEVEL,
+  SHIELD_TYPE_LEVEL,
+  WEAPON_TYPE_LEVEL,
+} from '../../engine/config'
+import { lockUnlock } from './capLevels'
 import { withCombatGates } from './gates'
 import { activity, drop, stack } from './define'
 import type { ActivityDef } from './types'
+
+// TODO(design): should equipping heavy armor TYPES also need a Class Level?
 
 const TIER_NAME: Record<GearMaterial, string> = {
   iron: 'Iron',
@@ -47,6 +56,20 @@ function barCount(itemId: string, slot?: string): number {
   return 2
 }
 
+function gearLevel(item: (typeof WEAPONS)[number] | (typeof ARMOR)[number], material: GearMaterial): number {
+  const band = MATERIAL_LEVEL[material]
+  if (item.gear?.shield || item.id.includes('shield')) return Math.max(SHIELD_TYPE_LEVEL, band)
+  if (item.id.endsWith('arrowhead')) return Math.max(ARROWHEAD_TYPE_LEVEL, band)
+  const armor = item.id.match(/^(?:(?:steel|silvered|mithral|adamantine)-)?(.+)-(helmet|chest|chaps|gauntlets|boots)$/)
+  if (armor) {
+    const piece = ARMOR_PIECE_LEVELS[armor[1]!]?.[armor[2]!]
+    if (piece != null) return Math.max(piece, band)
+  }
+  const base = item.id.replace(/^(steel|silvered|mithral|adamantine)-/, '')
+  const typed = WEAPON_TYPE_LEVEL[base as keyof typeof WEAPON_TYPE_LEVEL]
+  return Math.max(typed ?? band, band)
+}
+
 function smithSection(item: (typeof WEAPONS)[number] | (typeof ARMOR)[number], tier: string) {
   if (item.gear?.shield || item.id.includes('shield')) return { group: tier, category: 'Shields', section: 2 }
   if (item.gear?.weapon) return { group: tier, category: 'Weapons', section: 0 }
@@ -63,13 +86,16 @@ function smithMetalGear(): ActivityDef[] {
     const barId = BAR_FOR[material]
     const tier = TIER_NAME[material]
     const { group, category, section } = smithSection(item, tier)
+    const id = `smith-${item.id}`
+    const requiredLevel = gearLevel(item, material)
+    if (material === 'iron') lockUnlock('smithing', id)
     recipes.push(
       activity({
         skillId: 'smithing',
-        id: `smith-${item.id}`,
+        id,
         name: `Smith ${item.name}`,
         description: `Forge ${item.name.toLowerCase()} from ${barId.replace('-', ' ')}s.`,
-        requiredLevel: MATERIAL_LEVEL[material],
+        requiredLevel,
         inputs: [stack(barId, bars)],
         outputs: [drop(item.id as ItemId)],
         category,
@@ -79,13 +105,15 @@ function smithMetalGear(): ActivityDef[] {
     )
   }
   for (const tip of ARROWHEADS) {
+    const id = `smith-${tip.id}`
+    if (tip.material === 'iron') lockUnlock('smithing', id)
     recipes.push(
       activity({
         skillId: 'smithing',
-        id: `smith-${tip.id}`,
+        id,
         name: `Smith ${tip.name}`,
         description: `Forge a batch of ${tip.name.toLowerCase()}.`,
-        requiredLevel: MATERIAL_LEVEL[tip.material],
+        requiredLevel: Math.max(ARROWHEAD_TYPE_LEVEL, MATERIAL_LEVEL[tip.material]),
         inputs: [stack(BAR_FOR[tip.material])],
         outputs: [drop(tip.id, 10)],
         category: 'Weapons',
@@ -172,4 +200,25 @@ const SMELT: ActivityDef[] = [
   }),
 ]
 
-export const smithingActivities: ActivityDef[] = withCombatGates([...SMELT, ...smithMetalGear()])
+for (const bar of SMELT) lockUnlock('smithing', bar.id)
+
+const DRILL: ActivityDef[] = [
+  activity({
+    skillId: 'smithing',
+    id: 'temper-mithral',
+    name: 'Temper Mithral',
+    description: 'Practice the heat that mithral wants.',
+    requiredLevel: 74,
+    category: 'Smelting',
+  }),
+  activity({
+    skillId: 'smithing',
+    id: 'plan-adamantine',
+    name: 'Plan the Adamantine',
+    description: 'Study how adamantine takes a heat.',
+    requiredLevel: 78,
+    category: 'Smelting',
+  }),
+]
+
+export const smithingActivities: ActivityDef[] = withCombatGates([...SMELT, ...smithMetalGear(), ...DRILL])

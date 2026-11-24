@@ -137,7 +137,7 @@ export function CharacterCreate({ onCancel, onBegin }: CharacterCreateProps) {
               <p className="text-sm text-parchment/70">Nothing.</p>
             ) : (
               <ul className="space-y-1 text-sm">
-                {chosen.startingKit.map((stack) => (
+                {(chosen.startingKit as readonly { itemId: string; quantity: number }[]).map((stack) => (
                   <li key={stack.itemId} className="flex justify-between gap-3">
                     <span>{getItem(stack.itemId)?.name ?? stack.itemId}</span>
                     <span className="text-sage">×{stack.quantity}</span>

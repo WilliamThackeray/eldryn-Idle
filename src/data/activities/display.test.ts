@@ -36,16 +36,18 @@ test('tabbed skills categorize every activity and leave no empty tab', () => {
   expect(skillUsesTabs('vitality', activitiesFor('vitality'))).toBe(false)
 })
 
-test('locked activities keep the next one and collapse the rest', () => {
+test('locked activities preview the next three levels', () => {
   const items = [
-    { id: 'a', locked: false },
-    { id: 'b', locked: true },
-    { id: 'c', locked: true },
+    { id: 'a', locked: false, level: 1 },
+    { id: 'b', locked: true, level: 4 },
+    { id: 'c', locked: true, level: 4 },
+    { id: 'd', locked: true, level: 8 },
+    { id: 'e', locked: true, level: 12 },
+    { id: 'f', locked: true, level: 20 },
   ]
-  expect(visibleActivities(items, false, false)).toEqual({
-    shown: [items[0], items[1]],
-    hiddenLocked: 1,
+  expect(visibleActivities(items, false)).toEqual({
+    shown: [items[0], items[1], items[2], items[3], items[4]],
+    moreMax: 20,
   })
-  expect(visibleActivities(items, true, false).shown).toEqual([items[0]])
-  expect(visibleActivities(items, false, true).hiddenLocked).toBe(0)
+  expect(visibleActivities(items, true)).toEqual({ shown: [items[0]], moreMax: null })
 })

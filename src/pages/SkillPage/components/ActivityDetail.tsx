@@ -4,6 +4,7 @@ import { Collapsible } from '../../../components/ui/Collapsible'
 import { ItemChip } from '../../../components/ui/ItemChip'
 import { StatTile } from '../../../components/ui/StatTile'
 import { Tooltip } from '../../../components/ui/Tooltip'
+import { ProgressBar } from '../../../components/ProgressBar'
 import type { ActivityDef } from '../../../data/activities'
 import { SKILLS } from '../../../data/skills'
 import type { GameEvent, SkillEvent } from '../../../engine/advance'
@@ -58,6 +59,7 @@ export function ActivityDetail({
   onStop,
   secondary,
   log,
+  lockPanel,
 }: {
   activity: ActivityDef | null
   checkLine: string
@@ -75,11 +77,18 @@ export function ActivityDetail({
   onStop: () => void
   secondary: { label: string; ready: boolean; reason: string | null; onClick: () => void } | null
   log: GameEvent[]
+  lockPanel: { title: string; level: number; progress: number } | null
 }) {
   return (
     <div className="space-y-3 rounded-lg border border-line bg-panel p-4 text-parchment">
       {activity == null ? (
         <p className="text-body text-muted">Select an activity.</p>
+      ) : lockPanel ? (
+        <div className="space-y-2">
+          <h2 className="text-card text-gold">{lockPanel.title}</h2>
+          <p className="text-meta text-muted">Your level: {lockPanel.level}</p>
+          <ProgressBar progress={lockPanel.progress} className="h-2" label="Progress toward unlock" />
+        </div>
       ) : (
         <>
           <h2 className="text-card text-gold">{activity.name}</h2>

@@ -126,13 +126,14 @@ function buildTomeActivities(): ActivityDef[] {
 }
 
 function buildNoteActivities(): ActivityDef[] {
-  return NOTE_GROUPS.map((group) =>
+  const levels = [8, 11, 17, 26, 35]
+  return NOTE_GROUPS.map((group, index) =>
     activity({
       skillId: 'scribing',
       id: `craft-notes-${group.id}`,
       name: `Notes on ${group.name}`,
       description: `Cheap study notes. +10% ${group.name.toLowerCase()} yield for 1 hour.`,
-      requiredLevel: 1,
+      requiredLevel: levels[index] ?? 8,
       inputs: [stack('ink'), ...group.inputs.map((entry) => stack(entry.itemId, entry.quantity))],
       outputs: [drop(noteItemId(group.id) as ItemId)],
       category: 'Study Notes',
@@ -140,9 +141,17 @@ function buildNoteActivities(): ActivityDef[] {
   )
 }
 
+const BESTIARY_LEVELS: Record<string, readonly number[]> = {
+  beast: [10, 38, 62],
+  undead: [13, 44, 71],
+  fey: [16, 47, 80],
+  monstrosity: [19, 53, 89],
+  giant: [29, 56, 92],
+}
+
 function buildBestiaryActivities(): ActivityDef[] {
   return BESTIARY_TYPES.flatMap((type) =>
-    BESTIARY_VOLUME_LEVELS.map((level, index) => {
+    (BESTIARY_LEVELS[type] ?? BESTIARY_VOLUME_LEVELS).map((level, index) => {
       const volume = index + 1
       const roman = ['I', 'II', 'III'][index]
       const trophy = trophyItemId(type) as ItemId

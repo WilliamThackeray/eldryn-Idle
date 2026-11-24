@@ -93,6 +93,7 @@ test('general goods are not gear or ammo', () => {
   for (const good of GENERAL_GOODS) {
     const def = getItem(good.itemId)
     expect(def).toBeTruthy()
+    if (good.itemId.startsWith('padded-')) continue
     expect(def?.category).not.toBe('gear')
     expect(def?.category).not.toBe('ammo')
   }

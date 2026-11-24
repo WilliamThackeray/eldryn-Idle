@@ -9,7 +9,7 @@ import { PageLayout } from '../../components/ui/PageLayout'
 import { SubHeading } from '../../components/ui/SectionHeading'
 import { TabPanel, Tabs } from '../../components/ui/Tabs'
 import { activitiesFor, type ActivityDef } from '../../data/activities'
-import { compareActivities, parseGroup, tabsFor } from '../../data/activities/display'
+import { compareActivities, parseGroup, tabsFor, visibleActivities } from '../../data/activities/display'
 import { getClass, modifiersFor } from '../../data/classes'
 import {
   parseBestiaryItemId,
@@ -24,8 +24,7 @@ import { actionIntervalMs, activityIntervalMs } from '../../engine/advance'
 import { totalItemStats } from '../../engine/equipment'
 import { tomeSpeedBonus, tomeXpPct } from '../../engine/history'
 import type { Inventory } from '../../engine/inventory'
-import { activityUnlocked } from '../../engine/quest'
-import { spellOnClassList } from '../../engine/spells'
+import { presentActivity, activityIsListed, type Viewer } from '../../engine/presentActivity'
 import {
   activityBonusParts,
   activityRollMode,
@@ -33,7 +32,7 @@ import {
   formatCheckLine,
   qualityOdds,
 } from '../../engine/skillCheck'
-import { levelForXp, progressToNext, tier } from '../../engine/xp'
+import { levelForXp, progressToNext, tier, xpForLevel } from '../../engine/xp'
 import { useGameStore } from '../../store/gameStore'
 import { useUiPrefs } from '../../store/uiPrefs'
 import { ActivityCard } from './components/ActivityCard'
@@ -46,7 +45,6 @@ import {
   formatXp,
   goldNote,
   inputChips,
-  isLocked,
   itemName,
   lockLabel,
   lootNote,
@@ -81,6 +79,8 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const questProgress = useGameStore((state) => state.questProgress)
   const hideLocked = useUiPrefs((state) => state.hideLocked)
   const setHideLocked = useUiPrefs((state) => state.setHideLocked)
+  const unseenUnlocks = useUiPrefs((state) => state.unseenUnlocks)
+  const markSeen = useUiPrefs((state) => state.markSeen)
   const savedTab = useUiPrefs((state) => state.lastTab[`skill:${skillId}`])
   const setLastTab = useUiPrefs((state) => state.setLastTab)
 
@@ -101,15 +101,13 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   const tomeSpeed = tomeSpeedBonus(tomes, skillId)
   const pageDiscount = effectTotal(activePerks({ skills }), 'historyTomePages')
 
+  const viewer: Viewer = useMemo(
+    () => ({ skills, renown, classId, secondaryClassId, questProgress }),
+    [skills, renown, classId, secondaryClassId, questProgress],
+  )
   const activities = useMemo(
-    () =>
-      activitiesFor(skillId).filter((activity) => {
-        if (!activityUnlocked(activity.requiresQuest, questProgress)) return false
-        const spellId = activity.learnSpell ?? (activity.id.startsWith('scribe-') ? activity.id.slice('scribe-'.length) : null)
-        if (!spellId) return true
-        return spellOnClassList(spellId, classId, secondaryClassId)
-      }),
-    [skillId, questProgress, classId, secondaryClassId],
+    () => activitiesFor(skillId).filter((activity) => activityIsListed(activity, viewer)),
+    [skillId, viewer],
   )
   const tabs = useMemo(() => tabsFor(skillId, activities), [skillId, activities])
   const running =
@@ -229,10 +227,17 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   }
 
   function renderCard(activity: ActivityDef) {
+    const view = presentActivity(activity, viewer)
     const odds = qualityOdds(checkState, activity)
     const success = Math.round(100 - odds.fail - odds.fumble)
     const runningThis = running?.activityId === activity.id
     const interval = intervalOf(activity)
+    const maskText =
+      view.lock === 'quest'
+        ? 'Requires a quest'
+        : view.lock === 'renown'
+          ? `Requires Renown ${activity.renownRequired}`
+          : `Requires ${skill?.name ?? skillId} level ${activity.requiredLevel}`
     return (
       <ActivityCard
         activity={activity}
@@ -243,8 +248,13 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
         successPct={success}
         inputs={inputChips(activity, inventory, pageDiscount)}
         output={mainOutput(activity)}
-        lockedLabel={lockLabel(activity, level, renown)}
-        onSelect={() => setSelectedId(activity.id)}
+        masked={!view.visible}
+        maskText={maskText}
+        isNew={view.visible && unseenUnlocks.includes(`${skillId}:${activity.id}`)}
+        onSelect={() => {
+          setSelectedId(activity.id)
+          if (view.visible) markSeen(`${skillId}:${activity.id}`)
+        }}
       />
     )
   }
@@ -273,36 +283,81 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
   }
 
   const renderGrouped = (list: ActivityDef[]) => {
+    const marked = list.map((activity) => ({
+      activity,
+      locked: !presentActivity(activity, viewer).visible,
+      level: activity.requiredLevel,
+    }))
+    const { shown, moreMax } = visibleActivities(marked, hideLocked)
     const headings = new Map<string, Map<string, ActivityDef[]>>()
-    for (const activity of list) {
-      const parts = parseGroup(activity.group)
+    for (const item of shown) {
+      const parts = parseGroup(item.activity.group)
       const heading = parts.heading ?? ''
       const subheading = parts.subheading ?? ''
       const bucket = headings.get(heading) ?? new Map<string, ActivityDef[]>()
       const rows = bucket.get(subheading) ?? []
-      rows.push(activity)
+      rows.push(item.activity)
       bucket.set(subheading, rows)
       headings.set(heading, bucket)
     }
-    return [...headings.entries()].map(([heading, subs]) => (
-      <section key={heading || 'all'} className="space-y-3">
-        {heading && <SubHeading title={heading} />}
-        {[...subs.entries()].map(([subheading, rows]) => (
-          <ActivityGroup
-            key={subheading || heading || 'all'}
-            title={subheading || undefined}
-            activities={rows}
-            locked={(activity) => isLocked(activity, level, renown)}
-            hideLocked={hideLocked}
-          >
-            {renderCard}
-          </ActivityGroup>
-        ))}
-      </section>
-    ))
+    return (
+      <>
+        {[...headings.entries()].map(([heading, subs]) => {
+          const rows = [...subs.values()].flat()
+          const headingLocked = rows.every((activity) => !presentActivity(activity, viewer).visible)
+          return (
+            <section key={heading || 'all'} className="space-y-3">
+              {heading && !headingLocked && <SubHeading title={heading} />}
+              {[...subs.entries()].map(([subheading, groupRows]) => {
+                const groupLocked = groupRows.every((activity) => !presentActivity(activity, viewer).visible)
+                return (
+                  <ActivityGroup
+                    key={subheading || heading || 'all'}
+                    title={subheading && !groupLocked ? subheading : undefined}
+                    activities={groupRows}
+                    locked={(activity) => !presentActivity(activity, viewer).visible}
+                    hideLocked={false}
+                    preview={false}
+                  >
+                    {renderCard}
+                  </ActivityGroup>
+                )
+              })}
+            </section>
+          )
+        })}
+        {moreMax != null && <p className="text-meta text-muted">More unlocks up to level {moreMax}</p>}
+      </>
+    )
   }
 
   const detail = selected ? detailFor(selected) : null
+  function lockPanelFor(activity: ActivityDef | null) {
+    if (!activity) return null
+    const view = presentActivity(activity, viewer)
+    if (view.visible) return null
+    if (view.lock === 'quest') return { title: 'Requires a quest', level, progress: 0 }
+    const end = xpForLevel(activity.requiredLevel)
+    const start = xpForLevel(level)
+    const span = Math.max(1, end - start)
+    return {
+      title:
+        view.lock === 'renown'
+          ? `Requires Renown ${activity.renownRequired}`
+          : `Unlocks at ${skill?.name ?? skillId} level ${activity.requiredLevel}`,
+      level,
+      progress: activity.requiredLevel <= level ? 1 : Math.min(1, Math.max(0, (xp - start) / span)),
+    }
+  }
+  const nextUnlock = activities.reduce<number | null>((best, activity) => {
+    if (activity.requiredLevel <= level) return best
+    if (!activityIsListed(activity, viewer)) return best
+    return best == null || activity.requiredLevel < best ? activity.requiredLevel : best
+  }, null)
+  const nextStart = xpForLevel(level)
+  const nextEnd = nextUnlock == null ? nextStart : xpForLevel(nextUnlock)
+  const nextProgress =
+    nextUnlock == null ? 0 : Math.min(1, Math.max(0, (xp - nextStart) / Math.max(1, nextEnd - nextStart)))
 
   return (
     <PageLayout
@@ -317,6 +372,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
           intervalLabel={detail ? formatInterval(intervalOf(selected!)) : ''}
           requiredLabel={detail?.requiredLabel ?? ''}
           lockedReason={selected ? lockLabel(selected, level, renown) : null}
+          lockPanel={lockPanelFor(selected)}
           inputs={selected ? inputChips(selected, inventory, pageDiscount) : []}
           outputs={selected ? outputChips(selected) : []}
           running={running?.activityId === selected?.id}
@@ -349,6 +405,12 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
           <div className="mt-2">
             <ProgressBar progress={progress.progress} className="h-3" label="Skill XP progress" />
           </div>
+          {nextUnlock != null && (
+            <div className="mt-2">
+              <p className="text-meta text-muted">Next unlock at level {nextUnlock}</p>
+              <ProgressBar progress={nextProgress} className="mt-1 h-1.5" label="Progress toward next unlock" />
+            </div>
+          )}
         </Card>
 
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -361,12 +423,16 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
               onChange={chooseTab}
               tabs={tabs.map((id) => {
                 const rows = activities.filter((activity) => activity.category === id)
-                const unlocked = rows.filter((activity) => !isLocked(activity, level, renown)).length
+                const unlocked = rows.filter((activity) => presentActivity(activity, viewer).visible).length
+                const min = Math.min(...rows.map((activity) => activity.requiredLevel))
+                const locked = rows.length > 0 && unlocked === 0
                 return {
                   id,
                   label: id,
-                  count: `${unlocked}/${rows.length}`,
+                  count: locked ? undefined : `${unlocked}/${rows.length}`,
                   running: runningActivity?.category === id,
+                  locked,
+                  lockLevel: locked ? min : undefined,
                 }
               })}
             />
@@ -398,7 +464,7 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
                   key={group.kind}
                   title={group.title}
                   activities={group.activities}
-                  locked={(activity) => isLocked(activity, level, renown)}
+                  locked={(activity) => !presentActivity(activity, viewer).visible}
                   hideLocked={hideLocked}
                 >
                   {renderCard}
@@ -419,11 +485,12 @@ export function SkillPage({ skillId, focus = null, onFocusConsumed }: SkillPageP
                   tabs={subIds.map((id) => {
                     const rows = subMap.get(id) ?? []
                     const min = Math.min(...rows.map((activity) => activity.requiredLevel))
+                    const locked = rows.every((activity) => !presentActivity(activity, viewer).visible)
                     return {
                       id,
                       label: id,
-                      locked: level < min,
-                      lockLevel: level < min ? min : undefined,
+                      locked,
+                      lockLevel: locked ? min : undefined,
                       running: runningActivity?.category === tab && parseGroup(runningActivity.group).subtab === id,
                     }
                   })}

@@ -1,5 +1,4 @@
-import { useState, type ReactNode } from 'react'
-import { Button } from '../../../components/ui/Button'
+import type { ReactNode } from 'react'
 import { SubHeading } from '../../../components/ui/SectionHeading'
 import { visibleActivities } from '../../../data/activities/display'
 import type { ActivityDef } from '../../../data/activities'
@@ -9,18 +8,24 @@ export function ActivityGroup({
   activities,
   locked,
   hideLocked,
+  preview = true,
   children,
 }: {
   title?: string
   activities: ActivityDef[]
   locked: (activity: ActivityDef) => boolean
   hideLocked: boolean
+  preview?: boolean
   children: (activity: ActivityDef) => ReactNode
 }) {
-  const [showAll, setShowAll] = useState(false)
-  const marked = activities.map((activity) => ({ activity, locked: locked(activity) }))
-  const { shown, hiddenLocked } = visibleActivities(marked, hideLocked, showAll)
-  if (shown.length === 0 && hiddenLocked === 0) return null
+  const marked = activities.map((activity) => ({
+    activity,
+    locked: locked(activity),
+    level: activity.requiredLevel,
+  }))
+  const shown = preview ? visibleActivities(marked, hideLocked).shown : marked
+  const moreMax = preview ? visibleActivities(marked, hideLocked).moreMax : null
+  if (shown.length === 0 && moreMax == null) return null
   return (
     <section className="space-y-2">
       {title && <SubHeading title={title} />}
@@ -29,11 +34,7 @@ export function ActivityGroup({
           <div key={item.activity.id}>{children(item.activity)}</div>
         ))}
       </div>
-      {hiddenLocked > 0 && (
-        <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
-          Show {hiddenLocked} more locked
-        </Button>
-      )}
+      {moreMax != null && <p className="text-meta text-muted">More unlocks up to level {moreMax}</p>}
     </section>
   )
 }

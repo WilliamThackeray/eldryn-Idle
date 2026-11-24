@@ -122,8 +122,8 @@ test('quality odds sum to 100 with and without advantage', () => {
   expect(tierChances(0, 10, 'advantage').fumble).toBe(0.25)
 })
 
-test('level 1 smithing an iron longsword is mostly standard and fine', () => {
-  const activity = getActivity('smithing', 'smith-longsword')
+test('level 1 smithing an iron dagger is mostly standard and fine', () => {
+  const activity = getActivity('smithing', 'smith-dagger')
   expect(activity).toBeTruthy()
   const state = { skills: initialSkillProgress(), equipment: emptyEquipment() }
   const odds = qualityOdds(state, activity!)

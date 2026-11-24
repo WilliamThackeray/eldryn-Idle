@@ -18,6 +18,7 @@ import { thieveryActivities } from './thievery'
 import { weavingActivities } from './weaving'
 import { woodcraftActivities } from './woodcraft'
 import { woodcuttingActivities } from './woodcutting'
+import { capSkillLevels } from './capLevels'
 import type { ActivityDef } from './types'
 
 export type { ActivityDef, GoldDrop, ItemStack, LootEntry } from './types'
@@ -43,6 +44,8 @@ export const ACTIVITIES: ActivityDef[] = [
   ...bindingActivities,
   ...skillingGearActivities,
 ]
+
+capSkillLevels(ACTIVITIES)
 
 const BY_KEY = new Map(ACTIVITIES.map((activity) => [`${activity.skillId}:${activity.id}`, activity]))
 

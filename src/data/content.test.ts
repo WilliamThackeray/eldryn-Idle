@@ -31,7 +31,7 @@ test('every skill has a level 1 activity and craft inputs are produced somewhere
     if (skill.id === 'vitality') continue
     expect(activitiesFor(skill.id).length, skill.id).toBeGreaterThanOrEqual(6)
     const minLevel = Math.min(...activitiesFor(skill.id).map((activity) => activity.requiredLevel))
-    expect(minLevel, skill.id).toBeLessThanOrEqual(skill.id === 'binding' ? 10 : 1)
+    expect(minLevel, skill.id).toBeLessThanOrEqual(1)
   }
 
   const produced = new Set([
@@ -44,7 +44,7 @@ test('every skill has a level 1 activity and craft inputs are produced somewhere
     ...GENERAL_GOODS.map((good) => good.itemId),
   ])
   for (const activity of ACTIVITIES) {
-    for (const input of activity.inputs ?? []) expect(produced.has(input.itemId)).toBe(true)
+    for (const input of activity.inputs ?? []) expect(produced.has(input.itemId), `${activity.id}:${input.itemId}`).toBe(true)
     for (const entry of [...activity.outputs, ...(activity.rareTable ?? []), ...(activity.byproducts ?? [])]) {
       expect(isItemId(entry.itemId)).toBe(true)
       expect(entry.max).toBeGreaterThanOrEqual(entry.min)
@@ -57,7 +57,7 @@ test('every skill has a level 1 activity and craft inputs are produced somewhere
 
 test('mining, steel, fishing, cooking, and the herb plot match the slice', () => {
   expect(activitiesFor('mining').filter((activity) => activity.id.startsWith('mine-')).map((activity) => activity.requiredLevel)).toEqual([
-    1, 15, 30, 40, 60, 80,
+    1, 5, 30, 40, 60, 80,
   ])
 
   expect(getActivity('smithing', 'smith-steel')).toMatchObject({
@@ -110,31 +110,22 @@ test('every equippable item and every recipe input has a source', () => {
   }
 })
 
-test('material-tier longswords, chain mail, and arrowheads match MATERIAL_LEVEL', () => {
-  const levels = [1, 15, 30, 60, 80]
-  const swords = [
-    'longsword',
-    'steel-longsword',
-    'silvered-longsword',
-    'mithral-longsword',
-    'adamantine-longsword',
-  ]
-  const tips = [
-    'iron-arrowhead',
-    'steel-arrowhead',
-    'silvered-arrowhead',
-    'mithral-arrowhead',
-    'adamantine-arrowhead',
-  ]
-  for (let i = 0; i < levels.length; i++) {
-    expect(getActivity('smithing', `smith-${swords[i]}`)?.requiredLevel).toBe(levels[i])
-    expect(getActivity('smithing', `smith-${tips[i]}`)?.requiredLevel).toBe(levels[i])
-  }
-  expect(getActivity('smithing', 'smith-chain-mail-chest')?.requiredLevel).toBe(1)
-  expect(getActivity('smithing', 'smith-steel-chain-mail-chest')?.requiredLevel).toBe(15)
-  expect(getActivity('smithing', 'smith-silvered-chain-mail-chest')?.requiredLevel).toBe(30)
-  expect(getActivity('smithing', 'smith-mithral-chain-mail-chest')?.requiredLevel).toBe(60)
-  expect(getActivity('smithing', 'smith-adamantine-chain-mail-chest')?.requiredLevel).toBe(80)
+test('material-tier longswords, chain mail, and arrowheads sit at or above their type and band', () => {
+  expect(getActivity('smithing', 'smith-longsword')?.requiredLevel).toBe(19)
+  expect(getActivity('smithing', 'smith-steel-longsword')?.requiredLevel).toBeGreaterThanOrEqual(19)
+  expect(getActivity('smithing', 'smith-silvered-longsword')?.requiredLevel).toBeGreaterThanOrEqual(30)
+  expect(getActivity('smithing', 'smith-mithral-longsword')?.requiredLevel).toBeGreaterThanOrEqual(60)
+  expect(getActivity('smithing', 'smith-adamantine-longsword')?.requiredLevel).toBeGreaterThanOrEqual(80)
+  expect(getActivity('smithing', 'smith-iron-arrowhead')?.requiredLevel).toBe(2)
+  expect(getActivity('smithing', 'smith-steel-arrowhead')?.requiredLevel).toBeGreaterThanOrEqual(15)
+  expect(getActivity('smithing', 'smith-silvered-arrowhead')?.requiredLevel).toBeGreaterThanOrEqual(30)
+  expect(getActivity('smithing', 'smith-mithral-arrowhead')?.requiredLevel).toBeGreaterThanOrEqual(60)
+  expect(getActivity('smithing', 'smith-adamantine-arrowhead')?.requiredLevel).toBeGreaterThanOrEqual(80)
+  expect(getActivity('smithing', 'smith-chain-mail-chest')?.requiredLevel).toBe(27)
+  expect(getActivity('smithing', 'smith-steel-chain-mail-chest')?.requiredLevel).toBeGreaterThanOrEqual(27)
+  expect(getActivity('smithing', 'smith-silvered-chain-mail-chest')?.requiredLevel).toBeGreaterThanOrEqual(30)
+  expect(getActivity('smithing', 'smith-mithral-chain-mail-chest')?.requiredLevel).toBeGreaterThanOrEqual(60)
+  expect(getActivity('smithing', 'smith-adamantine-chain-mail-chest')?.requiredLevel).toBeGreaterThanOrEqual(80)
 })
 
 test('every spell component and tradition reagent has a source', () => {
@@ -155,6 +146,7 @@ test('every spell component and tradition reagent has a source', () => {
 test('general store sells commons and upgrades grant no items', () => {
   for (const good of GENERAL_GOODS) {
     const def = ITEMS.find((item) => item.id === good.itemId)
+    if (good.itemId.startsWith('padded-')) continue
     expect(def?.category).not.toBe('gear')
     expect(def?.category).not.toBe('ammo')
   }

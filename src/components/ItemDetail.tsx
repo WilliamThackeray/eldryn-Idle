@@ -9,6 +9,8 @@ import { canEquip, targetSlot, type Equipment, type EquipmentSlot } from '../eng
 import { equipPreview } from '../engine/equipPreview'
 import type { Inventory } from '../engine/inventory'
 import { sourcesOf, usesOf, type ItemLink } from '../engine/itemIndex'
+import { presentedActivityLabel } from '../engine/presentActivity'
+import { useGameStore } from '../store/gameStore'
 import { levelForXp } from '../engine/xp'
 import { itemStatLines } from './itemStatLines'
 import { Button } from './ui/Button'
@@ -357,7 +359,17 @@ function LinkList({
   links: ItemLink[]
   onOpen: (link: ItemLink) => void
 }) {
+  const skills = useGameStore((state) => state.skills)
+  const renown = useGameStore((state) => state.renown)
+  const classId = useGameStore((state) => state.classId)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
+  const questProgress = useGameStore((state) => state.questProgress)
   if (links.length === 0) return null
+  const viewer = { skills, renown, classId, secondaryClassId, questProgress }
+  const text = (link: ItemLink) =>
+    link.kind === 'activity'
+      ? (presentedActivityLabel(link.skillId, link.activityId, viewer) ?? link.label)
+      : link.label
   return (
     <div className="space-y-1 text-body">
       <SubHeading title={title} />
@@ -369,7 +381,7 @@ function LinkList({
               onClick={() => onOpen(link)}
               className="text-left text-sage underline-offset-2 hover:underline"
             >
-              {link.label}
+              {text(link)}
             </button>
           </li>
         ))}

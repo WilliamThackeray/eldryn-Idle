@@ -8,6 +8,8 @@ import type { ActivityDef } from '../../../data/activities'
 import { TOME_SKILLS, parseTomeActivityId } from '../../../data/historyContent'
 import { SKILLS, type SkillId } from '../../../data/skills'
 import type { Inventory } from '../../../engine/inventory'
+import { useGameStore } from '../../../store/gameStore'
+import { presentActivity } from '../../../engine/presentActivity'
 import { ROMAN, inputChips, lockLabel } from '../present'
 
 export function TomeCatalog({
@@ -32,6 +34,11 @@ export function TomeCatalog({
   onCraft: (activity: ActivityDef) => void
 }) {
   const [open, setOpen] = useState<string | null>(null)
+  const skills = useGameStore((state) => state.skills)
+  const classId = useGameStore((state) => state.classId)
+  const secondaryClassId = useGameStore((state) => state.secondaryClassId)
+  const questProgress = useGameStore((state) => state.questProgress)
+  const viewer = { skills, renown, classId, secondaryClassId, questProgress }
   const bySkill = new Map<string, ActivityDef[]>()
   for (const activity of activities) {
     const parsed = parseTomeActivityId(activity.id)
@@ -69,6 +76,7 @@ export function TomeCatalog({
               <ChevronDown size={16} className={cx('ml-auto shrink-0', expanded && 'rotate-180')} aria-hidden />
             </button>
             {next ? (
+              presentActivity(next, viewer).visible ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="text-meta text-muted">{next.name}</span>
                 {inputChips(next, inventory, pageDiscount).map((input) => (
@@ -83,6 +91,9 @@ export function TomeCatalog({
                   Craft
                 </Button>
               </div>
+              ) : (
+                <p className="mt-2 text-meta text-muted">Requires Scribing level {next.requiredLevel}</p>
+              )
             ) : (
               <p className="mt-2 text-meta text-sage">All {volumes.length} volumes read</p>
             )}
@@ -91,6 +102,7 @@ export function TomeCatalog({
                 {volumes.map((volume) => {
                   const parsed = parseTomeActivityId(volume.id)
                   const volumeNo = parsed?.volume ?? 0
+                  const view = presentActivity(volume, viewer)
                   const status = volumeNo <= read ? 'Read' : volumeNo === read + 1 ? 'Next' : lockLabel(volume, level, renown)
                   return (
                     <li key={volume.id}>
@@ -102,8 +114,8 @@ export function TomeCatalog({
                         )}
                         onClick={() => onSelect(volume)}
                       >
-                        <span>{volume.name}</span>
-                        <span className="text-muted">{status}</span>
+                        <span>{view.visible ? volume.name : `Requires Scribing level ${volume.requiredLevel}`}</span>
+                        <span className="text-muted">{view.visible ? status : ''}</span>
                       </button>
                     </li>
                   )

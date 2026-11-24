@@ -1,4 +1,5 @@
 import type { CreatureType } from '../monsters/types'
+import { TOME_FIRST_LEVEL, TOME_LEVEL_STEP } from '../../engine/config'
 import { SKILLS, type TradeSkillId } from '../skills'
 import type { ItemDef } from './types'
 
@@ -9,7 +10,7 @@ export const TOME_SKILLS = SKILLS.filter(
   (skill) => skill.id !== 'scribing' && skill.id !== 'vitality',
 ).map((skill) => skill.id)
 
-export const TOME_VOLUME_LEVELS = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90] as const
+export const TOME_VOLUME_LEVELS = Array.from({ length: 10 }, (_, index) => TOME_FIRST_LEVEL + index * TOME_LEVEL_STEP)
 
 export const BESTIARY_TYPES = ['beast', 'undead', 'fey', 'monstrosity', 'giant'] as const satisfies readonly CreatureType[]
 export type BestiaryType = (typeof BESTIARY_TYPES)[number]

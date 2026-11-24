@@ -143,8 +143,8 @@ export function advanceDungeonNodes(input: {
   const echoes = input.echoes ?? 0
   const hasSecondary = input.hasSecondary === true
   let skills = input.skills
-  let bounty = input.bounty ?? []
-  let favor = input.favor ?? 0
+  const bounty = input.bounty ?? []
+  const favor = input.favor ?? 0
   const dungeon = getDungeon(fight.dungeonId ?? '')
   if (!dungeon) {
     return {
@@ -465,7 +465,7 @@ export function onKill(input: {
   fight.ammoSpent = 0
   let skills = input.skills
   let bounty = input.bounty ?? []
-  let favor = input.favor ?? 0
+  const favor = input.favor ?? 0
   const hasSecondary = input.hasSecondary === true
   const echoes = input.echoes ?? 0
 

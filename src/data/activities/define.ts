@@ -1,15 +1,14 @@
+import { CRAFT_XP_MULT, XP_BASE, XP_PER_LEVEL } from '../../engine/config'
 import type { TradeSkillId } from '../skills'
 import type { ItemId } from '../items'
 import type { ActivityDef, GoldDrop, ItemStack, LootEntry } from './types'
 
 const INTERVAL_MS = 6000
 
-function xpFor(requiredLevel: number): number {
-  if (requiredLevel >= 70) return 60
-  if (requiredLevel >= 40) return 40
-  if (requiredLevel >= 20) return 25
-  if (requiredLevel >= 10) return 15
-  return 10
+/** Base activity XP before the quality multiplier. Monotonic in requiredLevel. */
+export function activityXp(requiredLevel: number, kind: ActivityDef['kind']): number {
+  const base = Math.round(XP_BASE + XP_PER_LEVEL * requiredLevel)
+  return kind === 'craft' ? Math.round(base * CRAFT_XP_MULT) : base
 }
 
 export function stack(itemId: ItemId, quantity = 1): ItemStack {
@@ -48,7 +47,7 @@ export function activity(spec: Spec): ActivityDef {
   const kind =
     spec.kind ??
     (spec.inputs?.length ? 'craft' : outputs.length > 0 || spec.gold || spec.favor ? 'gather' : 'train')
-  const base = xpFor(spec.requiredLevel)
+  const base = activityXp(spec.requiredLevel, kind)
   return {
     id: spec.id,
     skillId: spec.skillId,
@@ -56,7 +55,7 @@ export function activity(spec: Spec): ActivityDef {
     description: spec.description,
     requiredLevel: spec.requiredLevel,
     baseIntervalMs: spec.baseIntervalMs ?? INTERVAL_MS,
-    xp: kind === 'craft' ? base + 8 : base,
+    xp: base,
     inputs: spec.inputs,
     outputs,
     rareTable: spec.rareTable,

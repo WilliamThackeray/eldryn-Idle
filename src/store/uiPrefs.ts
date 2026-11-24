@@ -8,6 +8,7 @@ interface UiPrefsData {
   sidebarExpanded: boolean
   lastTab: Record<string, string>
   hideLocked: boolean
+  unseenUnlocks: string[]
 }
 
 interface UiPrefs extends UiPrefsData {
@@ -15,12 +16,15 @@ interface UiPrefs extends UiPrefsData {
   toggleSidebar: () => void
   setLastTab: (page: string, tab: string) => void
   setHideLocked: (value: boolean) => void
+  noteUnlocks: (ids: string[]) => void
+  markSeen: (id: string) => void
 }
 
 const initial: UiPrefsData = {
   sidebarExpanded: false,
   lastTab: {},
   hideLocked: false,
+  unseenUnlocks: [],
 }
 
 export function createUiPrefsStore(storage: StateStorage) {
@@ -33,6 +37,12 @@ export function createUiPrefsStore(storage: StateStorage) {
         setLastTab: (page, tab) =>
           set((state) => ({ lastTab: { ...state.lastTab, [page]: tab } })),
         setHideLocked: (hideLocked) => set({ hideLocked }),
+        noteUnlocks: (ids) =>
+          set((state) => ({
+            unseenUnlocks: [...new Set([...state.unseenUnlocks, ...ids])],
+          })),
+        markSeen: (id) =>
+          set((state) => ({ unseenUnlocks: state.unseenUnlocks.filter((entry) => entry !== id) })),
       }),
       {
         name: UI_PREFS_KEY,
@@ -41,7 +51,17 @@ export function createUiPrefsStore(storage: StateStorage) {
           sidebarExpanded: state.sidebarExpanded,
           lastTab: state.lastTab,
           hideLocked: state.hideLocked,
+          unseenUnlocks: state.unseenUnlocks,
         }),
+        merge: (persisted, current) => {
+          const saved = (persisted ?? {}) as Partial<UiPrefsData>
+          return {
+            ...current,
+            ...saved,
+            lastTab: saved.lastTab ?? {},
+            unseenUnlocks: saved.unseenUnlocks ?? [],
+          }
+        },
       },
     ),
   )
